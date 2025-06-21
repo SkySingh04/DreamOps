@@ -1,23 +1,21 @@
 """Configuration management for the oncall agent."""
 
-import os
-from typing import Optional
-from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
+from pydantic import Field
+from pydantic_settings import BaseSettings
 
 
 class Config(BaseSettings):
     """Application configuration."""
-    
+
     # Anthropic/Claude settings
     anthropic_api_key: str = Field(..., env="ANTHROPIC_API_KEY")
     claude_model: str = Field("claude-3-5-sonnet-20241022", env="CLAUDE_MODEL")
-    
+
     # Agent settings
     agent_name: str = Field("oncall-agent", env="AGENT_NAME")
     log_level: str = Field("INFO", env="LOG_LEVEL")
-    
+
     # MCP integration settings
     mcp_timeout: int = Field(30, env="MCP_TIMEOUT")  # seconds
     mcp_retry_attempts: int = Field(3, env="MCP_RETRY_ATTEMPTS")
@@ -30,7 +28,7 @@ class Config(BaseSettings):
     # Alert handling settings
     alert_auto_acknowledge: bool = Field(False, env="ALERT_AUTO_ACKNOWLEDGE")
     alert_priority_threshold: str = Field("high", env="ALERT_PRIORITY_THRESHOLD")
-    
+
     # Kubernetes settings
     k8s_enabled: bool = Field(True, env="K8S_ENABLED")
     k8s_config_path: str = Field("~/.kube/config", env="K8S_CONFIG_PATH")
@@ -38,18 +36,18 @@ class Config(BaseSettings):
     k8s_namespace: str = Field("default", env="K8S_NAMESPACE")
     k8s_mcp_server_url: str = Field("http://localhost:8080", env="K8S_MCP_SERVER_URL")
     k8s_enable_destructive_operations: bool = Field(False, env="K8S_ENABLE_DESTRUCTIVE_OPERATIONS")
-    
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
-        
+
     def get(self, key: str, default=None):
         """Get config value by key (for backward compatibility)."""
         return getattr(self, key.lower(), default)
 
 
-_config: Optional[Config] = None
+_config: Config | None = None
 
 
 def get_config() -> Config:
