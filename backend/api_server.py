@@ -1,14 +1,15 @@
 """FastAPI server for webhook endpoints and API."""
 
+import json
 import signal
 import sys
 from contextlib import asynccontextmanager
+import logging
 
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-import json
 
 from src.oncall_agent.api import webhooks
 from src.oncall_agent.api.routers import (
@@ -21,6 +22,7 @@ from src.oncall_agent.api.routers import (
     security_router,
     settings_router,
 )
+from src.oncall_agent.api.socketio_server import socket_app
 from src.oncall_agent.config import get_config
 from src.oncall_agent.utils import get_logger
 
@@ -78,7 +80,7 @@ async def log_requests(request: Request, call_next):
     """Log all incoming requests for debugging."""
     # Log request details
     logger.info(f"Incoming request: {request.method} {request.url.path}")
-    
+
     # Log webhook requests in detail
     if request.url.path == "/webhook/pagerduty":
         body = await request.body()
@@ -88,16 +90,15 @@ async def log_requests(request: Request, call_next):
             logger.info(f"PagerDuty webhook payload: {json.dumps(payload, indent=2)}")
         except:
             logger.info(f"PagerDuty webhook raw body: {body}")
-        
+
         # Important: Create a new request with the body we read
-        from starlette.datastructures import Headers
         from starlette.requests import Request as StarletteRequest
-        
+
         request = StarletteRequest(
             scope=request.scope,
             receive=lambda: {"type": "http.request", "body": body}
         )
-    
+
     response = await call_next(request)
     return response
 
@@ -176,6 +177,10 @@ if config.pagerduty_enabled:
 
 logger.info("All API routes registered successfully")
 
+# Mount Socket.IO application - TEMPORARILY DISABLED
+# app.mount("/socket.io", socket_app)
+# logger.info("Socket.IO server mounted at /socket.io")
+
 
 def signal_handler(sig, frame):
     """Handle shutdown signals gracefully."""
@@ -188,6 +193,20 @@ def main():
     # Setup signal handlers
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
+    
+    # Filter out ONLY WebSocket connection logs
+    class WebSocketFilter(logging.Filter):
+        def filter(self, record):
+            # Filter out WebSocket connection messages ONLY
+            msg = record.getMessage()
+            if "/socket.io/" in msg and ("WebSocket" in msg or "connection" in msg):
+                return False
+            # Allow all other logs including PagerDuty webhooks
+            return True
+    
+    # Apply filter to uvicorn access logger
+    uvicorn_access = logging.getLogger("uvicorn.access")
+    uvicorn_access.addFilter(WebSocketFilter())
 
     # Run server
     uvicorn.run(

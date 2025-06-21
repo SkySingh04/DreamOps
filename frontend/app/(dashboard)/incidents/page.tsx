@@ -109,20 +109,20 @@ export default function IncidentsPage() {
     }
   ];
 
-  // WebSocket for real-time updates
-  useWebSocket({
-    onMessage: (message) => {
-      if (message.type === 'incident_update') {
-        queryClient.invalidateQueries({ queryKey: queryKeys.incidents() });
-        toast.info('Incident updated', {
-          description: `${message.data.title} status changed to ${message.data.status}`,
-        });
-      }
-      if (message.type === 'ai_action') {
-        queryClient.invalidateQueries({ queryKey: queryKeys.incident(message.data.incident_id) });
-      }
-    },
-  });
+  // WebSocket for real-time updates - DISABLED
+  // useWebSocket({
+  //   onMessage: (message) => {
+  //     if (message.type === 'incident_update') {
+  //       queryClient.invalidateQueries({ queryKey: queryKeys.incidents() });
+  //       toast.info('Incident updated', {
+  //         description: `${message.data.title} status changed to ${message.data.status}`,
+  //       });
+  //     }
+  //     if (message.type === 'ai_action') {
+  //       queryClient.invalidateQueries({ queryKey: queryKeys.incident(message.data.incident_id) });
+  //     }
+  //   },
+  // });
 
   // Mutations
   const acknowledgeMutation = useMutation({

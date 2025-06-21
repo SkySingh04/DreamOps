@@ -103,23 +103,24 @@ export default function MonitoringPage() {
     { name: 'Error Rate', value: 0.2, unit: '%', status: 'healthy', trend: 'stable' },
   ]);
 
-  // WebSocket for real-time updates
-  const { isConnected } = useWebSocket({
-    onMessage: (message) => {
-      // Handle metric updates from WebSocket
-      if (message.type === 'metric_update') {
-        // Update metrics based on incoming data
-        const metricData = message.data;
-        if (metricData && metricData.name && metricData.value !== undefined) {
-          setSystemMetrics(prev => prev.map(m => 
-            m.name === metricData.name 
-              ? { ...m, value: metricData.value, trend: metricData.trend || m.trend }
-              : m
-          ));
-        }
-      }
-    },
-  });
+  // WebSocket for real-time updates - DISABLED
+  // const { isConnected } = useWebSocket({
+  //   onMessage: (message) => {
+  //     // Handle metric updates from WebSocket
+  //     if (message.type === 'metric_update') {
+  //       // Update metrics based on incoming data
+  //       const metricData = message.data;
+  //       if (metricData && metricData.name && metricData.value !== undefined) {
+  //         setSystemMetrics(prev => prev.map(m => 
+  //           m.name === metricData.name 
+  //             ? { ...m, value: metricData.value, trend: metricData.trend || m.trend }
+  //             : m
+  //         ));
+  //       }
+  //     }
+  //   },
+  // });
+  const isConnected = false; // Hardcoded to false for now
 
   // Auto-scroll logs
   useEffect(() => {

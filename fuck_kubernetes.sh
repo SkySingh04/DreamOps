@@ -291,11 +291,12 @@ run_all() {
     # Auto-trigger CloudWatch alarms
     echo -e "\n${YELLOW}⚡ Auto-triggering CloudWatch alarms...${NC}"
     sleep 5  # Give a few seconds for metrics to propagate
-    trigger_alarms
+    trigger_alarms all
 }
 
 # Function to force CloudWatch alarms to trigger
 trigger_alarms() {
+    local scenario="${1:-all}"
     echo -e "${YELLOW}🔔 Forcing CloudWatch alarms to trigger PagerDuty...${NC}"
     
     # Check if AWS CLI is available
@@ -304,14 +305,41 @@ trigger_alarms() {
         return 1
     fi
     
-    # List of alarms to trigger
-    local alarms=(
-        "eks-any-pod-error"
-        "eks-image-pull-error"
-        "eks-oom-kill"
-        "eks-instant-pod-issue"
-        "eks-problem-pods-detected"
-    )
+    # Define alarms for each scenario
+    local alarms=()
+    
+    case "$scenario" in
+        1|pod_crash)
+            alarms=("eks-any-pod-error" "eks-instant-pod-issue" "eks-problem-pods-detected")
+            echo -e "${YELLOW}Triggering alarms for: Pod Crash scenario${NC}"
+            ;;
+        2|image_pull)
+            alarms=("eks-image-pull-error" "eks-any-pod-error" "eks-problem-pods-detected")
+            echo -e "${YELLOW}Triggering alarms for: Image Pull Error scenario${NC}"
+            ;;
+        3|oom_kill)
+            alarms=("eks-oom-kill" "eks-any-pod-error" "eks-problem-pods-detected")
+            echo -e "${YELLOW}Triggering alarms for: OOM Kill scenario${NC}"
+            ;;
+        4|deployment)
+            alarms=("eks-any-pod-error" "eks-problem-pods-detected")
+            echo -e "${YELLOW}Triggering alarms for: Deployment Failure scenario${NC}"
+            ;;
+        5|service)
+            alarms=("eks-any-pod-error")
+            echo -e "${YELLOW}Triggering alarms for: Service Unavailable scenario${NC}"
+            ;;
+        all|*)
+            alarms=(
+                "eks-any-pod-error"
+                "eks-image-pull-error"
+                "eks-oom-kill"
+                "eks-instant-pod-issue"
+                "eks-problem-pods-detected"
+            )
+            echo -e "${YELLOW}Triggering alarms for: ALL scenarios${NC}"
+            ;;
+    esac
     
     for alarm in "${alarms[@]}"; do
         # Get current state
@@ -387,7 +415,7 @@ test_loop() {
         
         # Force trigger alarms
         echo -e "\n4️⃣  Triggering alarms..."
-        trigger_alarms
+        trigger_alarms $RANDOM_FUCK
         
         # Show pod status
         echo -e "\n5️⃣  Current pod status:"
@@ -407,31 +435,31 @@ case "${1:-random}" in
         fuck_pod_crash
         echo -e "\n${YELLOW}⚡ Auto-triggering CloudWatch alarms...${NC}"
         sleep 5
-        trigger_alarms
+        trigger_alarms 1
         ;;
     2)
         fuck_image_pull
         echo -e "\n${YELLOW}⚡ Auto-triggering CloudWatch alarms...${NC}"
         sleep 5
-        trigger_alarms
+        trigger_alarms 2
         ;;
     3)
         fuck_oom_kill
         echo -e "\n${YELLOW}⚡ Auto-triggering CloudWatch alarms...${NC}"
         sleep 5
-        trigger_alarms
+        trigger_alarms 3
         ;;
     4)
         fuck_deployment
         echo -e "\n${YELLOW}⚡ Auto-triggering CloudWatch alarms...${NC}"
         sleep 5
-        trigger_alarms
+        trigger_alarms 4
         ;;
     5)
         fuck_service
         echo -e "\n${YELLOW}⚡ Auto-triggering CloudWatch alarms...${NC}"
         sleep 5
-        trigger_alarms
+        trigger_alarms 5
         ;;
     all)
         run_all
@@ -462,7 +490,7 @@ case "${1:-random}" in
         
         echo -e "\n${YELLOW}⚡ Auto-triggering CloudWatch alarms...${NC}"
         sleep 5
-        trigger_alarms
+        trigger_alarms $RANDOM_FUCK
         ;;
     *)
         usage

@@ -28,13 +28,19 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   const socketRef = useRef<Socket | null>(null);
 
   const connect = useCallback(() => {
+    // TEMPORARILY DISABLED - WebSocket connection disabled to prevent spam
+    return;
+    
     if (socketRef.current?.connected) return;
 
     try {
       socketRef.current = io(WS_URL, {
         transports: ['websocket'],
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
+        reconnection: true,
+        reconnectionAttempts: 3,
+        reconnectionDelay: 5000,
+        reconnectionDelayMax: 10000,
+        timeout: 20000,
       });
 
       socketRef.current.on('connect', () => {
@@ -116,13 +122,14 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   }, []);
 
   useEffect(() => {
-    if (autoConnect) {
-      connect();
-    }
+    // DISABLED - WebSocket connection disabled
+    // if (autoConnect) {
+    //   connect();
+    // }
 
-    return () => {
-      disconnect();
-    };
+    // return () => {
+    //   disconnect();
+    // };
   }, [autoConnect, connect, disconnect]);
 
   return {

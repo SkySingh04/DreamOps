@@ -91,8 +91,14 @@ class OncallAgent:
     
     async def handle_pager_alert(self, alert: PagerAlert) -> Dict[str, Any]:
         """Handle an incoming pager alert."""
-        self.logger.info(f"Handling pager alert: {alert.alert_id} for service: {alert.service_name}")
-        
+        self.logger.info("=" * 80)
+        self.logger.info("🚨 ONCALL AGENT TRIGGERED 🚨")
+        self.logger.info("=" * 80)
+        self.logger.info(f"Alert ID: {alert.alert_id}")
+        self.logger.info(f"Service: {alert.service_name}")
+        self.logger.info(f"Severity: {alert.severity}")
+        self.logger.info(f"Description: {alert.description[:200]}...")
+
         try:
             # Detect if this is a Kubernetes-related alert
             k8s_alert_type = self._detect_k8s_alert_type(alert.description)
@@ -129,6 +135,7 @@ class OncallAgent:
             """
             
             # Use Claude for analysis
+            self.logger.info("🤖 Calling Claude for analysis...")
             response = await self.anthropic_client.messages.create(
                 model=self.config.claude_model,
                 max_tokens=1500,
@@ -139,7 +146,8 @@ class OncallAgent:
             
             # Extract the response
             analysis = response.content[0].text if response.content else "No analysis available"
-            
+            self.logger.info("✅ Claude analysis complete")
+
             # Create response structure
             result = {
                 "alert_id": alert.alert_id,

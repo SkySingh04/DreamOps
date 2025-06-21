@@ -7,7 +7,11 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from src.oncall_agent.api.models import PagerDutyWebhookPayload, PagerDutyIncidentData, PagerDutyService
+from src.oncall_agent.api.models import (
+    PagerDutyIncidentData,
+    PagerDutyService,
+    PagerDutyWebhookPayload,
+)
 from src.oncall_agent.api.oncall_agent_trigger import OncallAgentTrigger
 from src.oncall_agent.config import get_config
 from src.oncall_agent.utils import get_logger
@@ -37,7 +41,7 @@ def verify_pagerduty_signature(payload: bytes, signature: str, secret: str) -> b
     # Handle PagerDuty V3 signature format: v1=<signature>
     if signature and signature.startswith('v1='):
         signature = signature[3:]  # Remove 'v1=' prefix
-    
+
     expected = hmac.new(
         secret.encode('utf-8'),
         payload,
@@ -58,6 +62,10 @@ async def pagerduty_webhook(
     
     Processes incident.triggered events and automatically triggers the oncall agent.
     """
+    logger.info("=" * 80)
+    logger.info("📨 PAGERDUTY WEBHOOK RECEIVED!")
+    logger.info("=" * 80)
+    
     try:
         # Get raw body for signature verification
         body = await request.body()
@@ -71,29 +79,30 @@ async def pagerduty_webhook(
 
         # Parse payload
         payload_dict = await request.json()
-        
+
         # Log the raw payload for debugging
         logger.debug(f"Raw webhook payload: {payload_dict}")
-        
+
         # Detect if this is a V3 webhook
+        logger.info(f"Webhook payload keys: {list(payload_dict.keys())}")
         if 'event' in payload_dict and isinstance(payload_dict['event'], dict):
             # V3 webhook format
             from src.oncall_agent.api.models import PagerDutyV3WebhookPayload
             v3_payload = PagerDutyV3WebhookPayload(**payload_dict)
-            
+
             logger.info(f"Received PagerDuty V3 webhook: {v3_payload.event.event_type}")
-            
+
             # Get agent trigger
             trigger = await get_agent_trigger()
-            
+
             # Process V3 event
             event_data = v3_payload.event.data
             results = []
-            
+
             # Handle incident events
             if v3_payload.event.event_type.startswith('incident.'):
                 incident_data = event_data.get('incident', event_data)
-                
+
                 # Only process triggered incidents
                 if incident_data.get('status') != 'triggered':
                     logger.info(f"Skipping incident {incident_data.get('id')} with status {incident_data.get('status')}")
@@ -101,7 +110,7 @@ async def pagerduty_webhook(
                         status_code=200,
                         content={"status": "success", "message": "Incident not in triggered state"}
                     )
-                
+
                 # Convert V3 incident to our format
                 incident = PagerDutyIncidentData(
                     id=incident_data.get('id'),
@@ -118,12 +127,12 @@ async def pagerduty_webhook(
                     urgency=incident_data.get('urgency', 'high'),
                     html_url=incident_data.get('html_url', '')
                 )
-                
+
                 logger.info(
                     f"Processing V3 incident {incident.incident_number}: {incident.title} "
                     f"(severity: {incident.urgency}, service: {incident.service.name if incident.service else 'unknown'})"
                 )
-                
+
                 # Process immediately
                 result = await trigger.trigger_oncall_agent(
                     incident,
@@ -136,22 +145,22 @@ async def pagerduty_webhook(
                     status_code=200,
                     content={"status": "success", "message": f"Event type {v3_payload.event.event_type} acknowledged"}
                 )
-                
+
         else:
             # Legacy V2 format
             payload = PagerDutyWebhookPayload(**payload_dict)
-            
+
             if not payload.messages:
                 return JSONResponse(
                     status_code=200,
                     content={"status": "success", "message": "No messages to process"}
                 )
-            
+
             logger.info(f"Received PagerDuty V2 webhook with {len(payload.messages)} messages")
-            
+
             # Get agent trigger
             trigger = await get_agent_trigger()
-            
+
             # Process each message
             results = []
             for message in payload.messages:
