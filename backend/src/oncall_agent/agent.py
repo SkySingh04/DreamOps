@@ -47,7 +47,7 @@ class OncallAgent:
         }
         
         # Initialize Kubernetes integration if enabled
-        if self.config.get("K8S_ENABLED", "true").lower() == "true":
+        if self.config.k8s_enabled:
             self.k8s_integration = KubernetesMCPIntegration()
             self.register_mcp_integration("kubernetes", self.k8s_integration)
     

@@ -24,7 +24,7 @@ class KubernetesMCPIntegration(MCPIntegration):
     
     def __init__(self):
         """Initialize Kubernetes MCP integration."""
-        super().__init__()
+        super().__init__(name="kubernetes")
         self.config = get_config()
         self.logger = logging.getLogger(__name__)
         self.mcp_server_url = None
@@ -32,41 +32,30 @@ class KubernetesMCPIntegration(MCPIntegration):
         self.k8s_context = None
         self.enable_destructive = False
         self._audit_log = []
+        self._connected = False
         
     async def connect(self) -> None:
         """Start the Kubernetes MCP server and establish connection."""
         try:
             # Get configuration
-            k8s_config_path = self.config.get("K8S_CONFIG_PATH", "~/.kube/config")
-            self.k8s_context = self.config.get("K8S_CONTEXT", "default")
-            self.mcp_server_url = self.config.get("K8S_MCP_SERVER_URL", "http://localhost:8080")
-            self.enable_destructive = self.config.get("K8S_ENABLE_DESTRUCTIVE_OPERATIONS", "false").lower() == "true"
+            k8s_config_path = self.config.k8s_config_path
+            self.k8s_context = self.config.k8s_context
+            self.mcp_server_url = self.config.k8s_mcp_server_url
+            self.enable_destructive = self.config.k8s_enable_destructive_operations
             
-            # Start the MCP server process
-            cmd = [
-                "npx", "kubernetes-mcp-server@latest",
-                "--http-port", "8080",
-                "--kubeconfig", k8s_config_path,
-            ]
+            # For demo purposes, we'll skip the MCP server and use kubectl directly
+            # In production, you would start the actual MCP server here
+            self.logger.info("Using direct kubectl integration for demo")
             
-            if not self.enable_destructive:
-                cmd.append("--read-only")
-                
-            self.mcp_process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            
-            # Wait for server to start
-            await asyncio.sleep(2)
-            
-            # Test connection
-            if await self.health_check():
-                self.logger.info(f"Connected to Kubernetes MCP server at {self.mcp_server_url}")
+            # Test connection by checking if we can access the cluster
+            test_result = await self._execute_k8s_command("cluster-info")
+            if test_result.get("success"):
+                self.logger.info(f"Connected to Kubernetes cluster context: {self.k8s_context}")
                 self._connected = True
+                self.connected = True
+                self.connection_time = datetime.utcnow()
             else:
-                raise Exception("Failed to connect to Kubernetes MCP server")
+                raise Exception(f"Failed to connect to Kubernetes cluster: {test_result.get('error', 'Unknown error')}")
                 
         except Exception as e:
             self.logger.error(f"Failed to connect to Kubernetes: {e}")
@@ -93,9 +82,16 @@ class KubernetesMCPIntegration(MCPIntegration):
         except:
             return False
             
-    def get_capabilities(self) -> List[str]:
-        """Return list of supported Kubernetes operations."""
-        capabilities = [
+    async def get_capabilities(self) -> Dict[str, List[str]]:
+        """Return capabilities of the Kubernetes integration."""
+        context_types = [
+            "pod_crash",
+            "service_health", 
+            "resource_usage",
+            "general"
+        ]
+        
+        actions = [
             "list_pods",
             "get_pod_logs", 
             "describe_pod",
@@ -103,18 +99,26 @@ class KubernetesMCPIntegration(MCPIntegration):
             "get_service_status",
             "get_deployment_status",
             "execute_kubectl_command",
-            "list_namespaces",
-            "get_resource_usage",
         ]
         
         if self.enable_destructive:
-            capabilities.extend([
+            actions.extend([
                 "restart_pod",
                 "scale_deployment",
                 "rollback_deployment"
             ])
             
-        return capabilities
+        features = [
+            "audit_logging",
+            "retry_mechanism",
+            "safety_checks"
+        ]
+            
+        return {
+            "context_types": context_types,
+            "actions": actions,
+            "features": features
+        }
         
     async def fetch_context(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Fetch Kubernetes context for incident analysis."""
