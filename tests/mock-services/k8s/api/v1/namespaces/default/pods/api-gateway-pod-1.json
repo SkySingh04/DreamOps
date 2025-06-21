@@ -1,0 +1,35 @@
+{
+  "apiVersion": "v1",
+  "kind": "Pod",
+  "metadata": {
+    "name": "api-gateway-pod-1",
+    "namespace": "default",
+    "labels": {
+      "app": "api-gateway"
+    }
+  },
+  "status": {
+    "phase": "Running",
+    "conditions": [
+      {
+        "type": "Ready",
+        "status": "True",
+        "lastProbeTime": null,
+        "lastTransitionTime": "2025-06-21T10:00:00Z"
+      }
+    ],
+    "containerStatuses": [
+      {
+        "name": "api-gateway",
+        "state": {
+          "running": {
+            "startedAt": "2025-06-21T10:00:00Z"
+          }
+        },
+        "ready": true,
+        "restartCount": 0,
+        "image": "myorg/api-gateway:v2.3.1"
+      }
+    ]
+  }
+}

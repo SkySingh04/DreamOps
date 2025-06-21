@@ -1,14 +1,24 @@
-# Backend Python
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+ENV/
+
+# Backend specific
 backend/.env
-backend/__pycache__/
-backend/.pytest_cache/
-backend/*.pyc
 backend/.uv/
-backend/.venv/
-backend/venv/
-backend/*.egg-info/
-backend/dist/
-backend/build/
 backend/*.log
 
 # Frontend Node.js
@@ -90,6 +100,3 @@ Thumbs.db
 .cache/
 tmp/
 temp/
-
-# Tests
-# tests/ - removed to track test files
