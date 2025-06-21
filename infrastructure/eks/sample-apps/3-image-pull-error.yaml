@@ -1,0 +1,44 @@
+# App 3: ImagePullBackOff - Non-existent Image
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-image-app
+  namespace: test-apps
+  labels:
+    app: bad-image
+    issue: image-pull-error
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bad-image
+  template:
+    metadata:
+      labels:
+        app: bad-image
+    spec:
+      containers:
+      - name: app
+        image: nonexistent/doesnotexist:v99.99.99  # This image doesn't exist!
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bad-image-app
+  namespace: test-apps
+spec:
+  selector:
+    app: bad-image
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080

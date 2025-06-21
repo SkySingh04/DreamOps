@@ -1,0 +1,56 @@
+# Test Scenarios for Oncall Agent
+# These are alert descriptions you can use to test the agent
+
+test_scenarios:
+  - name: "Pod CrashLoopBackOff - Config Missing"
+    alert:
+      description: "Pod config-missing-app-7d9f8b6c5-x2n4m is in CrashLoopBackOff state in namespace test-apps"
+      service_name: "config-missing-app"
+      metadata:
+        pod_name: "config-missing-app-7d9f8b6c5-x2n4m"
+        namespace: "test-apps"
+        deployment_name: "config-missing-app"
+    expected_finding: "Missing ConfigMap 'app-config'"
+    
+  - name: "Pod OOMKilled"
+    alert:
+      description: "Pod memory-hog-app-55b6f9cfb5-h5ftt restarting due to OOMKilled in namespace test-apps"
+      service_name: "memory-hog-app"
+      metadata:
+        pod_name: "memory-hog-app-55b6f9cfb5-h5ftt"
+        namespace: "test-apps"
+        memory_limit: "100Mi"
+        memory_usage: "150Mi"
+    expected_finding: "Memory limit exceeded, needs increase"
+    
+  - name: "ImagePullBackOff"
+    alert:
+      description: "Pod bad-image-app-6d4b5c8f9-n3k8p - ImagePullBackOff: failed to pull image nonexistent/doesnotexist:v99.99.99"
+      service_name: "bad-image-app"
+      metadata:
+        pod_name: "bad-image-app-6d4b5c8f9-n3k8p"
+        namespace: "test-apps"
+        image: "nonexistent/doesnotexist:v99.99.99"
+    expected_finding: "Image doesn't exist in registry"
+    
+  - name: "CPU Throttling"
+    alert:
+      description: "Deployment cpu-intensive-app - CPU usage above threshold (95%) in namespace test-apps"
+      service_name: "cpu-intensive-app"
+      metadata:
+        deployment_name: "cpu-intensive-app"
+        namespace: "test-apps"
+        cpu_usage: "95%"
+        cpu_limit: "200m"
+    expected_finding: "CPU limits too low for workload"
+    
+  - name: "Liveness Probe Failed"
+    alert:
+      description: "Pod unhealthy-app-8f6d4b7c9-k2m4n failing liveness probe - container will be restarted"
+      service_name: "unhealthy-app"
+      metadata:
+        pod_name: "unhealthy-app-8f6d4b7c9-k2m4n"
+        namespace: "test-apps"
+        probe_type: "liveness"
+        probe_path: "/health"
+    expected_finding: "Health endpoint not responding"
