@@ -29,7 +29,9 @@
       "Bash(./fuck_kubernetes.sh:*)",
       "Bash(true)",
       "Bash(grep:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(npm run lint)"
     ],
     "deny": []
   }
