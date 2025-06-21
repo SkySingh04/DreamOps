@@ -22,7 +22,6 @@ from src.oncall_agent.api.routers import (
     security_router,
     settings_router,
 )
-from src.oncall_agent.api.socketio_server import socket_app
 from src.oncall_agent.config import get_config
 from src.oncall_agent.utils import get_logger, setup_logging
 
