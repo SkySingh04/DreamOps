@@ -241,6 +241,47 @@ uv run pytest tests/test_kubernetes_integration.py
 uv run pytest tests/ --cov=src --cov-report=html
 ```
 
+### Docker Integration Testing
+
+For comprehensive integration testing of all MCP integrations (Notion, GitHub, and Kubernetes) using mock services:
+
+```bash
+# From the tests directory
+cd tests
+./run-docker-test.sh
+
+# Or from project root  
+cd tests && ./run-docker-test.sh
+
+# Or directly with docker-compose
+docker-compose -f tests/docker-compose.test.yml up --build
+```
+
+**What gets tested:**
+- **Kubernetes Integration**: Pod status, event logs, container logs
+- **GitHub Integration**: Recent commits, open issues, GitHub Actions status  
+- **Notion Integration**: Real API connection and incident page creation
+- **AI Analysis**: Claude processes alerts with context from all integrations
+
+**Test Architecture:**
+- `mock-kubernetes`: Nginx server simulating Kubernetes API
+- `mock-github`: Nginx server simulating GitHub API
+- `oncall-test`: The on-call agent running integration tests
+
+**Test Results:**
+- Console output shows real-time results
+- `test-results/test-summary.txt` contains saved summary
+- Notion workspace shows created incident pages
+
+**Prerequisites for Docker tests:**
+- Docker and Docker Compose installed
+- `.env` file with required API keys (ANTHROPIC_API_KEY, NOTION_TOKEN, NOTION_DATABASE_ID, GITHUB_TOKEN)
+
+**Cleanup:**
+```bash
+docker-compose -f tests/docker-compose.test.yml down
+```
+
 ### Testing with Kubernetes Issues
 
 The project includes `fuck_kubernetes.sh` - a comprehensive testing script that simulates various Kubernetes failures to verify the complete alerting pipeline:

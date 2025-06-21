@@ -570,16 +570,16 @@ export default function IncidentsPage() {
       />
 
       {/* Two column layout for AI logs and incidents */}
-      <div className={showAgentLogs ? "grid grid-cols-1 lg:grid-cols-2 gap-6" : ""}>
+      <div className={showAgentLogs ? "grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-hidden" : ""}>
         {/* AI Agent Logs Section */}
         {showAgentLogs && (
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 overflow-hidden">
             <AgentLogs incidentId={selectedIncident?.id} />
           </div>
         )}
         
         {/* Main incidents section */}
-        <div className={showAgentLogs ? "lg:col-span-1" : ""}>
+        <div className={showAgentLogs ? "lg:col-span-1 overflow-hidden" : ""}>
 
       {/* Search and Filter Bar */}
       <div className="flex gap-4 flex-wrap">

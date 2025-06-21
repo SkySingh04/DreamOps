@@ -156,8 +156,8 @@ export function LogEntry({ log }: LogEntryProps) {
       {isExpanded && (
         <div className="px-3 pb-3 ml-7">
           {hasFullAnalysis ? (
-            <Card className="p-4 bg-gray-50/50">
-              <div className="prose prose-sm max-w-none">
+            <Card className="p-4 bg-gray-50/50 overflow-hidden">
+              <div className="markdown-content max-w-full overflow-x-hidden">
                 <ReactMarkdown
                   components={{
                     code({ node, inline, className, children, ...props }) {
