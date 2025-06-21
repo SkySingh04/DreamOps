@@ -1,0 +1,332 @@
+#!/bin/bash
+
+# Fuck Kubernetes - Simulate random Kubernetes issues for PagerDuty testing
+# Usage: ./fuck_kubernetes.sh [issue_number|all|random]
+
+set -e
+
+# Color codes for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# Check if kubectl is available
+if ! command -v kubectl &> /dev/null; then
+    echo -e "${RED}Error: kubectl command not found. Please install kubectl first.${NC}"
+    exit 1
+fi
+
+# Check if we have a valid kubernetes context
+if ! kubectl cluster-info &> /dev/null; then
+    echo -e "${RED}Error: No valid kubernetes cluster context found.${NC}"
+    echo "Please ensure you have a running Kubernetes cluster (EKS, Kind, etc.)"
+    exit 1
+fi
+
+# Function to print usage
+usage() {
+    echo "Usage: $0 [option]"
+    echo "Options:"
+    echo "  1         - Simulate pod crash (CrashLoopBackOff)"
+    echo "  2         - Simulate image pull error (ImagePullBackOff)"
+    echo "  3         - Simulate OOM kill"
+    echo "  4         - Simulate deployment failure"
+    echo "  5         - Simulate service unavailable"
+    echo "  all       - Run all simulations sequentially"
+    echo "  random    - Run a random simulation (default)"
+    echo "  clean     - Clean up all test resources"
+    exit 1
+}
+
+# Namespace for testing
+NAMESPACE="fuck-kubernetes-test"
+
+# Ensure namespace exists
+ensure_namespace() {
+    if ! kubectl get namespace $NAMESPACE &> /dev/null; then
+        echo -e "${YELLOW}Creating namespace: $NAMESPACE${NC}"
+        kubectl create namespace $NAMESPACE
+    fi
+}
+
+# Function to simulate pod crash
+fuck_pod_crash() {
+    echo -e "${RED}🔥 Fucking Kubernetes: Simulating Pod Crash (CrashLoopBackOff)${NC}"
+    ensure_namespace
+    
+    cat <<EOF | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crashloop-app
+  namespace: $NAMESPACE
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crashloop
+  template:
+    metadata:
+      labels:
+        app: crashloop
+    spec:
+      containers:
+      - name: crash-container
+        image: busybox
+        command: ["/bin/sh", "-c"]
+        args: ["echo 'Starting up...'; sleep 5; echo 'Crashing now!'; exit 1"]
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+EOF
+    
+    echo -e "${GREEN}✓ Pod crash simulation deployed. Watch it crash and burn!${NC}"
+    echo "Run 'kubectl get pods -n $NAMESPACE' to see the CrashLoopBackOff"
+}
+
+# Function to simulate image pull error
+fuck_image_pull() {
+    echo -e "${RED}🔥 Fucking Kubernetes: Simulating Image Pull Error${NC}"
+    ensure_namespace
+    
+    cat <<EOF | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imagepull-error-app
+  namespace: $NAMESPACE
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: imagepull-error
+  template:
+    metadata:
+      labels:
+        app: imagepull-error
+    spec:
+      containers:
+      - name: bad-image
+        image: totally-fake-registry.com/this-image-does-not-exist:v666
+        ports:
+        - containerPort: 80
+EOF
+    
+    echo -e "${GREEN}✓ Image pull error simulation deployed. Good luck pulling that image!${NC}"
+    echo "Run 'kubectl get pods -n $NAMESPACE' to see the ImagePullBackOff"
+}
+
+# Function to simulate OOM kill
+fuck_oom_kill() {
+    echo -e "${RED}🔥 Fucking Kubernetes: Simulating OOM Kill${NC}"
+    ensure_namespace
+    
+    cat <<EOF | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oom-app
+  namespace: $NAMESPACE
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: oom-killer
+  template:
+    metadata:
+      labels:
+        app: oom-killer
+    spec:
+      containers:
+      - name: memory-hog
+        image: polinux/stress
+        command: ["stress"]
+        args: ["--vm", "1", "--vm-bytes", "1000M", "--vm-hang", "1"]
+        resources:
+          requests:
+            memory: "50Mi"
+            cpu: "100m"
+          limits:
+            memory: "100Mi"
+            cpu: "200m"
+EOF
+    
+    echo -e "${GREEN}✓ OOM kill simulation deployed. Memory massacre incoming!${NC}"
+    echo "Run 'kubectl get pods -n $NAMESPACE' to see the OOMKilled status"
+}
+
+# Function to simulate deployment failure
+fuck_deployment() {
+    echo -e "${RED}🔥 Fucking Kubernetes: Simulating Deployment Failure${NC}"
+    ensure_namespace
+    
+    # First create a working deployment
+    cat <<EOF | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: failed-deployment
+  namespace: $NAMESPACE
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: fail-deploy
+  template:
+    metadata:
+      labels:
+        app: fail-deploy
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.14
+        ports:
+        - containerPort: 80
+EOF
+    
+    sleep 5
+    
+    # Now update with bad image to trigger failure
+    kubectl set image deployment/failed-deployment nginx=nginx:totally-broken-tag -n $NAMESPACE
+    
+    echo -e "${GREEN}✓ Deployment failure simulation initiated. Rolling update will fail!${NC}"
+    echo "Run 'kubectl rollout status deployment/failed-deployment -n $NAMESPACE' to see the failure"
+}
+
+# Function to simulate service unavailable
+fuck_service() {
+    echo -e "${RED}🔥 Fucking Kubernetes: Simulating Service Unavailable${NC}"
+    ensure_namespace
+    
+    # Create a service with no matching pods
+    cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Service
+metadata:
+  name: broken-service
+  namespace: $NAMESPACE
+spec:
+  selector:
+    app: non-existent-app
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
+  type: LoadBalancer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wrong-label-app
+  namespace: $NAMESPACE
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: wrong-label
+  template:
+    metadata:
+      labels:
+        app: wrong-label  # Intentionally wrong label
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+EOF
+    
+    echo -e "${GREEN}✓ Service unavailable simulation deployed. Service has no endpoints!${NC}"
+    echo "Run 'kubectl describe service broken-service -n $NAMESPACE' to see no endpoints"
+}
+
+# Function to clean up all test resources
+clean_up() {
+    echo -e "${YELLOW}🧹 Cleaning up all test resources...${NC}"
+    
+    if kubectl get namespace $NAMESPACE &> /dev/null; then
+        kubectl delete namespace $NAMESPACE --grace-period=0 --force &> /dev/null || true
+        echo -e "${GREEN}✓ Cleaned up namespace: $NAMESPACE${NC}"
+    else
+        echo "Nothing to clean up."
+    fi
+}
+
+# Function to run all simulations
+run_all() {
+    echo -e "${YELLOW}🔥 Running ALL Kubernetes fuckery simulations!${NC}"
+    
+    fuck_pod_crash
+    echo -e "\n${YELLOW}Waiting 10 seconds before next simulation...${NC}\n"
+    sleep 10
+    
+    fuck_image_pull
+    echo -e "\n${YELLOW}Waiting 10 seconds before next simulation...${NC}\n"
+    sleep 10
+    
+    fuck_oom_kill
+    echo -e "\n${YELLOW}Waiting 10 seconds before next simulation...${NC}\n"
+    sleep 10
+    
+    fuck_deployment
+    echo -e "\n${YELLOW}Waiting 10 seconds before next simulation...${NC}\n"
+    sleep 10
+    
+    fuck_service
+    
+    echo -e "\n${GREEN}✓ All simulations deployed! Your Kubernetes is properly fucked!${NC}"
+    echo -e "${YELLOW}Run 'kubectl get all -n $NAMESPACE' to see the chaos${NC}"
+    echo -e "${YELLOW}Run '$0 clean' to clean up when done${NC}"
+}
+
+# Main logic
+case "${1:-random}" in
+    1)
+        fuck_pod_crash
+        ;;
+    2)
+        fuck_image_pull
+        ;;
+    3)
+        fuck_oom_kill
+        ;;
+    4)
+        fuck_deployment
+        ;;
+    5)
+        fuck_service
+        ;;
+    all)
+        run_all
+        ;;
+    clean)
+        clean_up
+        ;;
+    random|"")
+        # Generate random number between 1 and 5
+        RANDOM_FUCK=$((RANDOM % 5 + 1))
+        echo -e "${YELLOW}🎲 Randomly selected simulation: $RANDOM_FUCK${NC}\n"
+        
+        case $RANDOM_FUCK in
+            1) fuck_pod_crash ;;
+            2) fuck_image_pull ;;
+            3) fuck_oom_kill ;;
+            4) fuck_deployment ;;
+            5) fuck_service ;;
+        esac
+        ;;
+    *)
+        usage
+        ;;
+esac
+
+echo -e "\n${YELLOW}📊 PagerDuty should detect and alert on these issues soon!${NC}"
+echo -e "${YELLOW}Check your Slack for alerts from PagerDuty${NC}"

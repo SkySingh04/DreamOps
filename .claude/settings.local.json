@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(aws sts get-caller-identity:*)",
+      "Bash(aws configure:*)",
+      "Bash(export:*)",
+      "Bash(kubectl get:*)",
+      "Bash(aws cloudwatch list-metrics:*)",
+      "Bash(kubectl describe:*)",
+      "Bash(kubectl delete:*)",
+      "Bash(kubectl apply:*)",
+      "Bash(kubectl create:*)",
+      "Bash(kubectl run:*)",
+      "Bash(kubectl top:*)",
+      "Bash(aws cloudwatch put-metric-alarm:*)",
+      "Bash(aws cloudwatch describe-alarms:*)",
+      "Bash(aws sns list-subscriptions-by-topic:*)",
+      "Bash(aws sns get-topic-attributes:*)",
+      "Bash(curl:*)",
+      "Bash(uv run:*)",
+      "Bash(source ~/.bashrc)",
+      "Bash(uv:*)",
+      "Bash(~/.local/bin/uv:*)",
+      "Bash(rm:*)",
+      "Bash(pkill:*)",
+      "Bash(aws sns subscribe:*)",
+      "Bash(aws cloudwatch set-alarm-state:*)",
+      "Bash(timeout 30s kubectl get pods -n stress-test -w)"
+    ],
+    "deny": []
+  }
+}

@@ -21,6 +21,14 @@ class Config(BaseSettings):
     # MCP integration settings
     mcp_timeout: int = Field(30, env="MCP_TIMEOUT")  # seconds
     mcp_retry_attempts: int = Field(3, env="MCP_RETRY_ATTEMPTS")
+    mcp_max_retries: int = Field(3, env="MCP_MAX_RETRIES")
+    mcp_retry_delay: float = Field(1.0, env="MCP_RETRY_DELAY")
+    
+    # GitHub MCP settings - kept for backward compatibility but not used
+    github_token: Optional[str] = Field(None, env="GITHUB_TOKEN")
+    github_mcp_server_path: Optional[str] = Field(None, env="GITHUB_MCP_SERVER_PATH")
+    github_mcp_host: str = Field("localhost", env="GITHUB_MCP_HOST")
+    github_mcp_port: int = Field(8081, env="GITHUB_MCP_PORT")
     
     # Notion MCP settings
     notion_token: Optional[str] = Field(None, env="NOTION_TOKEN")
@@ -47,6 +55,27 @@ class Config(BaseSettings):
     k8s_namespace: str = Field("default", env="K8S_NAMESPACE")
     k8s_mcp_server_url: str = Field("http://localhost:8080", env="K8S_MCP_SERVER_URL")
     k8s_enable_destructive_operations: bool = Field(False, env="K8S_ENABLE_DESTRUCTIVE_OPERATIONS")
+    
+    # PagerDuty integration settings
+    pagerduty_webhook_secret: Optional[str] = Field(None, env="PAGERDUTY_WEBHOOK_SECRET")
+    pagerduty_api_key: Optional[str] = Field(None, env="PAGERDUTY_API_KEY")
+    pagerduty_enabled: bool = Field(True, env="PAGERDUTY_ENABLED")
+    
+    # API server settings
+    api_host: str = Field("0.0.0.0", env="API_HOST")
+    api_port: int = Field(8000, env="API_PORT")
+    api_reload: bool = Field(False, env="API_RELOAD")
+    api_workers: int = Field(1, env="API_WORKERS")
+    api_log_level: str = Field("info", env="API_LOG_LEVEL")
+    
+    # Webhook settings
+    webhook_rate_limit: int = Field(100, env="WEBHOOK_RATE_LIMIT")  # requests per minute
+    webhook_allowed_ips: Optional[str] = Field(None, env="WEBHOOK_ALLOWED_IPS")  # comma-separated
+    
+    # Additional settings
+    debug: bool = Field(False, env="DEBUG")
+    aws_profile: Optional[str] = Field(None, env="AWS_PROFILE")
+    aws_default_region: str = Field("us-east-1", env="AWS_DEFAULT_REGION")
     
     class Config:
         env_file = ".env"

@@ -1,0 +1,78 @@
+# App 5: Liveness Probe Failure - Health Check Failing
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unhealthy-app
+  namespace: test-apps
+  labels:
+    app: unhealthy
+    issue: liveness-probe-failure
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: unhealthy
+  template:
+    metadata:
+      labels:
+        app: unhealthy
+    spec:
+      containers:
+      - name: app
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - |
+            # Start nginx
+            nginx -g 'daemon off;' &
+            # Remove health endpoint after 60 seconds
+            sleep 60
+            rm -f /usr/share/nginx/html/health
+            wait
+        livenessProbe:
+          httpGet:
+            path: /health  # This endpoint will disappear after 60s
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+      initContainers:
+      - name: setup
+        image: busybox
+        command: ['sh', '-c', 'echo "OK" > /usr/share/nginx/html/health']
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: html
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: unhealthy-app
+  namespace: test-apps
+spec:
+  selector:
+    app: unhealthy
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: LoadBalancer

@@ -52,7 +52,7 @@ ehthumbs_vista.db
 [Dd]esktop.ini
 $RECYCLE.BIN/
 *.lnk
-
+.terraform/
 # Linux
 *~
 .fuse_hidden*
@@ -62,9 +62,14 @@ $RECYCLE.BIN/
 
 # Project specific
 *.log
+*.pyc
 *.pid
 *.seed
 *.pid.lock
+
+#pycache
+__pycache__/
+*.pyc
 
 # GitHub MCP Server (external dependency - DO NOT COMMIT)
 github-mcp-server
@@ -100,3 +105,23 @@ Thumbs.db
 .cache/
 tmp/
 temp/
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfplan
+*.tfplan.*
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+terraform.rc
+
+aws/
+*.zip

@@ -1,0 +1,57 @@
+{
+  "family": "oncall-agent-backend",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "taskRoleArn": "arn:aws:iam::500489831186:role/oncall-agent-ecs-task-role",
+  "executionRoleArn": "arn:aws:iam::500489831186:role/oncall-agent-ecs-execution-role",
+  "containerDefinitions": [
+    {
+      "name": "oncall-agent-backend",
+      "image": "REPLACE_WITH_IMAGE_URL",
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "LOG_LEVEL",
+          "value": "INFO"
+        },
+        {
+          "name": "K8S_ENABLED",
+          "value": "true"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "ANTHROPIC_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:500489831186:secret:oncall-agent/anthropic-api-key-CsC1pn"
+        },
+        {
+          "name": "K8S_CONFIG",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:500489831186:secret:oncall-agent/k8s-config-cId4uh"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/oncall-agent-backend",
+          "awslogs-region": "ap-south-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "python -c 'import sys; sys.exit(0)'"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      }
+    }
+  ]
+}

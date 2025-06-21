@@ -1,10 +1,10 @@
 """Base class for MCP (Model Context Protocol) integrations."""
 
-from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List
 import asyncio
 import logging
+from abc import ABC, abstractmethod
 from datetime import datetime
+from typing import Any
 
 
 class MCPIntegration(ABC):
@@ -14,8 +14,8 @@ class MCPIntegration(ABC):
     to work with the oncall agent. Each integration (Kubernetes, Grafana, etc.)
     should extend this class and implement the required methods.
     """
-    
-    def __init__(self, name: str, config: Optional[Dict[str, Any]] = None):
+
+    def __init__(self, name: str, config: dict[str, Any] | None = None):
         """Initialize the MCP integration.
         
         Args:
@@ -26,8 +26,8 @@ class MCPIntegration(ABC):
         self.config = config or {}
         self.logger = logging.getLogger(f"{__name__}.{name}")
         self.connected = False
-        self.connection_time: Optional[datetime] = None
-        
+        self.connection_time: datetime | None = None
+
     @abstractmethod
     async def connect(self) -> None:
         """Connect to the MCP server/service.
@@ -39,7 +39,7 @@ class MCPIntegration(ABC):
             ConnectionError: If unable to connect to the service
         """
         pass
-    
+
     @abstractmethod
     async def disconnect(self) -> None:
         """Disconnect from the MCP server/service.
@@ -48,9 +48,9 @@ class MCPIntegration(ABC):
         resources being used by the integration.
         """
         pass
-    
+
     @abstractmethod
-    async def fetch_context(self, context_type: str, **kwargs) -> Dict[str, Any]:
+    async def fetch_context(self, context_type: str, **kwargs) -> dict[str, Any]:
         """Fetch context information from the integration.
         
         This method retrieves relevant context data that can help in
@@ -68,9 +68,9 @@ class MCPIntegration(ABC):
             ConnectionError: If not connected to the service
         """
         pass
-    
+
     @abstractmethod
-    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute_action(self, action: str, params: dict[str, Any]) -> dict[str, Any]:
         """Execute an action through the integration.
         
         This method performs actions like restarting services, scaling deployments,
@@ -89,9 +89,9 @@ class MCPIntegration(ABC):
             ConnectionError: If not connected to the service
         """
         pass
-    
+
     @abstractmethod
-    async def get_capabilities(self) -> Dict[str, List[str]]:
+    async def get_capabilities(self) -> dict[str, list[str]]:
         """Get the capabilities of this integration.
         
         Returns a dictionary describing what context types and actions
@@ -104,8 +104,8 @@ class MCPIntegration(ABC):
                 - "features": List of additional features
         """
         pass
-    
-    async def health_check(self) -> Dict[str, Any]:
+
+    async def health_check(self) -> dict[str, Any]:
         """Perform a health check on the integration.
         
         Returns:
@@ -117,7 +117,7 @@ class MCPIntegration(ABC):
             "connection_time": self.connection_time.isoformat() if self.connection_time else None,
             "status": "healthy" if self.connected else "disconnected"
         }
-    
+
     def validate_connection(self) -> None:
         """Validate that the integration is connected.
         
@@ -126,7 +126,7 @@ class MCPIntegration(ABC):
         """
         if not self.connected:
             raise ConnectionError(f"{self.name} integration is not connected")
-    
+
     async def retry_operation(self, operation, max_attempts: int = 3, delay: float = 1.0):
         """Retry an operation with exponential backoff.
         
@@ -142,7 +142,7 @@ class MCPIntegration(ABC):
             The last exception if all attempts fail
         """
         last_exception = None
-        
+
         for attempt in range(max_attempts):
             try:
                 return await operation()
@@ -157,5 +157,5 @@ class MCPIntegration(ABC):
                     await asyncio.sleep(wait_time)
                 else:
                     self.logger.error(f"Operation failed after {max_attempts} attempts: {e}")
-        
+
         raise last_exception

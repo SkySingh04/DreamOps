@@ -1,0 +1,118 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly scan
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  backend-security:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: './backend'
+        format: 'sarif'
+        output: 'backend-trivy-results.sarif'
+    
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'backend-trivy-results.sarif'
+      continue-on-error: true
+    
+    - name: Run Bandit security linter
+      run: |
+        pip install bandit
+        bandit -r backend/src -f json -o backend-bandit-results.json || true
+    
+    - name: Upload Bandit results
+      uses: actions/upload-artifact@v4
+      with:
+        name: backend-security-scan-results
+        path: backend-bandit-results.json
+
+  frontend-security:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install pnpm
+      uses: pnpm/action-setup@v3
+      with:
+        version: 8
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    
+    - name: Install dependencies
+      working-directory: ./frontend
+      run: pnpm install
+    
+    - name: Run pnpm audit
+      working-directory: ./frontend
+      run: |
+        pnpm audit --json > pnpm-audit-results.json || true
+    
+    - name: Upload pnpm audit results
+      uses: actions/upload-artifact@v4
+      with:
+        name: frontend-security-scan-results
+        path: frontend/pnpm-audit-results.json
+    
+    - name: Run ESLint security plugin
+      working-directory: ./frontend
+      run: |
+        pnpm add --save-dev eslint-plugin-security
+        pnpm exec eslint . --ext .js,.jsx,.ts,.tsx --format json --output-file eslint-security-results.json || true
+    
+    - name: Upload ESLint results
+      uses: actions/upload-artifact@v4
+      with:
+        name: frontend-eslint-security-results
+        path: frontend/eslint-security-results.json
+
+  docker-security:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build backend Docker image
+      run: docker build -t oncall-backend:test -f backend/Dockerfile.prod ./backend
+    
+    - name: Run Trivy on Docker image
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'oncall-backend:test'
+        format: 'sarif'
+        output: 'docker-trivy-results.sarif'
+    
+    - name: Upload Docker scan results
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'docker-trivy-results.sarif'
+      continue-on-error: true
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run GitLeaks
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
