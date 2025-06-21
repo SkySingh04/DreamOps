@@ -16,20 +16,20 @@ async def simulate_pager_alert() -> PagerAlert:
     alert_type = "kubernetes"  # Change to "general" for non-k8s alert
     
     if alert_type == "kubernetes":
-        # Kubernetes pod crash alert
+        # Real Kubernetes pod crash alert from our cluster
         return PagerAlert(
-            alert_id="K8S-ALERT-001",
+            alert_id="K8S-REAL-001",
             severity="critical",
-            service_name="payment-service",
-            description="Pod payment-service-7d9f8b6c5-x2n4m is in CrashLoopBackOff state, restarting every 30 seconds",
+            service_name="broken-database-app",
+            description="Pod broken-database-app-55b6f9cfb5-h5ftt is in CrashLoopBackOff state - Database initialization failing",
             timestamp=datetime.now(timezone.utc).isoformat(),
             metadata={
-                "pod_name": "payment-service-7d9f8b6c5-x2n4m",
-                "namespace": "production",
-                "deployment_name": "payment-service",
-                "restart_count": 12,
+                "pod_name": "broken-database-app-55b6f9cfb5-h5ftt",
+                "namespace": "default",
+                "deployment_name": "broken-database-app",
+                "restart_count": 3,
                 "last_restart": "30 seconds ago",
-                "cluster": "prod-us-east-1"
+                "cluster": "kind-oncall-test"
             }
         )
     else:
