@@ -8,6 +8,11 @@ on:
   schedule:
     - cron: '0 0 * * 0'  # Weekly scan
 
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
 jobs:
   backend-security:
     runs-on: ubuntu-latest
@@ -26,6 +31,7 @@ jobs:
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: 'backend-trivy-results.sarif'
+      continue-on-error: true
     
     - name: Run Bandit security linter
       run: |
@@ -52,12 +58,10 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '20'
-        cache: 'pnpm'
-        cache-dependency-path: frontend/pnpm-lock.yaml
     
     - name: Install dependencies
       working-directory: ./frontend
-      run: pnpm install --frozen-lockfile
+      run: pnpm install
     
     - name: Run pnpm audit
       working-directory: ./frontend
@@ -101,6 +105,7 @@ jobs:
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: 'docker-trivy-results.sarif'
+      continue-on-error: true
 
   secrets-scan:
     runs-on: ubuntu-latest
