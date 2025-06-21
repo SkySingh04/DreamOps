@@ -1,6 +1,6 @@
-# AI Assistant Instructions for Oncall Agent Codebase
+# CLAUDE.md
 
-This document provides instructions for AI assistants (like Claude, GPT-4, etc.) on how to effectively work with this codebase.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
@@ -17,6 +17,8 @@ This is an oncall AI agent built with:
 2. **Async-First**: All operations are async to handle concurrent MCP calls efficiently
 3. **Configuration-Driven**: Uses pydantic for config validation and environment variables
 4. **Type-Safe**: Extensive use of type hints throughout the codebase
+5. **Retry Logic**: Built-in exponential backoff for network operations (configurable via MCP_MAX_RETRIES)
+6. **Singleton Config**: Global configuration instance accessed via `get_config()`
 
 ## Working with the Codebase
 
@@ -100,6 +102,19 @@ When asked to test changes:
 2. Add to `.env.example` with description
 3. Document in README.md
 
+## Commands
+
+### Development Commands
+- **Install dependencies**: `uv sync`
+- **Run the agent**: `uv run python main.py`
+- **Add dependency**: `uv add <package>`
+- **Add dev dependency**: `uv add --dev <package>`
+- **Check environment**: `uv run python test_run.py`
+
+### Testing and Validation
+- **Run demo**: `uv run python main.py` (runs a simulated alert through the agent)
+- **Validate setup**: `uv run python test_run.py` (checks Python version, packages, env vars)
+
 ## Dependencies and Tools
 
 - **uv**: Package manager (use `uv add <package>` to add dependencies)
@@ -112,6 +127,28 @@ When asked to test changes:
 1. Set `LOG_LEVEL=DEBUG` in `.env` for verbose logging
 2. Check agent state with `agent.mcp_integrations` dictionary
 3. Use `agent.health_check()` on integrations to verify connectivity
+
+## MCP Integration Interface
+
+Every MCP integration must implement these methods from the base class:
+- `async def connect()`: Establish connection to the service
+- `async def disconnect()`: Gracefully close connections
+- `async def fetch_context(params: Dict[str, Any])`: Retrieve information
+- `async def execute_action(action: str, params: Dict[str, Any])`: Perform remediation
+- `def get_capabilities() -> List[str]`: List available actions
+- `async def health_check() -> bool`: Verify connection status
+
+## High-Level Flow
+
+1. **Alert Reception**: `OncallAgent.handle_pager_alert()` receives a PagerAlert
+2. **Context Gathering**: Agent queries all registered MCP integrations for context
+3. **Claude Analysis**: Sends alert + context to Claude for intelligent analysis
+4. **Response Generation**: Returns structured incident analysis with:
+   - Severity assessment
+   - Root cause analysis
+   - Impact assessment
+   - Recommended actions (both immediate and follow-up)
+   - Monitoring suggestions
 
 ## Future Architecture Considerations
 

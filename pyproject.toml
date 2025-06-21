@@ -3,7 +3,7 @@ name = "oncall-ai-agent"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
     "agno>=1.6.3",
     "anthropic>=0.54.0",
