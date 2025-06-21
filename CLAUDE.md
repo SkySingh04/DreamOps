@@ -310,6 +310,10 @@ uv run python simulate_pagerduty_alert.py pod_crash --github-integration
 4. **Resource Access**: Repository contents, file browsing
 5. **Cleanup**: Process termination and resource cleanup
 
+- `GITHUB_MCP_SERVER_PATH`: Path to GitHub MCP server binary
+- `GITHUB_MCP_HOST`: Host for MCP server (default: localhost)
+- `GITHUB_MCP_PORT`: Port for MCP server (default: 8081)
+
 ## Debugging Tips
 
 1. Set `LOG_LEVEL=DEBUG` in `.env` for verbose logging

@@ -4,8 +4,8 @@
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "512",
   "memory": "1024",
-  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/oncall-agent-ecs-task-role",
-  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/oncall-agent-ecs-execution-role",
+  "taskRoleArn": "arn:aws:iam::500489831186:role/oncall-agent-ecs-task-role",
+  "executionRoleArn": "arn:aws:iam::500489831186:role/oncall-agent-ecs-execution-role",
   "containerDefinitions": [
     {
       "name": "oncall-agent-backend",
@@ -30,11 +30,11 @@
       "secrets": [
         {
           "name": "ANTHROPIC_API_KEY",
-          "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:oncall-agent/anthropic-api-key"
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:500489831186:secret:oncall-agent/anthropic-api-key-CsC1pn"
         },
         {
           "name": "K8S_CONFIG",
-          "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:oncall-agent/k8s-config"
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:500489831186:secret:oncall-agent/k8s-config-cId4uh"
         }
       ],
       "logConfiguration": {

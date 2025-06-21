@@ -10,6 +10,11 @@ import {
   Plug, 
   Settings, 
   Menu 
+  Menu,
+  Bot,
+  BarChart3,
+  Activity,
+  Shield
 } from 'lucide-react';
 
 export default function DashboardLayout({
@@ -24,6 +29,11 @@ export default function DashboardLayout({
     { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { href: '/incidents', icon: AlertTriangle, label: 'Incidents' },
     { href: '/integrations', icon: Plug, label: 'Integrations' },
+    { href: '/ai-control', icon: Bot, label: 'AI Control' },
+    { href: '/integrations', icon: Plug, label: 'Integrations' },
+    { href: '/analytics', icon: BarChart3, label: 'Analytics' },
+    { href: '/monitoring', icon: Activity, label: 'Monitoring' },
+    { href: '/security', icon: Shield, label: 'Security' },
     { href: '/settings', icon: Settings, label: 'Settings' }
   ];
 

@@ -5,6 +5,9 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main ]
+    branches: [main]
+  pull_request:
+    branches: [main]
   schedule:
     - cron: '0 0 * * 0'  # Weekly scan
 
@@ -13,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
@@ -24,6 +28,7 @@ jobs:
     
     - name: Upload Trivy scan results to GitHub Security tab
       uses: github/codeql-action/upload-sarif@v2
+      uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: 'backend-trivy-results.sarif'
     
@@ -42,6 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Run npm audit
       working-directory: ./frontend
@@ -70,6 +76,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Build backend Docker image
       run: docker build -t oncall-backend:test -f backend/Dockerfile.prod ./backend
@@ -83,6 +90,7 @@ jobs:
     
     - name: Upload Docker scan results
       uses: github/codeql-action/upload-sarif@v2
+      uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: 'docker-trivy-results.sarif'
 
@@ -90,6 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Run GitLeaks
       uses: gitleaks/gitleaks-action@v2

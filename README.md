@@ -267,6 +267,9 @@ uv run python main.py  # If GitHub token is configured
 - ✅ Full GitHub API access via MCP protocol
 - ✅ Clean resource cleanup and error handling
 
+2. **GitHub** - Fetches context from repositories and creates incident issues
+3. **Notion** - Creates incident documentation (if configured)
+
 ### Adding New Integrations
 
 1. Create a new file in `backend/src/oncall_agent/mcp_integrations/`
