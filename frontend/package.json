@@ -9,7 +9,10 @@
     "db:seed": "npx tsx lib/db/seed.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "test": "echo \"No tests configured yet\""
   },
   "dependencies": {
     "@tailwindcss/postcss": "4.1.7",
