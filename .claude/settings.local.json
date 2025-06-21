@@ -28,7 +28,8 @@
       "Bash(timeout 30s kubectl get pods -n stress-test -w)",
       "Bash(./fuck_kubernetes.sh:*)",
       "Bash(true)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(find:*)"
     ],
     "deny": []
   }

@@ -46,8 +46,12 @@ import {
 import { toast } from 'sonner';
 import { apiClient, queryKeys } from '@/lib/api-client';
 import { useWebSocket } from '@/lib/hooks/use-websocket';
+import { useAgentLogs } from '@/lib/hooks/use-agent-logs';
 import { Incident, AIAction, TimelineEvent, Severity, IncidentStatus } from '@/lib/types';
 import { format, formatDistanceToNow } from 'date-fns';
+import { AgentLogs } from '@/components/incidents/agent-logs';
+import { AgentStatusPanel } from '@/components/incidents/agent-status-panel';
+import { AIAnalysisDisplay } from '@/components/incidents/ai-analysis-display';
 
 const MOCK_INCIDENT_TYPES = [
   { value: 'server_down', label: 'Server Down', severity: 'critical' },
@@ -66,7 +70,11 @@ export default function IncidentsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showMockDialog, setShowMockDialog] = useState(false);
   const [expandedIncident, setExpandedIncident] = useState<string | null>(null);
+  const [showAgentLogs, setShowAgentLogs] = useState(true);
   const queryClient = useQueryClient();
+  
+  // Agent logs hook for real-time monitoring
+  const { logs, isConnected, activeIncidents, currentStage, currentProgress } = useAgentLogs();
 
   // Using mock data for now
   const incidents = [
@@ -306,11 +314,40 @@ export default function IncidentsPage() {
           <h1 className="text-2xl font-bold">Incident Management</h1>
           <p className="text-gray-600 mt-1">Monitor and resolve incidents with AI assistance</p>
         </div>
-        <Button onClick={() => setShowMockDialog(true)}>
-          <Zap className="h-4 w-4 mr-2" />
-          Trigger Test Incident
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAgentLogs(!showAgentLogs)}
+          >
+            <Terminal className="h-4 w-4 mr-2" />
+            {showAgentLogs ? 'Hide' : 'Show'} AI Logs
+          </Button>
+          <Button onClick={() => setShowMockDialog(true)}>
+            <Zap className="h-4 w-4 mr-2" />
+            Trigger Test Incident
+          </Button>
+        </div>
       </div>
+      
+      {/* AI Agent Status Panel */}
+      <AgentStatusPanel
+        activeIncidents={activeIncidents}
+        currentStage={currentStage}
+        currentProgress={currentProgress}
+      />
+
+      {/* Two column layout for AI logs and incidents */}
+      <div className={showAgentLogs ? "grid grid-cols-1 lg:grid-cols-2 gap-6" : ""}>
+        {/* AI Agent Logs Section */}
+        {showAgentLogs && (
+          <div className="lg:col-span-1">
+            <AgentLogs incidentId={selectedIncident?.id} />
+          </div>
+        )}
+        
+        {/* Main incidents section */}
+        <div className={showAgentLogs ? "lg:col-span-1" : ""}>
 
       {/* Search and Filter Bar */}
       <div className="flex gap-4 flex-wrap">
@@ -447,9 +484,17 @@ export default function IncidentsPage() {
                         <div className="space-y-2">
                           {incident.status === 'active' && (
                             <>
-                              <Button variant="outline" size="sm" className="w-full justify-start">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="w-full justify-start"
+                                onClick={() => {
+                                  setSelectedIncident(incident);
+                                  setShowAgentLogs(true);
+                                }}
+                              >
                                 <Eye className="h-4 w-4 mr-2" />
-                                View Logs
+                                View AI Agent Logs
                               </Button>
                               <Button variant="outline" size="sm" className="w-full justify-start">
                                 <Terminal className="h-4 w-4 mr-2" />
@@ -486,6 +531,9 @@ export default function IncidentsPage() {
             </Card>
           ))
         )}
+      </div>
+
+        </div>
       </div>
 
       {/* Mock Incident Dialog */}
