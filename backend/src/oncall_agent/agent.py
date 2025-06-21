@@ -47,6 +47,7 @@ class OncallAgent:
             "image_pull": re.compile(r"(ImagePullBackOff|ErrImagePull|Failed to pull image)", re.IGNORECASE),
             "high_memory": re.compile(r"(memory|Memory).*(?:high|above threshold|exceeded)", re.IGNORECASE),
             "high_cpu": re.compile(r"(cpu|CPU).*(?:high|above threshold|exceeded)", re.IGNORECASE),
+            "oom_kill": re.compile(r"(OOMKill|OOM Kill|Out of Memory)", re.IGNORECASE),
             "service_down": re.compile(r"(Service|service).*(?:down|unavailable|not responding)", re.IGNORECASE),
             "deployment_failed": re.compile(r"(Deployment|deployment).*(?:failed|failing|error)", re.IGNORECASE),
             "node_issue": re.compile(r"(Node|node).*(?:NotReady|unreachable|down)", re.IGNORECASE),
@@ -382,8 +383,8 @@ class OncallAgent:
                 result["suggested_actions"] = k8s_context["automated_actions"]
 
             # Add automated actions if available
-            if k8s_alert_type and all_context.get("kubernetes", {}).get("automated_actions"):
-                result["automated_actions"] = all_context["kubernetes"]["automated_actions"]
+            if k8s_alert_type and k8s_context.get("automated_actions"):
+                result["automated_actions"] = k8s_context["automated_actions"]
                 self.logger.info("🤖 Automated actions available:")
                 for action in result["automated_actions"]:
                     self.logger.info(f"  - {action['action']}: {action['reason']} (confidence: {action['confidence']})")
@@ -397,6 +398,67 @@ class OncallAgent:
                         )
                     except Exception as e:
                         self.logger.error(f"❌ Failed to send automated action to dashboard: {e}")
+                
+                # Check if we should execute in YOLO mode
+                try:
+                    # Import here to avoid circular dependency
+                    from .api.routers.agent import AGENT_CONFIG
+                    from .api.schemas import AIMode
+                    
+                    if AGENT_CONFIG.mode == AIMode.YOLO and AGENT_CONFIG.auto_execute_enabled:
+                        self.logger.info("🚀 YOLO MODE ACTIVATED - Executing automated actions!")
+                        
+                        # Execute high confidence actions
+                        executed_actions = []
+                        for action in result["automated_actions"]:
+                            if action.get("confidence", 0) >= 0.6:  # Execute if confidence >= 60%
+                                self.logger.info(f"⚡ Executing action: {action['action']}")
+                                
+                                # Execute via K8s MCP integration
+                                if hasattr(self, 'k8s_integration'):
+                                    # Check if this is a kubectl command
+                                    if action['action'] == 'execute_kubectl_command':
+                                        exec_result = await self.k8s_integration.execute_kubectl_command(
+                                            action['params']['command'],
+                                            dry_run=False,
+                                            auto_approve=True
+                                        )
+                                    elif hasattr(self.k8s_integration, 'execute_action'):
+                                        exec_result = await self.k8s_integration.execute_action(
+                                            action['action'],
+                                            {**action.get('params', {}), 'auto_approve': True}
+                                        )
+                                    else:
+                                        self.logger.error(f"K8s integration doesn't support action: {action['action']}")
+                                        continue
+                                    
+                                    if exec_result.get('success'):
+                                        self.logger.info(f"✅ Successfully executed: {action['action']}")
+                                        executed_actions.append({
+                                            'action': action['action'],
+                                            'result': exec_result,
+                                            'status': 'success'
+                                        })
+                                        
+                                        # Send execution result to dashboard
+                                        await send_ai_action_to_dashboard(
+                                            action=f"executed_{action['action']}",
+                                            description=f"YOLO: Executed {action['action']} - {exec_result.get('output', 'Success')}",
+                                            incident_id=incident_id
+                                        )
+                                    else:
+                                        self.logger.error(f"❌ Failed to execute: {action['action']} - {exec_result.get('error')}")
+                                        executed_actions.append({
+                                            'action': action['action'],
+                                            'result': exec_result,
+                                            'status': 'failed'
+                                        })
+                        
+                        result["executed_actions"] = executed_actions
+                        result["execution_mode"] = "YOLO"
+                        
+                except Exception as e:
+                    self.logger.error(f"Error checking/executing YOLO mode: {e}")
 
             # Log summary
             self.logger.info(f"✅ Alert {alert.alert_id} analyzed successfully")
@@ -536,6 +598,85 @@ class OncallAgent:
                             "reason": f"High {alert_type.split('_')[1]} usage, scaling up may help"
                         }
                     ]
+                    
+            elif alert_type == "oom_kill":
+                # For OOMKill alerts, find pods with high restart counts
+                self.logger.info("Detecting OOMKill - searching for problematic pods...")
+                pods_result = await k8s.list_pods(namespace)
+                if pods_result.get("success", False) and "pods" in pods_result:
+                    all_pods = pods_result["pods"]
+                else:
+                    # Fallback to fetch_context if list_pods doesn't work
+                    ctx_result = await k8s.fetch_context("list_pods", namespace=namespace)
+                    all_pods = ctx_result.get("pods", [])
+                    
+                context["total_pods"] = len(all_pods)
+                
+                # Find pods with restarts or issues
+                problematic_pods = []
+                for pod in all_pods:
+                    if isinstance(pod, dict):
+                        # Check for restart count or problematic status
+                        if (pod.get("status") in ["CrashLoopBackOff", "Error", "OOMKilled"] or 
+                            pod.get("restarts", 0) > 0):
+                            problematic_pods.append(pod)
+                
+                context["problematic_pods"] = problematic_pods
+                
+                # Generate automated actions for OOMKill
+                automated_actions = []
+                
+                # Action 1: Check top memory consumers
+                automated_actions.append({
+                    "action": "execute_kubectl_command",
+                    "confidence": 0.9,
+                    "params": {
+                        "command": ["top", "pods", "--all-namespaces", "--sort-by=memory"],
+                        "dry_run": False,
+                        "auto_approve": True
+                    },
+                    "reason": "Identify memory-hungry pods to find OOMKill culprits"
+                })
+                
+                # Action 2: Get events related to OOMKill
+                automated_actions.append({
+                    "action": "execute_kubectl_command",
+                    "confidence": 0.85,
+                    "params": {
+                        "command": ["get", "events", "--all-namespaces", "--field-selector", "reason=OOMKilling", "--sort-by=.lastTimestamp"],
+                        "dry_run": False,
+                        "auto_approve": True
+                    },
+                    "reason": "Check recent OOMKill events to identify affected pods"
+                })
+                
+                # Action 3: If we found problematic pods, restart the worst one
+                if problematic_pods:
+                    worst_pod = max(problematic_pods, key=lambda p: p.get("restarts", 0))
+                    automated_actions.append({
+                        "action": "restart_pod",
+                        "confidence": 0.7,
+                        "params": {
+                            "pod_name": worst_pod["name"],
+                            "namespace": worst_pod.get("namespace", namespace)
+                        },
+                        "reason": f"Restart pod with {worst_pod.get('restarts', 0)} restarts to clear memory state"
+                    })
+                
+                # Action 4: Check node memory pressure
+                automated_actions.append({
+                    "action": "execute_kubectl_command",
+                    "confidence": 0.8,
+                    "params": {
+                        "command": ["describe", "nodes"],
+                        "dry_run": False,
+                        "auto_approve": True  
+                    },
+                    "reason": "Check for node-level memory pressure that might cause OOMKills"
+                })
+                
+                context["automated_actions"] = automated_actions
+                self.logger.info(f"Generated {len(automated_actions)} automated actions for OOMKill")
 
             elif alert_type == "service_down":
                 service_name = metadata.get("service_name", alert.service_name)

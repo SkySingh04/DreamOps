@@ -91,16 +91,16 @@ export function LogEntry({ log }: LogEntryProps) {
 
   return (
     <div className={cn(
-      "rounded-lg transition-colors",
+      "rounded-lg transition-colors overflow-hidden",
       log.level === 'ALERT' && "bg-red-50 border border-red-200",
       log.level === 'ERROR' && "bg-red-50/50",
       log.level === 'SUCCESS' && "bg-green-50/50"
     )}>
-      <div className="flex items-start gap-3 p-3">
+      <div className="flex items-start gap-3 p-3 overflow-hidden">
         <Icon className={cn("w-4 h-4 mt-0.5 flex-shrink-0", config.color)} />
         
-        <div className="flex-1 space-y-1">
-          <div className="flex items-center gap-2">
+        <div className="flex-1 space-y-1 min-w-0 overflow-hidden">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-muted-foreground font-mono">
               {formatTimestamp(log.timestamp)}
             </span>
@@ -119,7 +119,7 @@ export function LogEntry({ log }: LogEntryProps) {
             )}
           </div>
           
-          <p className="text-sm">{log.message}</p>
+          <p className="text-sm break-words">{log.message}</p>
           
           {/* Basic metadata (always visible) */}
           {log.metadata && !hasFullAnalysis && Object.keys(log.metadata).length > 0 && (
@@ -154,11 +154,12 @@ export function LogEntry({ log }: LogEntryProps) {
 
       {/* Expanded content */}
       {isExpanded && (
-        <div className="px-3 pb-3 ml-7 max-w-full overflow-hidden">
+        <div className="pb-3 overflow-hidden">
           {hasFullAnalysis ? (
-            <Card className="p-4 bg-gray-50/50 overflow-hidden">
-              <div className="markdown-content w-full overflow-x-auto">
-                <ReactMarkdown
+            <div className="mt-2 overflow-hidden max-w-full">
+              <div className="markdown-content px-3 overflow-hidden max-w-full">
+                <div className="overflow-x-auto max-w-full">
+                  <ReactMarkdown
                   components={{
                     code({ node, inline, className, children, ...props }) {
                       const match = /language-(\w+)/.exec(className || '')
@@ -177,6 +178,8 @@ export function LogEntry({ log }: LogEntryProps) {
                                 margin: 0,
                                 borderRadius: '0.375rem',
                                 fontSize: '0.875rem',
+                                maxWidth: '100%',
+                                overflowX: 'auto',
                               }}
                               {...props}
                             >
@@ -208,14 +211,15 @@ export function LogEntry({ log }: LogEntryProps) {
                     h1: ({ children }) => <h1 className="text-lg font-bold mt-4 mb-2">{children}</h1>,
                     h2: ({ children }) => <h2 className="text-base font-semibold mt-3 mb-2">{children}</h2>,
                     h3: ({ children }) => <h3 className="text-sm font-semibold mt-2 mb-1">{children}</h3>,
-                    ul: ({ children }) => <ul className="list-disc pl-5 space-y-1">{children}</ul>,
-                    ol: ({ children }) => <ol className="list-decimal pl-5 space-y-1">{children}</ol>,
-                    li: ({ children }) => <li className="text-sm">{children}</li>,
-                    p: ({ children }) => <p className="text-sm mb-2">{children}</p>,
+                    ul: ({ children }) => <ul className="list-disc pl-5 space-y-1 max-w-full">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal pl-5 space-y-1 max-w-full">{children}</ol>,
+                    li: ({ children }) => <li className="text-sm break-words">{children}</li>,
+                    p: ({ children }) => <p className="text-sm mb-2 break-words">{children}</p>,
                   }}
-                >
-                  {log.metadata.analysis}
-                </ReactMarkdown>
+                  >
+                    {log.metadata.analysis}
+                  </ReactMarkdown>
+                </div>
               </div>
               
               {/* Show parsed analysis summary */}
@@ -239,7 +243,7 @@ export function LogEntry({ log }: LogEntryProps) {
                   )}
                 </div>
               )}
-            </Card>
+            </div>
           ) : (
             // Regular metadata display
             <div className="text-xs text-muted-foreground space-y-1">

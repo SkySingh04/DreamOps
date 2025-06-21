@@ -50,7 +50,7 @@ export function AgentLogs({ incidentId, className }: AgentLogsProps) {
     : logs
 
   return (
-    <Card className={className}>
+    <Card className={`${className} overflow-hidden`}>
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -98,13 +98,13 @@ export function AgentLogs({ incidentId, className }: AgentLogsProps) {
         )}
       </CardHeader>
       
-      <CardContent className="p-0">
+      <CardContent className="p-0 overflow-hidden">
         <ScrollArea 
           ref={scrollAreaRef}
-          className="h-[400px] border-t" 
+          className="h-[400px] border-t overflow-hidden" 
           onScroll={handleScroll}
         >
-          <div className="p-4 space-y-2">
+          <div className="p-4 space-y-2 overflow-hidden">
             {relevantLogs.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Info className="w-8 h-8 mx-auto mb-2 opacity-50" />

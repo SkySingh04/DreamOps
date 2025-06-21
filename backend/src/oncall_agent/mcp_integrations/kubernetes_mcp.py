@@ -255,16 +255,80 @@ class KubernetesMCPServerIntegration(MCPIntegration):
         except:
             return False
 
-    async def get_capabilities(self) -> dict[str, list[str]]:
+    def get_capabilities(self) -> dict[str, Any]:
         """Return capabilities of the Kubernetes integration."""
-        capabilities = await super().get_capabilities()
+        return {
+            "context_types": ["pods", "deployments", "services", "events", "logs"],
+            "actions": ["restart_pod", "scale_deployment", "rollback_deployment", "execute_kubectl"],
+            "features": ["risk_assessment", "dry_run", "auto_approval"],
+            "execution_modes": ["direct", "dry_run", "approval_required"],
+            "risk_assessment": ["low", "medium", "high"],
+            "command_types": list(self.command_risk_levels.keys())
+        }
+
+    async def fetch_context(self, context_type: str, **kwargs) -> dict[str, Any]:
+        """Fetch context from Kubernetes cluster.
         
-        # Add execution capabilities
-        capabilities["execution_modes"] = ["direct", "dry_run", "approval_required"]
-        capabilities["risk_assessment"] = ["low", "medium", "high"]
-        capabilities["command_types"] = list(self.command_risk_levels.keys())
+        This method is required by the base class and provides compatibility
+        with the standard MCP integration interface.
+        """
+        # Map context_type to action for backward compatibility
+        action = kwargs.get("action", context_type if context_type in ["list_pods", "get_pod_logs", "get_events"] else "list_pods")
+        namespace = kwargs.get("namespace", "default")
         
-        return capabilities
+        if action == "list_pods":
+            result = await self._execute_kubectl_command(["get", "pods", "-n", namespace, "-o", "json"])
+            if result.get("success"):
+                import json
+                try:
+                    pods_data = json.loads(result.get("output", "{}"))
+                    return {
+                        "pods": [
+                            {
+                                "name": pod["metadata"]["name"],
+                                "namespace": pod["metadata"]["namespace"],
+                                "status": pod["status"]["phase"],
+                                "containers": len(pod["spec"]["containers"])
+                            }
+                            for pod in pods_data.get("items", [])
+                        ]
+                    }
+                except:
+                    return {"error": "Failed to parse pod data"}
+            else:
+                return {"error": result.get("error", "Failed to list pods")}
+                
+        elif action == "get_pod_logs":
+            pod_name = kwargs.get("pod_name")
+            if not pod_name:
+                return {"error": "pod_name is required"}
+            result = await self._execute_kubectl_command(["logs", pod_name, "-n", namespace, "--tail=100"])
+            return {"logs": result.get("output", ""), "success": result.get("success", False)}
+            
+        elif action == "get_events":
+            result = await self._execute_kubectl_command(["get", "events", "-n", namespace, "-o", "json"])
+            if result.get("success"):
+                try:
+                    import json
+                    events_data = json.loads(result.get("output", "{}"))
+                    return {
+                        "events": [
+                            {
+                                "type": event.get("type"),
+                                "reason": event.get("reason"),
+                                "message": event.get("message"),
+                                "object": f"{event.get('involvedObject', {}).get('kind')}/{event.get('involvedObject', {}).get('name')}"
+                            }
+                            for event in events_data.get("items", [])[-10:]  # Last 10 events
+                        ]
+                    }
+                except:
+                    return {"error": "Failed to parse events data"}
+            else:
+                return {"error": result.get("error", "Failed to get events")}
+                
+        else:
+            return {"error": f"Unknown action: {action}"}
 
     async def execute_kubectl_command(self, command: list[str], dry_run: bool = False, 
                                     auto_approve: bool = False) -> dict[str, Any]:
@@ -614,3 +678,88 @@ class KubernetesMCPServerIntegration(MCPIntegration):
     def get_audit_log(self) -> list[dict[str, Any]]:
         """Get the audit log of all commands."""
         return self._audit_log
+    
+    # Add compatibility methods for the standard K8s integration interface
+    async def list_pods(self, namespace: str = "default") -> dict[str, Any]:
+        """List pods in a namespace."""
+        return await self.fetch_context({"action": "list_pods", "namespace": namespace})
+    
+    async def get_pod_logs(self, pod_name: str, namespace: str = "default", tail_lines: int = 100) -> dict[str, Any]:
+        """Get pod logs."""
+        result = await self._execute_kubectl_command(["logs", pod_name, "-n", namespace, f"--tail={tail_lines}"])
+        return {"success": result.get("success", False), "logs": result.get("output", "")}
+    
+    async def get_pod_events(self, pod_name: str, namespace: str = "default") -> dict[str, Any]:
+        """Get pod events."""
+        result = await self._execute_kubectl_command([
+            "get", "events", "-n", namespace, 
+            f"--field-selector=involvedObject.name={pod_name}",
+            "-o", "json"
+        ])
+        if result.get("success"):
+            try:
+                import json
+                events_data = json.loads(result.get("output", "{}"))
+                return {
+                    "success": True,
+                    "events": events_data.get("items", [])
+                }
+            except:
+                return {"success": False, "error": "Failed to parse events"}
+        return {"success": False, "error": result.get("error", "Unknown error")}
+    
+    async def describe_pod(self, pod_name: str, namespace: str = "default") -> dict[str, Any]:
+        """Describe a pod."""
+        result = await self._execute_kubectl_command(["describe", "pod", pod_name, "-n", namespace])
+        return {"success": result.get("success", False), "description": result.get("output", "")}
+    
+    async def get_deployment_status(self, deployment_name: str, namespace: str = "default") -> dict[str, Any]:
+        """Get deployment status."""
+        result = await self._execute_kubectl_command(["get", "deployment", deployment_name, "-n", namespace, "-o", "json"])
+        if result.get("success"):
+            try:
+                import json
+                deployment_data = json.loads(result.get("output", "{}"))
+                return {
+                    "success": True,
+                    "deployment": {
+                        "name": deployment_data.get("metadata", {}).get("name"),
+                        "namespace": deployment_data.get("metadata", {}).get("namespace"),
+                        "replicas": deployment_data.get("status", {}).get("replicas", 0),
+                        "ready": deployment_data.get("status", {}).get("readyReplicas", 0),
+                        "healthy": deployment_data.get("status", {}).get("readyReplicas", 0) == deployment_data.get("spec", {}).get("replicas", 1)
+                    }
+                }
+            except:
+                return {"success": False, "error": "Failed to parse deployment"}
+        return {"success": False, "error": result.get("error", "Unknown error")}
+    
+    async def get_service_status(self, service_name: str, namespace: str = "default") -> dict[str, Any]:
+        """Get service status."""
+        result = await self._execute_kubectl_command(["get", "service", service_name, "-n", namespace, "-o", "json"])
+        if result.get("success"):
+            try:
+                import json
+                service_data = json.loads(result.get("output", "{}"))
+                endpoints_result = await self._execute_kubectl_command(["get", "endpoints", service_name, "-n", namespace, "-o", "json"])
+                endpoint_count = 0
+                if endpoints_result.get("success"):
+                    try:
+                        endpoints_data = json.loads(endpoints_result.get("output", "{}"))
+                        endpoint_count = len(endpoints_data.get("subsets", []))
+                    except:
+                        pass
+                        
+                return {
+                    "success": True,
+                    "service": {
+                        "name": service_data.get("metadata", {}).get("name"),
+                        "namespace": service_data.get("metadata", {}).get("namespace"),
+                        "type": service_data.get("spec", {}).get("type"),
+                        "selector": service_data.get("spec", {}).get("selector", {}),
+                        "endpoint_count": endpoint_count
+                    }
+                }
+            except:
+                return {"success": False, "error": "Failed to parse service"}
+        return {"success": False, "error": result.get("error", "Unknown error")}
