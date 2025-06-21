@@ -3,15 +3,18 @@
 import asyncio
 import random
 import uuid
-from datetime import datetime, timedelta, UTC
-from typing import Dict, List, Optional, Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.oncall_agent.api.schemas import (
-    LogEntry, LogLevel, MonitoringMetric,
-    SystemStatus
+    LogEntry,
+    LogLevel,
+    MonitoringMetric,
+    SystemStatus,
 )
 from src.oncall_agent.utils import get_logger
 
@@ -19,37 +22,37 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/monitoring", tags=["monitoring"])
 
 # Active WebSocket connections
-active_connections: List[WebSocket] = []
+active_connections: list[WebSocket] = []
 
 
 @router.get("/logs")
 async def get_logs(
-    level: Optional[LogLevel] = Query(None, description="Filter by log level"),
-    source: Optional[str] = Query(None, description="Filter by source"),
+    level: LogLevel | None = Query(None, description="Filter by log level"),
+    source: str | None = Query(None, description="Filter by source"),
     limit: int = Query(100, ge=1, le=1000),
-    since: Optional[datetime] = Query(None, description="Logs since timestamp")
+    since: datetime | None = Query(None, description="Logs since timestamp")
 ) -> JSONResponse:
     """Get system logs."""
     try:
         logs = []
         sources = ["api", "agent", "kubernetes", "github", "datadog", "webhook"]
-        
+
         # Generate mock logs
         now = datetime.now(UTC)
         for i in range(min(limit, 200)):
             timestamp = now - timedelta(seconds=i*30)
-            
+
             if since and timestamp < since:
                 break
-            
+
             log_level = random.choice(list(LogLevel))
             if level and log_level != level:
                 continue
-            
+
             log_source = random.choice(sources)
             if source and log_source != source:
                 continue
-            
+
             # Generate appropriate message based on level
             if log_level == LogLevel.ERROR:
                 messages = [
@@ -79,7 +82,7 @@ async def get_logs(
                     "Response time: 145ms",
                     "Cache hit for key: incident-123"
                 ]
-            
+
             logs.append(LogEntry(
                 timestamp=timestamp,
                 level=log_level,
@@ -90,12 +93,12 @@ async def get_logs(
                     "user": f"user{i % 5}@example.com" if i % 3 == 0 else "system"
                 }
             ))
-        
+
         return JSONResponse(content={
             "logs": [log.dict() for log in logs],
             "total": len(logs)
         })
-        
+
     except Exception as e:
         logger.error(f"Error fetching logs: {e}")
         raise
@@ -103,26 +106,26 @@ async def get_logs(
 
 @router.get("/logs/stream")
 async def stream_logs(
-    level: Optional[LogLevel] = Query(None, description="Filter by log level"),
-    source: Optional[str] = Query(None, description="Filter by source")
+    level: LogLevel | None = Query(None, description="Filter by log level"),
+    source: str | None = Query(None, description="Filter by source")
 ) -> StreamingResponse:
     """Stream logs in real-time using Server-Sent Events."""
     async def generate_logs() -> AsyncGenerator[str, None]:
         """Generate log events."""
         sources = ["api", "agent", "kubernetes", "github", "datadog"]
-        
+
         while True:
             # Generate a random log entry
             log_source = random.choice(sources)
             if source and log_source != source:
                 await asyncio.sleep(0.5)
                 continue
-            
+
             log_level = random.choice(list(LogLevel))
             if level and log_level != level:
                 await asyncio.sleep(0.5)
                 continue
-            
+
             log_entry = LogEntry(
                 timestamp=datetime.now(UTC),
                 level=log_level,
@@ -130,10 +133,10 @@ async def stream_logs(
                 message=f"[{log_source}] Sample log message at {datetime.now().isoformat()}",
                 context={"stream": True}
             )
-            
+
             yield f"data: {log_entry.json()}\n\n"
             await asyncio.sleep(random.uniform(0.5, 2.0))
-    
+
     return StreamingResponse(
         generate_logs(),
         media_type="text/event-stream"
@@ -145,14 +148,14 @@ async def websocket_metrics(websocket: WebSocket):
     """WebSocket endpoint for real-time metrics."""
     await websocket.accept()
     active_connections.append(websocket)
-    
+
     try:
         while True:
             # Send metrics every second
             metrics = generate_real_time_metrics()
             await websocket.send_json(metrics)
             await asyncio.sleep(1)
-            
+
     except WebSocketDisconnect:
         active_connections.remove(websocket)
     except Exception as e:
@@ -160,7 +163,7 @@ async def websocket_metrics(websocket: WebSocket):
         active_connections.remove(websocket)
 
 
-def generate_real_time_metrics() -> Dict[str, Any]:
+def generate_real_time_metrics() -> dict[str, Any]:
     """Generate real-time system metrics."""
     return {
         "timestamp": datetime.now(UTC).isoformat(),
@@ -222,12 +225,12 @@ async def get_current_metrics() -> JSONResponse:
                 unit="tasks"
             )
         ]
-        
+
         return JSONResponse(content={
             "metrics": [m.dict() for m in metrics],
             "timestamp": datetime.now(UTC).isoformat()
         })
-        
+
     except Exception as e:
         logger.error(f"Error fetching metrics: {e}")
         raise
@@ -248,7 +251,7 @@ async def get_system_status() -> SystemStatus:
             "pagerduty": "healthy",
             "datadog": "healthy"
         }
-        
+
         # Determine overall status
         if any(status == "down" for status in components.values()):
             overall_status = "critical"
@@ -256,14 +259,14 @@ async def get_system_status() -> SystemStatus:
             overall_status = "degraded"
         else:
             overall_status = "healthy"
-        
+
         # Current metrics
         metrics = [
             MonitoringMetric(name="uptime_hours", value=720, unit="hours"),
             MonitoringMetric(name="error_rate", value=0.02, unit="%"),
             MonitoringMetric(name="avg_response_time", value=145, unit="ms")
         ]
-        
+
         # Active alerts
         alerts = []
         if random.random() > 0.7:
@@ -273,14 +276,14 @@ async def get_system_status() -> SystemStatus:
                 "message": "High memory usage on api-server-2",
                 "timestamp": datetime.now(UTC).isoformat()
             })
-        
+
         return SystemStatus(
             status=overall_status,
             components=components,
             metrics=metrics,
             alerts=alerts
         )
-        
+
     except Exception as e:
         logger.error(f"Error getting system status: {e}")
         raise
@@ -288,24 +291,24 @@ async def get_system_status() -> SystemStatus:
 
 @router.get("/traces")
 async def get_distributed_traces(
-    service: Optional[str] = Query(None, description="Filter by service"),
-    duration_min: Optional[int] = Query(None, description="Minimum duration in ms"),
+    service: str | None = Query(None, description="Filter by service"),
+    duration_min: int | None = Query(None, description="Minimum duration in ms"),
     limit: int = Query(20, ge=1, le=100)
 ) -> JSONResponse:
     """Get distributed traces."""
     try:
         traces = []
         services = ["api-gateway", "user-service", "payment-service", "notification-service"]
-        
+
         for i in range(min(limit, 50)):
             trace_service = random.choice(services)
             if service and trace_service != service:
                 continue
-            
+
             duration = int(50 + random.random() * 500)
             if duration_min and duration < duration_min:
                 continue
-            
+
             trace = {
                 "trace_id": f"trace-{uuid.uuid4().hex[:16]}",
                 "service": trace_service,
@@ -332,12 +335,12 @@ async def get_distributed_traces(
                 ]
             }
             traces.append(trace)
-        
+
         return JSONResponse(content={
             "traces": traces,
             "total": len(traces)
         })
-        
+
     except Exception as e:
         logger.error(f"Error fetching traces: {e}")
         raise
@@ -348,7 +351,7 @@ async def get_active_alerts() -> JSONResponse:
     """Get currently active monitoring alerts."""
     try:
         alerts = []
-        
+
         # Generate some mock active alerts
         alert_templates = [
             {
@@ -382,7 +385,7 @@ async def get_active_alerts() -> JSONResponse:
                 "service": "search-service"
             }
         ]
-        
+
         # Randomly select some alerts to be active
         for i, template in enumerate(alert_templates):
             if random.random() > 0.6:  # 40% chance of being active
@@ -396,7 +399,7 @@ async def get_active_alerts() -> JSONResponse:
                     "value": f"{random.randint(81, 95)}%" if "%" in template["condition"] else f"{random.randint(500, 2000)}ms",
                     "status": "firing"
                 })
-        
+
         return JSONResponse(content={
             "alerts": alerts,
             "total": len(alerts),
@@ -406,7 +409,7 @@ async def get_active_alerts() -> JSONResponse:
                 "info": 0
             }
         })
-        
+
     except Exception as e:
         logger.error(f"Error fetching active alerts: {e}")
         raise
@@ -425,7 +428,7 @@ async def get_profiling_data(
             "timestamp": datetime.now(UTC).isoformat(),
             "data": {}
         }
-        
+
         if type == "cpu":
             profiling_data["data"] = {
                 "top_functions": [
@@ -449,9 +452,9 @@ async def get_profiling_data(
                     {"function": "cacheSet", "alloc_mb": 60}
                 ]
             }
-        
+
         return JSONResponse(content=profiling_data)
-        
+
     except Exception as e:
         logger.error(f"Error fetching profiling data: {e}")
         raise

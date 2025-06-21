@@ -39,7 +39,8 @@ import {
   Globe,
   Cpu,
   HardDrive,
-  Wifi
+  Wifi,
+  BarChart3
 } from 'lucide-react';
 import { useWebSocket } from '@/lib/hooks/use-websocket';
 import { format } from 'date-fns';
@@ -93,7 +94,7 @@ export default function MonitoringPage() {
   const terminalRef = useRef<any>(null);
 
   // Mock system metrics
-  const [systemMetrics] = useState<SystemMetric[]>([
+  const [systemMetrics, setSystemMetrics] = useState<SystemMetric[]>([
     { name: 'CPU Usage', value: 45, unit: '%', status: 'healthy', trend: 'stable' },
     { name: 'Memory', value: 72, unit: '%', status: 'warning', trend: 'up' },
     { name: 'Disk I/O', value: 120, unit: 'MB/s', status: 'healthy', trend: 'down' },
@@ -105,11 +106,17 @@ export default function MonitoringPage() {
   // WebSocket for real-time updates
   const { isConnected } = useWebSocket({
     onMessage: (message) => {
-      if (message.type === 'log_entry') {
-        setLogs(prev => [...prev.slice(-99), message.data as LogEntry]);
-      }
-      if (message.type === 'ai_analysis') {
-        setAiAnalyses(prev => [...prev.slice(-19), message.data as AIAnalysis]);
+      // Handle metric updates from WebSocket
+      if (message.type === 'metric_update') {
+        // Update metrics based on incoming data
+        const metricData = message.data;
+        if (metricData && metricData.name && metricData.value !== undefined) {
+          setSystemMetrics(prev => prev.map(m => 
+            m.name === metricData.name 
+              ? { ...m, value: metricData.value, trend: metricData.trend || m.trend }
+              : m
+          ));
+        }
       }
     },
   });

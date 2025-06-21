@@ -2,7 +2,8 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -48,7 +49,7 @@ class ActionType(str, Enum):
 class TimestampMixin(BaseModel):
     """Mixin for timestamp fields."""
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 # Dashboard Models
@@ -56,16 +57,16 @@ class MetricValue(BaseModel):
     """Individual metric value."""
     value: float
     timestamp: datetime
-    label: Optional[str] = None
+    label: str | None = None
 
 
 class DashboardMetric(BaseModel):
     """Dashboard metric data."""
     name: str
     current_value: float
-    change_percentage: Optional[float] = None
-    trend: List[MetricValue] = []
-    unit: Optional[str] = None
+    change_percentage: float | None = None
+    trend: list[MetricValue] = []
+    unit: str | None = None
 
 
 class DashboardStats(BaseModel):
@@ -77,7 +78,7 @@ class DashboardStats(BaseModel):
     automation_success_rate: float
     integrations_healthy: int
     integrations_total: int
-    last_incident_time: Optional[datetime] = None
+    last_incident_time: datetime | None = None
 
 
 # Incident Models
@@ -88,36 +89,36 @@ class IncidentCreate(BaseModel):
     severity: Severity
     service_name: str
     alert_source: str = "manual"
-    metadata: Dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
 
 
 class IncidentUpdate(BaseModel):
     """Update incident request."""
-    status: Optional[IncidentStatus] = None
-    assignee: Optional[str] = None
-    notes: Optional[str] = None
-    resolution: Optional[str] = None
+    status: IncidentStatus | None = None
+    assignee: str | None = None
+    notes: str | None = None
+    resolution: str | None = None
 
 
 class IncidentAction(BaseModel):
     """Action taken on an incident."""
     action_type: ActionType
-    parameters: Dict[str, Any] = {}
+    parameters: dict[str, Any] = {}
     automated: bool = True
-    user: Optional[str] = None
+    user: str | None = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-    result: Optional[Dict[str, Any]] = None
+    result: dict[str, Any] | None = None
 
 
 class AIAnalysis(BaseModel):
     """AI agent analysis result."""
     summary: str
-    root_cause: Optional[str] = None
+    root_cause: str | None = None
     impact_assessment: str
-    recommended_actions: List[Dict[str, Any]] = []
+    recommended_actions: list[dict[str, Any]] = []
     confidence_score: float = Field(ge=0, le=1)
-    related_incidents: List[str] = []
-    knowledge_base_references: List[str] = []
+    related_incidents: list[str] = []
+    knowledge_base_references: list[str] = []
 
 
 class Incident(TimestampMixin):
@@ -129,18 +130,18 @@ class Incident(TimestampMixin):
     status: IncidentStatus
     service_name: str
     alert_source: str
-    assignee: Optional[str] = None
-    ai_analysis: Optional[AIAnalysis] = None
-    actions_taken: List[IncidentAction] = []
-    resolution: Optional[str] = None
-    resolved_at: Optional[datetime] = None
-    metadata: Dict[str, Any] = {}
-    timeline: List[Dict[str, Any]] = []
+    assignee: str | None = None
+    ai_analysis: AIAnalysis | None = None
+    actions_taken: list[IncidentAction] = []
+    resolution: str | None = None
+    resolved_at: datetime | None = None
+    metadata: dict[str, Any] = {}
+    timeline: list[dict[str, Any]] = []
 
 
 class IncidentList(BaseModel):
     """Paginated incident list."""
-    incidents: List[Incident]
+    incidents: list[Incident]
     total: int
     page: int
     page_size: int
@@ -152,16 +153,16 @@ class AgentTriggerRequest(BaseModel):
     """Manual agent trigger request."""
     incident_id: str
     force_reanalyze: bool = False
-    context: Dict[str, Any] = {}
+    context: dict[str, Any] = {}
 
 
 class AgentResponse(BaseModel):
     """Agent analysis response."""
     incident_id: str
     analysis: AIAnalysis
-    automated_actions: List[IncidentAction] = []
+    automated_actions: list[IncidentAction] = []
     execution_time_ms: float
-    tokens_used: Optional[int] = None
+    tokens_used: int | None = None
 
 
 class AgentStatus(BaseModel):
@@ -172,15 +173,15 @@ class AgentStatus(BaseModel):
     incidents_processed_today: int
     average_response_time_ms: float
     queue_size: int
-    active_integrations: List[str]
-    last_error: Optional[str] = None
+    active_integrations: list[str]
+    last_error: str | None = None
 
 
 # Integration Models
 class IntegrationConfig(BaseModel):
     """Integration configuration."""
     enabled: bool
-    config: Dict[str, Any] = {}
+    config: dict[str, Any] = {}
 
 
 class IntegrationHealth(BaseModel):
@@ -188,8 +189,8 @@ class IntegrationHealth(BaseModel):
     name: str
     status: IntegrationStatus
     last_check: datetime
-    error: Optional[str] = None
-    metrics: Dict[str, Any] = {}
+    error: str | None = None
+    metrics: dict[str, Any] = {}
 
 
 class Integration(BaseModel):
@@ -197,9 +198,9 @@ class Integration(BaseModel):
     name: str
     type: str
     status: IntegrationStatus
-    capabilities: List[str]
+    capabilities: list[str]
     config: IntegrationConfig
-    health: Optional[IntegrationHealth] = None
+    health: IntegrationHealth | None = None
 
 
 # Analytics Models
@@ -212,19 +213,19 @@ class TimeRange(BaseModel):
 class AnalyticsQuery(BaseModel):
     """Analytics query parameters."""
     time_range: TimeRange
-    group_by: Optional[str] = None
-    filters: Dict[str, Any] = {}
+    group_by: str | None = None
+    filters: dict[str, Any] = {}
 
 
 class IncidentAnalytics(BaseModel):
     """Incident analytics data."""
     total_incidents: int
-    by_severity: Dict[str, int]
-    by_service: Dict[str, int]
-    by_status: Dict[str, int]
-    mttr_by_severity: Dict[str, float]  # Mean Time To Resolution
+    by_severity: dict[str, int]
+    by_service: dict[str, int]
+    by_status: dict[str, int]
+    mttr_by_severity: dict[str, float]  # Mean Time To Resolution
     automation_rate: float
-    trend_data: List[Dict[str, Any]]
+    trend_data: list[dict[str, Any]]
 
 
 class ServiceHealth(BaseModel):
@@ -233,7 +234,7 @@ class ServiceHealth(BaseModel):
     incident_count: int
     availability_percentage: float
     mttr_minutes: float
-    last_incident: Optional[datetime] = None
+    last_incident: datetime | None = None
     health_score: float = Field(ge=0, le=100)
 
 
@@ -253,17 +254,17 @@ class AuditLogEntry(TimestampMixin):
     """Audit log entry."""
     id: str
     action: AuditAction
-    user: Optional[str] = None
+    user: str | None = None
     resource_type: str
     resource_id: str
-    details: Dict[str, Any] = {}
-    ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
+    details: dict[str, Any] = {}
+    ip_address: str | None = None
+    user_agent: str | None = None
 
 
 class AuditLogList(BaseModel):
     """Paginated audit log list."""
-    entries: List[AuditLogEntry]
+    entries: list[AuditLogEntry]
     total: int
     page: int
     page_size: int
@@ -285,24 +286,24 @@ class LogEntry(BaseModel):
     level: LogLevel
     source: str
     message: str
-    context: Dict[str, Any] = {}
+    context: dict[str, Any] = {}
 
 
 class MonitoringMetric(BaseModel):
     """Real-time monitoring metric."""
     name: str
-    value: Union[float, int, str]
-    unit: Optional[str] = None
+    value: float | int | str
+    unit: str | None = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-    tags: Dict[str, str] = {}
+    tags: dict[str, str] = {}
 
 
 class SystemStatus(BaseModel):
     """Overall system status."""
     status: str
-    components: Dict[str, str]
-    metrics: List[MonitoringMetric]
-    alerts: List[Dict[str, Any]] = []
+    components: dict[str, str]
+    metrics: list[MonitoringMetric]
+    alerts: list[dict[str, Any]] = []
 
 
 # Settings Models
@@ -310,11 +311,11 @@ class NotificationSettings(BaseModel):
     """Notification preferences."""
     email_enabled: bool = True
     slack_enabled: bool = False
-    slack_channel: Optional[str] = None
+    slack_channel: str | None = None
     severity_threshold: Severity = Severity.MEDIUM
     quiet_hours_enabled: bool = False
-    quiet_hours_start: Optional[str] = None  # HH:MM format
-    quiet_hours_end: Optional[str] = None
+    quiet_hours_start: str | None = None  # HH:MM format
+    quiet_hours_end: str | None = None
 
 
 class AutomationSettings(BaseModel):
@@ -323,7 +324,7 @@ class AutomationSettings(BaseModel):
     auto_resolve: bool = False
     require_approval_for_actions: bool = True
     max_automated_actions: int = 5
-    allowed_action_types: List[ActionType] = []
+    allowed_action_types: list[ActionType] = []
 
 
 class GlobalSettings(BaseModel):
@@ -333,7 +334,7 @@ class GlobalSettings(BaseModel):
     retention_days: int = 90
     notifications: NotificationSettings
     automation: AutomationSettings
-    integrations: Dict[str, IntegrationConfig] = {}
+    integrations: dict[str, IntegrationConfig] = {}
 
 
 # WebSocket Models
@@ -346,8 +347,8 @@ class WSMessage(BaseModel):
 
 class WSSubscription(BaseModel):
     """WebSocket subscription request."""
-    channels: List[str]
-    filters: Dict[str, Any] = {}
+    channels: list[str]
+    filters: dict[str, Any] = {}
 
 
 # Response Models
@@ -355,12 +356,12 @@ class SuccessResponse(BaseModel):
     """Generic success response."""
     success: bool = True
     message: str
-    data: Optional[Any] = None
+    data: Any | None = None
 
 
 class ErrorResponse(BaseModel):
     """Generic error response."""
     success: bool = False
     error: str
-    details: Optional[Dict[str, Any]] = None
-    request_id: Optional[str] = None
+    details: dict[str, Any] | None = None
+    request_id: str | None = None

@@ -1,15 +1,18 @@
 """Analytics and reporting API endpoints."""
 
-from datetime import datetime, timedelta, UTC
-from typing import Dict, List, Optional, Any
 import random
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from src.oncall_agent.api.schemas import (
-    AnalyticsQuery, IncidentAnalytics, ServiceHealth,
-    TimeRange, Severity
+    AnalyticsQuery,
+    IncidentAnalytics,
+    ServiceHealth,
+    Severity,
+    TimeRange,
 )
 from src.oncall_agent.utils import get_logger
 
@@ -17,11 +20,11 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
-def generate_trend_data(days: int, base_value: int = 10) -> List[Dict[str, Any]]:
+def generate_trend_data(days: int, base_value: int = 10) -> list[dict[str, Any]]:
     """Generate mock trend data."""
     trend = []
     now = datetime.now(UTC)
-    
+
     for i in range(days, -1, -1):
         date = now - timedelta(days=i)
         # Add some variation
@@ -30,7 +33,7 @@ def generate_trend_data(days: int, base_value: int = 10) -> List[Dict[str, Any]]
             "date": date.date().isoformat(),
             "value": max(0, value)
         })
-    
+
     return trend
 
 
@@ -42,10 +45,10 @@ async def get_incident_analytics(
     try:
         # Calculate days in range
         days = (query.time_range.end - query.time_range.start).days
-        
+
         # Mock data generation
         total = days * 15  # Average 15 incidents per day
-        
+
         by_severity = {
             Severity.CRITICAL: int(total * 0.05),
             Severity.HIGH: int(total * 0.15),
@@ -53,7 +56,7 @@ async def get_incident_analytics(
             Severity.LOW: int(total * 0.35),
             Severity.INFO: int(total * 0.15)
         }
-        
+
         by_service = {
             "api-gateway": int(total * 0.25),
             "user-service": int(total * 0.20),
@@ -62,14 +65,14 @@ async def get_incident_analytics(
             "search-service": int(total * 0.10),
             "other": int(total * 0.20)
         }
-        
+
         by_status = {
             "resolved": int(total * 0.85),
             "active": int(total * 0.05),
             "acknowledged": int(total * 0.05),
             "triggered": int(total * 0.05)
         }
-        
+
         mttr_by_severity = {
             Severity.CRITICAL: 15.5,
             Severity.HIGH: 28.3,
@@ -77,7 +80,7 @@ async def get_incident_analytics(
             Severity.LOW: 120.5,
             Severity.INFO: 180.0
         }
-        
+
         return IncidentAnalytics(
             total_incidents=total,
             by_severity=by_severity,
@@ -87,7 +90,7 @@ async def get_incident_analytics(
             automation_rate=0.72,  # 72% automated
             trend_data=generate_trend_data(min(days, 30))
         )
-        
+
     except Exception as e:
         logger.error(f"Error generating incident analytics: {e}")
         raise
@@ -104,7 +107,7 @@ async def get_services_health(
             "notification-service", "search-service", "auth-service",
             "inventory-service", "recommendation-service"
         ]
-        
+
         health_data = []
         for service in services:
             # Generate mock health data
@@ -112,7 +115,7 @@ async def get_services_health(
             availability = 99.9 - (incident_count * 0.1)
             mttr = 20 + random.randint(0, 60)
             health_score = min(100, 100 - (incident_count * 2) - (mttr / 10))
-            
+
             health_data.append(ServiceHealth(
                 service_name=service,
                 incident_count=incident_count,
@@ -121,16 +124,16 @@ async def get_services_health(
                 last_incident=datetime.now(UTC) - timedelta(hours=random.randint(1, 168)),
                 health_score=health_score
             ))
-        
+
         # Sort by health score
         health_data.sort(key=lambda x: x.health_score, reverse=True)
-        
+
         return JSONResponse(content={
             "services": [h.dict() for h in health_data],
             "period_days": days,
             "overall_health": sum(h.health_score for h in health_data) / len(health_data)
         })
-        
+
     except Exception as e:
         logger.error(f"Error getting service health: {e}")
         raise
@@ -175,16 +178,16 @@ async def get_incident_patterns(
                 "recommended_action": "Implement auto-scaling and request rate limiting"
             }
         ]
-        
+
         # Filter by minimum occurrences
         filtered_patterns = [p for p in patterns if p["occurrences"] >= min_occurrences]
-        
+
         return JSONResponse(content={
             "patterns": filtered_patterns,
             "total_patterns": len(filtered_patterns),
             "analysis_period_days": days
         })
-        
+
     except Exception as e:
         logger.error(f"Error identifying patterns: {e}")
         raise
@@ -192,24 +195,24 @@ async def get_incident_patterns(
 
 @router.get("/slo-compliance")
 async def get_slo_compliance(
-    service: Optional[str] = Query(None, description="Filter by service")
+    service: str | None = Query(None, description="Filter by service")
 ) -> JSONResponse:
     """Get SLO compliance metrics."""
     try:
         slos = []
         services = ["api-gateway", "user-service", "payment-service"] if not service else [service]
-        
+
         for svc in services:
             # Generate mock SLO data
             availability_target = 99.9
             availability_actual = 99.85 + random.random() * 0.14
-            
+
             latency_target = 200  # ms
             latency_actual = 150 + random.randint(0, 100)
-            
+
             error_rate_target = 0.1  # percentage
             error_rate_actual = random.random() * 0.15
-            
+
             slos.append({
                 "service": svc,
                 "slos": [
@@ -237,12 +240,12 @@ async def get_slo_compliance(
                 ],
                 "overall_compliance": sum(1 for slo in [True, latency_actual <= latency_target, error_rate_actual <= error_rate_target] if slo) / 3
             })
-        
+
         return JSONResponse(content={
             "slo_compliance": slos,
             "reporting_period": "last_30_days"
         })
-        
+
     except Exception as e:
         logger.error(f"Error calculating SLO compliance: {e}")
         raise
@@ -257,14 +260,14 @@ async def get_incident_cost_impact(
         # Mock cost calculation
         incident_costs = []
         total_cost = 0
-        
+
         cost_factors = [
             {"type": "downtime", "unit_cost": 1000, "unit": "per hour"},
             {"type": "engineering_hours", "unit_cost": 150, "unit": "per hour"},
             {"type": "customer_credits", "unit_cost": 500, "unit": "per incident"},
             {"type": "infrastructure_scaling", "unit_cost": 200, "unit": "per incident"}
         ]
-        
+
         for factor in cost_factors:
             if factor["type"] == "downtime":
                 hours = random.randint(5, 20)
@@ -278,14 +281,14 @@ async def get_incident_cost_impact(
             else:
                 incidents = random.randint(5, 15)
                 cost = incidents * factor["unit_cost"]
-            
+
             total_cost += cost
             incident_costs.append({
                 "category": factor["type"],
                 "amount": cost,
                 "details": f"{hours if 'hour' in factor['unit'] else incidents} {factor['unit']}"
             })
-        
+
         return JSONResponse(content={
             "total_cost": total_cost,
             "cost_breakdown": incident_costs,
@@ -293,7 +296,7 @@ async def get_incident_cost_impact(
             "currency": "USD",
             "savings_from_automation": int(total_cost * 0.3)  # 30% saved through automation
         })
-        
+
     except Exception as e:
         logger.error(f"Error calculating cost impact: {e}")
         raise
@@ -306,13 +309,13 @@ async def get_team_performance(
     """Get on-call team performance metrics."""
     try:
         team_members = ["alice@example.com", "bob@example.com", "charlie@example.com", "diana@example.com"]
-        
+
         performance_data = []
         for member in team_members:
             incidents_handled = random.randint(10, 50)
             avg_response_time = random.randint(2, 15)
             avg_resolution_time = random.randint(20, 120)
-            
+
             performance_data.append({
                 "member": member,
                 "incidents_handled": incidents_handled,
@@ -321,7 +324,7 @@ async def get_team_performance(
                 "escalation_rate": round(random.random() * 0.2, 2),  # 0-20%
                 "customer_satisfaction": round(4 + random.random(), 1)  # 4.0-5.0
             })
-        
+
         # Team aggregate metrics
         team_metrics = {
             "total_incidents": sum(p["incidents_handled"] for p in performance_data),
@@ -330,13 +333,13 @@ async def get_team_performance(
             "on_call_coverage": 0.98,  # 98% coverage
             "handoff_efficiency": 0.95  # 95% smooth handoffs
         }
-        
+
         return JSONResponse(content={
             "individual_performance": performance_data,
             "team_metrics": team_metrics,
             "period_days": days
         })
-        
+
     except Exception as e:
         logger.error(f"Error getting team performance: {e}")
         raise
@@ -387,13 +390,13 @@ async def get_incident_predictions() -> JSONResponse:
                 "predicted_time": (datetime.now(UTC) + timedelta(days=14)).isoformat()
             }
         ]
-        
+
         return JSONResponse(content={
             "predictions": predictions,
             "generated_at": datetime.now(UTC).isoformat(),
             "model_confidence": 0.88
         })
-        
+
     except Exception as e:
         logger.error(f"Error generating predictions: {e}")
         raise
@@ -407,7 +410,7 @@ async def generate_report(
     """Generate a detailed report."""
     try:
         report_id = f"report-{datetime.now().timestamp()}"
-        
+
         # Mock report generation
         report_data = {
             "report_id": report_id,
@@ -417,7 +420,7 @@ async def generate_report(
             "format_options": ["pdf", "csv", "json"],
             "sections": []
         }
-        
+
         if report_type == "executive":
             report_data["sections"] = [
                 "Executive Summary",
@@ -442,9 +445,9 @@ async def generate_report(
                 "Policy Adherence",
                 "Remediation Status"
             ]
-        
+
         return JSONResponse(content=report_data)
-        
+
     except Exception as e:
         logger.error(f"Error generating report: {e}")
         raise

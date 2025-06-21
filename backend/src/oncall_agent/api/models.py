@@ -1,7 +1,8 @@
 """PagerDuty webhook payload models."""
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -9,8 +10,8 @@ class PagerDutyService(BaseModel):
     """PagerDuty service information."""
     id: str
     name: str
-    html_url: Optional[str] = None
-    summary: Optional[str] = None
+    html_url: str | None = None
+    summary: str | None = None
 
 
 class PagerDutyIncidentData(BaseModel):
@@ -18,14 +19,14 @@ class PagerDutyIncidentData(BaseModel):
     id: str
     incident_number: int
     title: str
-    description: Optional[str] = None
+    description: str | None = None
     created_at: datetime
     status: str
-    incident_key: Optional[str] = None
-    service: Optional[PagerDutyService] = None
+    incident_key: str | None = None
+    service: PagerDutyService | None = None
     urgency: str = "high"
-    priority: Optional[Dict[str, Any]] = None
-    custom_details: Optional[Dict[str, Any]] = None
+    priority: dict[str, Any] | None = None
+    custom_details: dict[str, Any] | None = None
     html_url: str
 
 
@@ -35,17 +36,17 @@ class PagerDutyLogEntry(BaseModel):
     type: str
     summary: str
     created_at: datetime
-    html_url: Optional[str] = None
+    html_url: str | None = None
 
 
 class PagerDutyMessage(BaseModel):
     """PagerDuty webhook message."""
     id: str
     incident: PagerDutyIncidentData
-    log_entries: Optional[List[PagerDutyLogEntry]] = None
+    log_entries: list[PagerDutyLogEntry] | None = None
 
 
 class PagerDutyWebhookPayload(BaseModel):
     """PagerDuty webhook payload."""
-    messages: List[PagerDutyMessage]
-    event: Optional[str] = Field(None, description="Event type like 'incident.triggered'")
+    messages: list[PagerDutyMessage]
+    event: str | None = Field(None, description="Event type like 'incident.triggered'")

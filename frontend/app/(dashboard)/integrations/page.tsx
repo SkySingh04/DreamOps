@@ -283,7 +283,8 @@ export default function IntegrationsPage() {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {integrations.map((integration) => {
-          const Icon = integration.icon;
+          const config = getIntegrationConfig(integration.id);
+          const Icon = config?.icon;
           return (
             <Card key={integration.id} className="hover:shadow-md transition-shadow">
               <CardHeader>
@@ -309,7 +310,7 @@ export default function IntegrationsPage() {
                       {integration.status}
                     </Badge>
                     <span className="text-xs text-gray-500">
-                      Last sync: {integration.lastSync}
+                      Last sync: {integration.last_sync}
                     </span>
                   </div>
 
@@ -355,7 +356,7 @@ export default function IntegrationsPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setSelectedIntegration(integration.id)}
+                      onClick={() => handleConfigure(integration)}
                       className="flex-1"
                     >
                       <Settings className="h-4 w-4 mr-2" />

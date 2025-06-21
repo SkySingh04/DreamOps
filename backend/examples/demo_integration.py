@@ -2,21 +2,21 @@
 """Demo script showing GitHub MCP integration is connected."""
 
 import os
-import sys
+
 
 def show_integration_demo():
     """Demonstrate the GitHub MCP integration setup."""
-    
+
     print("=" * 60)
     print("🚀 ONCALL AGENT - GITHUB MCP INTEGRATION DEMO")
     print("=" * 60)
     print()
-    
+
     # Check environment file
     env_file = ".env"
     if os.path.exists(env_file):
         print("✅ Environment Configuration:")
-        with open(env_file, 'r') as f:
+        with open(env_file) as f:
             lines = f.readlines()
             for line in lines:
                 if line.strip() and not line.startswith('#'):
@@ -26,17 +26,17 @@ def show_integration_demo():
                     else:
                         print(f"   {key}: {value}")
         print()
-    
+
     # Show integration files
     print("✅ Integration Files Created:")
     integration_files = [
         "src/oncall_agent/mcp_integrations/github_mcp.py",
-        "src/oncall_agent/agent.py", 
+        "src/oncall_agent/agent.py",
         "src/oncall_agent/config.py",
         ".env",
         "test_github_integration.py"
     ]
-    
+
     for file_path in integration_files:
         if os.path.exists(file_path):
             size = os.path.getsize(file_path)
@@ -44,7 +44,7 @@ def show_integration_demo():
         else:
             print(f"   ❌ {file_path} (missing)")
     print()
-    
+
     # Show GitHub MCP server
     server_path = "/mnt/c/Users/harsh/OneDrive/Desktop/oncall/github-mcp-server/github-mcp-server"
     if os.path.exists(server_path):
@@ -55,7 +55,7 @@ def show_integration_demo():
     else:
         print("❌ GitHub MCP Server binary not found")
     print()
-    
+
     # Show integration capabilities
     print("✅ Integration Capabilities:")
     print("   🔍 Context Types:")
@@ -68,7 +68,7 @@ def show_integration_demo():
     print("     - file_contents: Read any file/directory from repo")
     print("     - search_code: Search code across repositories")
     print()
-    
+
     print("   ⚡ Actions:")
     print("     - create_issue: Create new issues")
     print("     - add_comment: Add comments to issues/PRs")
@@ -77,7 +77,7 @@ def show_integration_demo():
     print("     - merge_pr: Merge pull requests")
     print("     - trigger_workflow: Trigger GitHub Actions")
     print()
-    
+
     # Show workflow
     print("✅ Integration Workflow:")
     print("   1. 📨 Alert received by oncall agent")
@@ -88,7 +88,7 @@ def show_integration_demo():
     print("   6. 📋 Auto-creates incident issue for high-severity alerts")
     print("   7. 📊 Returns comprehensive incident analysis with code insights")
     print()
-    
+
     # Show service mapping
     print("✅ Service-to-Repository Mapping:")
     print("   - api-gateway → myorg/api-gateway")
@@ -96,7 +96,7 @@ def show_integration_demo():
     print("   - payment-service → myorg/payment-service")
     print("   - notification-service → myorg/notification-service")
     print()
-    
+
     print("✅ Code Analysis Features:")
     print("   📖 File Reading:")
     print("     - Read any source file from repository")
@@ -111,7 +111,7 @@ def show_integration_demo():
     print("     - Fetches config files for deployment issues")
     print("     - Provides main application structure")
     print()
-    
+
     print("🎉 INTEGRATION READY!")
     print("Run 'python main.py' to see the agent in action with GitHub MCP!")
     print("=" * 60)

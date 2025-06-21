@@ -1,15 +1,17 @@
 """Security and audit trail API endpoints."""
 
 import uuid
-from datetime import datetime, timedelta, UTC
-from typing import Dict, List, Optional, Any
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from src.oncall_agent.api.schemas import (
-    AuditLogEntry, AuditLogList, AuditAction,
-    SuccessResponse
+    AuditAction,
+    AuditLogEntry,
+    AuditLogList,
+    SuccessResponse,
 )
 from src.oncall_agent.utils import get_logger
 
@@ -17,17 +19,17 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/security", tags=["security"])
 
 # Mock audit log storage
-AUDIT_LOGS: List[AuditLogEntry] = []
+AUDIT_LOGS: list[AuditLogEntry] = []
 
 
 def create_audit_log(
     action: AuditAction,
-    user: Optional[str],
+    user: str | None,
     resource_type: str,
     resource_id: str,
-    details: Dict[str, Any],
-    ip_address: Optional[str] = None,
-    user_agent: Optional[str] = None
+    details: dict[str, Any],
+    ip_address: str | None = None,
+    user_agent: str | None = None
 ) -> AuditLogEntry:
     """Create an audit log entry."""
     entry = AuditLogEntry(
@@ -57,7 +59,7 @@ def init_mock_audit_logs():
         (AuditAction.SETTINGS_CHANGED, "admin@example.com", "settings", "notifications", {"slack_enabled": True}),
         (AuditAction.USER_LOGIN, "charlie@example.com", "auth", "session-123", {"method": "sso"}),
     ]
-    
+
     now = datetime.now(UTC)
     for i, (action, user, resource_type, resource_id, details) in enumerate(actions):
         entry = AuditLogEntry(
@@ -78,17 +80,17 @@ def init_mock_audit_logs():
 async def get_audit_logs(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
-    action: Optional[AuditAction] = None,
-    user: Optional[str] = None,
-    resource_type: Optional[str] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None
+    action: AuditAction | None = None,
+    user: str | None = None,
+    resource_type: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None
 ) -> AuditLogList:
     """Get audit log entries with filtering."""
     try:
         # Filter logs
         filtered_logs = AUDIT_LOGS.copy()
-        
+
         if action:
             filtered_logs = [log for log in filtered_logs if log.action == action]
         if user:
@@ -99,24 +101,24 @@ async def get_audit_logs(
             filtered_logs = [log for log in filtered_logs if log.created_at >= start_date]
         if end_date:
             filtered_logs = [log for log in filtered_logs if log.created_at <= end_date]
-        
+
         # Sort by created_at descending
         filtered_logs.sort(key=lambda x: x.created_at, reverse=True)
-        
+
         # Paginate
         total = len(filtered_logs)
         start_idx = (page - 1) * page_size
         end_idx = start_idx + page_size
-        
+
         logs = filtered_logs[start_idx:end_idx]
-        
+
         return AuditLogList(
             entries=logs,
             total=total,
             page=page,
             page_size=page_size
         )
-        
+
     except Exception as e:
         logger.error(f"Error fetching audit logs: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -125,19 +127,19 @@ async def get_audit_logs(
 @router.get("/audit-logs/export")
 async def export_audit_logs(
     format: str = Query("csv", description="Export format: csv, json"),
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None
+    start_date: datetime | None = None,
+    end_date: datetime | None = None
 ) -> JSONResponse:
     """Export audit logs."""
     try:
         # Filter logs for export
         logs_to_export = AUDIT_LOGS.copy()
-        
+
         if start_date:
             logs_to_export = [log for log in logs_to_export if log.created_at >= start_date]
         if end_date:
             logs_to_export = [log for log in logs_to_export if log.created_at <= end_date]
-        
+
         # Mock export response
         export_data = {
             "export_id": str(uuid.uuid4()),
@@ -147,9 +149,9 @@ async def export_audit_logs(
             "expires_at": (datetime.now(UTC) + timedelta(hours=24)).isoformat(),
             "record_count": len(logs_to_export)
         }
-        
+
         return JSONResponse(content=export_data)
-        
+
     except Exception as e:
         logger.error(f"Error exporting audit logs: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -167,7 +169,7 @@ async def get_user_permissions(
             "roles": [],
             "permissions": []
         }
-        
+
         # Assign roles based on email patterns (mock logic)
         if "admin" in user_email:
             permissions["roles"] = ["admin", "operator"]
@@ -190,11 +192,11 @@ async def get_user_permissions(
                 "incidents.read",
                 "analytics.read"
             ]
-        
+
         permissions["effective_permissions"] = list(set(permissions["permissions"]))
-        
+
         return JSONResponse(content=permissions)
-        
+
     except Exception as e:
         logger.error(f"Error getting user permissions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -203,7 +205,7 @@ async def get_user_permissions(
 @router.get("/access-logs")
 async def get_access_logs(
     limit: int = Query(100, ge=1, le=1000),
-    user: Optional[str] = None
+    user: str | None = None
 ) -> JSONResponse:
     """Get API access logs."""
     try:
@@ -216,11 +218,11 @@ async def get_access_logs(
         ]
         methods = ["GET", "POST", "PUT", "DELETE"]
         status_codes = [200, 200, 200, 201, 400, 401, 404, 500]
-        
+
         for i in range(min(limit, 50)):
             timestamp = datetime.now(UTC) - timedelta(minutes=i*5)
             log_user = user if user else f"user{i % 5}@example.com"
-            
+
             access_logs.append({
                 "timestamp": timestamp.isoformat(),
                 "user": log_user,
@@ -231,12 +233,12 @@ async def get_access_logs(
                 "ip_address": f"192.168.1.{100 + (i % 50)}",
                 "user_agent": "Mozilla/5.0"
             })
-        
+
         return JSONResponse(content={
             "access_logs": access_logs,
             "total": len(access_logs)
         })
-        
+
     except Exception as e:
         logger.error(f"Error fetching access logs: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -244,7 +246,7 @@ async def get_access_logs(
 
 @router.get("/security-events")
 async def get_security_events(
-    severity: Optional[str] = Query(None, description="Filter by severity: low, medium, high, critical"),
+    severity: str | None = Query(None, description="Filter by severity: low, medium, high, critical"),
     days: int = Query(7, ge=1, le=90)
 ) -> JSONResponse:
     """Get security-related events."""
@@ -258,14 +260,14 @@ async def get_security_events(
             {"type": "integration_auth_failure", "severity": "high", "description": "Integration authentication failed"},
             {"type": "data_export", "severity": "medium", "description": "Large data export initiated"},
         ]
-        
+
         for i in range(20):
             event = event_types[i % len(event_types)].copy()
             timestamp = datetime.now(UTC) - timedelta(hours=i*8)
-            
+
             if severity and event["severity"] != severity:
                 continue
-            
+
             events.append({
                 "id": f"sec-event-{i}",
                 "timestamp": timestamp.isoformat(),
@@ -276,13 +278,13 @@ async def get_security_events(
                 "ip_address": f"192.168.1.{100 + i}",
                 "resolved": i > 5  # Older events are resolved
             })
-        
+
         return JSONResponse(content={
             "security_events": events,
             "total": len(events),
             "unresolved": len([e for e in events if not e["resolved"]])
         })
-        
+
     except Exception as e:
         logger.error(f"Error fetching security events: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -296,7 +298,7 @@ async def rotate_api_key(
     try:
         # Mock API key rotation
         new_key_preview = f"{service[:3].upper()}-****-****-****-{uuid.uuid4().hex[:8]}"
-        
+
         # Log the rotation
         create_audit_log(
             action=AuditAction.SETTINGS_CHANGED,
@@ -305,7 +307,7 @@ async def rotate_api_key(
             resource_id=service,
             details={"action": "rotate_key", "service": service}
         )
-        
+
         return SuccessResponse(
             success=True,
             message=f"API key rotated successfully for {service}",
@@ -315,7 +317,7 @@ async def rotate_api_key(
                 "expires_at": (datetime.now(UTC) + timedelta(days=90)).isoformat()
             }
         )
-        
+
     except Exception as e:
         logger.error(f"Error rotating API key: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -369,9 +371,9 @@ async def get_compliance_report() -> JSONResponse:
                 "Conduct security training for new team members"
             ]
         }
-        
+
         return JSONResponse(content=report)
-        
+
     except Exception as e:
         logger.error(f"Error generating compliance report: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -407,9 +409,9 @@ async def get_threat_detection_status() -> JSONResponse:
                 }
             ]
         }
-        
+
         return JSONResponse(content=status)
-        
+
     except Exception as e:
         logger.error(f"Error getting threat detection status: {e}")
         raise HTTPException(status_code=500, detail=str(e))

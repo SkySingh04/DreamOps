@@ -39,6 +39,8 @@ usage() {
     echo "  all       - Run all simulations sequentially"
     echo "  random    - Run a random simulation (default)"
     echo "  clean     - Clean up all test resources"
+    echo "  trigger   - Force CloudWatch alarms to trigger PagerDuty"
+    echo "  loop      - Continuous testing loop with auto-triggering"
     exit 1
 }
 
@@ -287,6 +289,113 @@ run_all() {
     echo -e "${YELLOW}Run '$0 clean' to clean up when done${NC}"
 }
 
+# Function to force CloudWatch alarms to trigger
+trigger_alarms() {
+    echo -e "${YELLOW}🔔 Forcing CloudWatch alarms to trigger PagerDuty...${NC}"
+    
+    # Check if AWS CLI is available
+    if ! command -v aws &> /dev/null; then
+        echo -e "${RED}Error: AWS CLI not found. Cannot trigger alarms.${NC}"
+        return 1
+    fi
+    
+    # List of alarms to trigger
+    local alarms=(
+        "eks-any-pod-error"
+        "eks-image-pull-error"
+        "eks-oom-kill"
+        "eks-instant-pod-issue"
+        "eks-problem-pods-detected"
+    )
+    
+    for alarm in "${alarms[@]}"; do
+        # Get current state
+        local current_state=$(AWS_PROFILE=burner aws cloudwatch describe-alarms --alarm-names "$alarm" --query "MetricAlarms[0].StateValue" --output text 2>/dev/null || echo "NOT_FOUND")
+        
+        if [ "$current_state" == "ALARM" ]; then
+            echo -e "  📍 ${alarm} is in ALARM state - forcing re-trigger..."
+            
+            # Set to OK temporarily
+            AWS_PROFILE=burner aws cloudwatch set-alarm-state \
+                --alarm-name "$alarm" \
+                --state-value OK \
+                --state-reason "Testing: Forcing re-trigger" 2>/dev/null || true
+            
+            sleep 2
+            
+            # Set back to ALARM to trigger SNS
+            AWS_PROFILE=burner aws cloudwatch set-alarm-state \
+                --alarm-name "$alarm" \
+                --state-value ALARM \
+                --state-reason "Testing: Re-triggering alarm" 2>/dev/null || true
+                
+            echo -e "  ${GREEN}✓ ${alarm} re-triggered!${NC}"
+        elif [ "$current_state" == "OK" ]; then
+            echo -e "  ⏭️  ${alarm} is in OK state - checking if it should be ALARM..."
+            # Force evaluation by setting to alarm if there are issues
+            if kubectl get pods -n $NAMESPACE 2>/dev/null | grep -E "Error|CrashLoop|ImagePull|OOM" >/dev/null; then
+                AWS_PROFILE=burner aws cloudwatch set-alarm-state \
+                    --alarm-name "$alarm" \
+                    --state-value ALARM \
+                    --state-reason "Testing: Found pod issues" 2>/dev/null || true
+                echo -e "  ${GREEN}✓ ${alarm} set to ALARM!${NC}"
+            fi
+        else
+            echo -e "  ❌ ${alarm} not found or error checking state"
+        fi
+    done
+    
+    echo -e "\n${GREEN}✅ Alarm triggering complete! Check PagerDuty for alerts.${NC}"
+}
+
+# Function for continuous testing loop
+test_loop() {
+    echo -e "${YELLOW}🔁 Starting continuous PagerDuty test loop...${NC}"
+    echo -e "${YELLOW}Press Ctrl+C to stop${NC}\n"
+    
+    local iteration=1
+    
+    while true; do
+        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${YELLOW}Iteration #${iteration} - $(date)${NC}"
+        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        
+        # Clean and create fresh issue
+        echo -e "\n1️⃣  Cleaning up previous test..."
+        clean_up >/dev/null 2>&1
+        sleep 3
+        
+        # Create random issue
+        echo -e "\n2️⃣  Creating new Kubernetes issue..."
+        RANDOM_FUCK=$((RANDOM % 5 + 1))
+        case $RANDOM_FUCK in
+            1) fuck_pod_crash ;;
+            2) fuck_image_pull ;;
+            3) fuck_oom_kill ;;
+            4) fuck_deployment ;;
+            5) fuck_service ;;
+        esac
+        
+        # Wait for CloudWatch to detect
+        echo -e "\n3️⃣  Waiting 60 seconds for CloudWatch to detect issue..."
+        sleep 60
+        
+        # Force trigger alarms
+        echo -e "\n4️⃣  Triggering alarms..."
+        trigger_alarms
+        
+        # Show pod status
+        echo -e "\n5️⃣  Current pod status:"
+        kubectl get pods -n $NAMESPACE 2>/dev/null || echo "No pods found"
+        
+        echo -e "\n${GREEN}✅ Iteration #${iteration} complete!${NC}"
+        echo -e "${YELLOW}Waiting 2 minutes before next iteration...${NC}\n"
+        
+        iteration=$((iteration + 1))
+        sleep 120
+    done
+}
+
 # Main logic
 case "${1:-random}" in
     1)
@@ -310,6 +419,14 @@ case "${1:-random}" in
     clean)
         clean_up
         ;;
+    trigger)
+        trigger_alarms
+        exit 0
+        ;;
+    loop)
+        test_loop
+        exit 0
+        ;;
     random|"")
         # Generate random number between 1 and 5
         RANDOM_FUCK=$((RANDOM % 5 + 1))
@@ -328,5 +445,10 @@ case "${1:-random}" in
         ;;
 esac
 
-echo -e "\n${YELLOW}📊 PagerDuty should detect and alert on these issues soon!${NC}"
-echo -e "${YELLOW}Check your Slack for alerts from PagerDuty${NC}"
+# Only show these messages if not running trigger or loop
+if [[ "$1" != "trigger" && "$1" != "loop" && "$1" != "clean" ]]; then
+    echo -e "\n${YELLOW}📊 PagerDuty should detect and alert on these issues soon!${NC}"
+    echo -e "${YELLOW}Check your Slack for alerts from PagerDuty${NC}"
+    echo -e "\n${YELLOW}💡 TIP: Run '$0 trigger' to force CloudWatch alarms to fire immediately${NC}"
+    echo -e "${YELLOW}💡 TIP: Run '$0 loop' for continuous testing with auto-triggering${NC}"
+fi

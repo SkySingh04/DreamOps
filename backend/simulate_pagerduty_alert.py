@@ -25,49 +25,47 @@ Options:
     --notion-integration: Test with Notion integration
 """
 
+import argparse
 import asyncio
-import json
 import logging
+import subprocess
 import sys
 import time
 from datetime import UTC, datetime
-from typing import Any, Dict, List
-
-import argparse
-import subprocess
-import requests
 from pathlib import Path
+from typing import Any
+
+import requests
 
 # Add the src directory to the path so we can import the agent modules
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from oncall_agent.agent import OncallAgent, PagerAlert
-from oncall_agent.config import get_config
-from oncall_agent.utils import setup_logging
 from oncall_agent.mcp_integrations.github_mcp import GitHubMCPIntegration
 from oncall_agent.mcp_integrations.notion_direct import NotionDirectIntegration
+from oncall_agent.utils import setup_logging
 
 
 class PagerDutySimulator:
     """Simulates PagerDuty alerts and webhooks for testing."""
-    
-    def __init__(self, config: Dict[str, Any]):
+
+    def __init__(self, config: dict[str, Any]):
         self.config = config
         self.logger = logging.getLogger(__name__)
         self.pagerduty_api_key = config.get("pagerduty_api_key", "")
         self.pagerduty_service_key = config.get("pagerduty_service_key", "")
         self.use_real_pagerduty = config.get("use_real_pagerduty", False)
-        
-    def trigger_real_pagerduty_alert(self, alert_data: Dict[str, Any]) -> Dict[str, Any]:
+
+    def trigger_real_pagerduty_alert(self, alert_data: dict[str, Any]) -> dict[str, Any]:
         """Send a real alert to PagerDuty using Events API v2."""
         if not self.use_real_pagerduty or not self.pagerduty_service_key:
             self.logger.info("Skipping real PagerDuty alert (not configured or disabled)")
             return {"status": "skipped", "reason": "Real PagerDuty not configured"}
-        
+
         try:
             # PagerDuty Events API v2 endpoint
             url = "https://events.pagerduty.com/v2/enqueue"
-            
+
             payload = {
                 "routing_key": self.pagerduty_service_key,
                 "event_action": "trigger",
@@ -84,14 +82,14 @@ class PagerDutySimulator:
                 "client": "oncall-agent-simulator",
                 "client_url": "https://github.com/yourusername/oncall-agent"
             }
-            
+
             headers = {
                 "Content-Type": "application/json"
             }
-            
+
             response = requests.post(url, json=payload, headers=headers, timeout=10)
             response.raise_for_status()
-            
+
             result = response.json()
             self.logger.info(f"✅ PagerDuty alert triggered: {result.get('dedup_key')}")
             return {
@@ -99,12 +97,12 @@ class PagerDutySimulator:
                 "dedup_key": result.get("dedup_key"),
                 "message": result.get("message", "Alert sent to PagerDuty")
             }
-            
+
         except Exception as e:
             self.logger.error(f"❌ Failed to send PagerDuty alert: {e}")
             return {"status": "error", "error": str(e)}
-    
-    def simulate_webhook_payload(self, alert_data: Dict[str, Any]) -> Dict[str, Any]:
+
+    def simulate_webhook_payload(self, alert_data: dict[str, Any]) -> dict[str, Any]:
         """Simulate a PagerDuty webhook payload that would be received."""
         return {
             "messages": [
@@ -139,41 +137,41 @@ class PagerDutySimulator:
 
 class EKSAlertSimulator:
     """Simulates various EKS/Kubernetes issues that would trigger alerts."""
-    
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.namespace = "oncall-test-apps"
-        
+
     def check_kubectl_available(self) -> bool:
         """Check if kubectl is available and configured."""
         try:
             result = subprocess.run(
-                ["kubectl", "cluster-info"], 
-                capture_output=True, 
-                text=True, 
+                ["kubectl", "cluster-info"],
+                capture_output=True,
+                text=True,
                 timeout=10
             )
             return result.returncode == 0
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
-    
-    def apply_broken_manifest(self, scenario: str) -> Dict[str, Any]:
+
+    def apply_broken_manifest(self, scenario: str) -> dict[str, Any]:
         """Apply a broken Kubernetes manifest to simulate issues."""
         if not self.check_kubectl_available():
             self.logger.warning("kubectl not available - simulating EKS issue instead")
             return self._simulate_issue_without_kubectl(scenario)
-        
+
         manifests = {
             "pod_crash": self._get_crashloop_manifest(),
-            "oom_kill": self._get_oom_manifest(), 
+            "oom_kill": self._get_oom_manifest(),
             "image_pull": self._get_imagepull_manifest(),
             "cpu_throttle": self._get_cpu_throttle_manifest(),
             "service_down": self._get_service_down_manifest()
         }
-        
+
         if scenario not in manifests:
             raise ValueError(f"Unknown scenario: {scenario}")
-        
+
         try:
             # Create namespace if it doesn't exist
             subprocess.run([
@@ -181,33 +179,33 @@ class EKSAlertSimulator:
             ], capture_output=True)
             subprocess.run([
                 "kubectl", "apply", "-f", "-"
-            ], input=f"apiVersion: v1\nkind: Namespace\nmetadata:\n  name: {self.namespace}", 
+            ], input=f"apiVersion: v1\nkind: Namespace\nmetadata:\n  name: {self.namespace}",
                text=True, capture_output=True)
-            
+
             # Apply the broken manifest
             result = subprocess.run([
                 "kubectl", "apply", "-f", "-"
             ], input=manifests[scenario], text=True, capture_output=True, timeout=30)
-            
+
             if result.returncode == 0:
                 self.logger.info(f"✅ Applied {scenario} manifest to EKS cluster")
                 return {"status": "success", "output": result.stdout}
             else:
                 self.logger.error(f"❌ Failed to apply manifest: {result.stderr}")
                 return {"status": "error", "error": result.stderr}
-                
+
         except Exception as e:
             self.logger.error(f"❌ Error applying manifest: {e}")
             return {"status": "error", "error": str(e)}
-    
-    def _simulate_issue_without_kubectl(self, scenario: str) -> Dict[str, Any]:
+
+    def _simulate_issue_without_kubectl(self, scenario: str) -> dict[str, Any]:
         """Simulate an issue when kubectl is not available."""
         self.logger.info(f"Simulating {scenario} issue (kubectl not available)")
         return {
             "status": "simulated",
             "message": f"Simulated {scenario} issue - kubectl not available for real deployment"
         }
-    
+
     def _get_crashloop_manifest(self) -> str:
         """Get manifest for CrashLoopBackOff simulation."""
         return """
@@ -242,7 +240,7 @@ spec:
             memory: "128Mi"
             cpu: "200m"
 """
-    
+
     def _get_oom_manifest(self) -> str:
         """Get manifest for OOM simulation."""
         return """
@@ -277,7 +275,7 @@ spec:
             memory: "128Mi"  # Very low limit to trigger OOM
             cpu: "200m"
 """
-    
+
     def _get_imagepull_manifest(self) -> str:
         """Get manifest for ImagePullBackOff simulation."""
         return """
@@ -308,7 +306,7 @@ spec:
             memory: "64Mi"
             cpu: "100m"
 """
-    
+
     def _get_cpu_throttle_manifest(self) -> str:
         """Get manifest for CPU throttling simulation."""
         return """
@@ -343,7 +341,7 @@ spec:
             memory: "128Mi"
             cpu: "150m"  # Low limit to cause throttling
 """
-    
+
     def _get_service_down_manifest(self) -> str:
         """Get manifest for service down simulation."""
         return """
@@ -388,35 +386,35 @@ spec:
 """
 
 
-async def test_complete_alert_flow(scenario: str, config: Dict[str, Any]) -> Dict[str, Any]:
+async def test_complete_alert_flow(scenario: str, config: dict[str, Any]) -> dict[str, Any]:
     """Test the complete alert flow from simulation to AI response."""
     logger = logging.getLogger(__name__)
-    
+
     logger.info(f"🧪 Testing complete alert flow for scenario: {scenario}")
-    
+
     # Step 1: Simulate EKS issue
     logger.info("📦 Step 1: Simulating EKS issue...")
     eks_simulator = EKSAlertSimulator()
     eks_result = eks_simulator.apply_broken_manifest(scenario)
-    
+
     if eks_result["status"] == "error":
         logger.warning(f"EKS simulation failed: {eks_result['error']}")
-    
+
     # Step 2: Create alert data based on scenario
     alert_data = get_scenario_alert_data(scenario)
-    
+
     # Step 3: Optionally send real PagerDuty alert
     logger.info("📟 Step 2: Optionally triggering PagerDuty alert...")
     pd_simulator = PagerDutySimulator(config)
     pd_result = pd_simulator.trigger_real_pagerduty_alert(alert_data)
-    
+
     # Step 4: Simulate webhook payload
     webhook_payload = pd_simulator.simulate_webhook_payload(alert_data)
-    
+
     # Step 5: Initialize and run oncall agent
     logger.info("🤖 Step 3: Running oncall agent analysis...")
     agent_result = await run_oncall_agent_with_integrations(alert_data, config)
-    
+
     # Step 6: Compile results
     results = {
         "scenario": scenario,
@@ -427,17 +425,17 @@ async def test_complete_alert_flow(scenario: str, config: Dict[str, Any]) -> Dic
         "agent_analysis": agent_result,
         "success": agent_result.get("status") == "success"
     }
-    
+
     # Step 7: Display summary
     print_test_summary(results)
-    
+
     return results
 
 
-async def run_oncall_agent_with_integrations(alert_data: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
+async def run_oncall_agent_with_integrations(alert_data: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
     """Run the oncall agent with configured integrations."""
     logger = logging.getLogger(__name__)
-    
+
     try:
         # Create PagerAlert from alert data
         alert = PagerAlert(
@@ -448,10 +446,10 @@ async def run_oncall_agent_with_integrations(alert_data: Dict[str, Any], config:
             timestamp=alert_data["timestamp"],
             metadata=alert_data.get("metadata", {})
         )
-        
+
         # Initialize agent
         agent = OncallAgent()
-        
+
         # Register GitHub MCP integration if enabled
         if config.get("github_integration", False):
             logger.info("🔗 Registering GitHub MCP integration...")
@@ -467,8 +465,8 @@ async def run_oncall_agent_with_integrations(alert_data: Dict[str, Any], config:
                 logger.info("✅ GitHub MCP integration registered")
             except Exception as e:
                 logger.warning(f"⚠️ GitHub MCP integration failed: {e}")
-        
-        # Register Notion integration if enabled  
+
+        # Register Notion integration if enabled
         if config.get("notion_integration", False):
             logger.info("📝 Registering Notion integration...")
             try:
@@ -482,17 +480,17 @@ async def run_oncall_agent_with_integrations(alert_data: Dict[str, Any], config:
                 logger.info("✅ Notion integration registered")
             except Exception as e:
                 logger.warning(f"⚠️ Notion integration failed: {e}")
-        
+
         # Connect integrations
         await agent.connect_integrations()
-        
+
         # Process the alert
         logger.info("⚡ Processing alert with AI agent...")
         result = await agent.handle_pager_alert(alert)
-        
+
         # Clean up
         await agent.shutdown()
-        
+
         return {
             "status": "success",
             "alert_id": alert.alert_id,
@@ -502,7 +500,7 @@ async def run_oncall_agent_with_integrations(alert_data: Dict[str, Any], config:
             "suggested_actions": result.get("suggested_actions", []),
             "raw_result": result
         }
-        
+
     except Exception as e:
         logger.error(f"❌ Agent processing failed: {e}")
         return {
@@ -512,10 +510,10 @@ async def run_oncall_agent_with_integrations(alert_data: Dict[str, Any], config:
         }
 
 
-def get_scenario_alert_data(scenario: str) -> Dict[str, Any]:
+def get_scenario_alert_data(scenario: str) -> dict[str, Any]:
     """Get alert data for a specific scenario."""
     base_timestamp = datetime.now(UTC).isoformat()
-    
+
     scenarios = {
         "pod_crash": {
             "alert_id": f"K8S-CRASH-{int(time.time())}",
@@ -552,7 +550,7 @@ def get_scenario_alert_data(scenario: str) -> Dict[str, Any]:
         "image_pull": {
             "alert_id": f"K8S-IMG-{int(time.time())}",
             "severity": "medium",
-            "service_name": "imagepull-test-app", 
+            "service_name": "imagepull-test-app",
             "description": "Pod imagepull-test-app in ImagePullBackOff state - cannot pull image",
             "timestamp": base_timestamp,
             "alert_type": "image_pull",
@@ -597,14 +595,14 @@ def get_scenario_alert_data(scenario: str) -> Dict[str, Any]:
             }
         }
     }
-    
+
     if scenario not in scenarios:
         raise ValueError(f"Unknown scenario: {scenario}. Available: {list(scenarios.keys())}")
-    
+
     return scenarios[scenario]
 
 
-def print_test_summary(results: Dict[str, Any]) -> None:
+def print_test_summary(results: dict[str, Any]) -> None:
     """Print a summary of the test results."""
     print("\n" + "="*80)
     print("🧪 PAGERDUTY ALERT SIMULATION TEST SUMMARY")
@@ -613,7 +611,7 @@ def print_test_summary(results: Dict[str, Any]) -> None:
     print(f"⏰ Timestamp: {results['timestamp']}")
     print(f"✅ Overall Success: {results['success']}")
     print()
-    
+
     # EKS Simulation Results
     eks = results['eks_simulation']
     print(f"📦 EKS Simulation: {eks['status']}")
@@ -622,9 +620,9 @@ def print_test_summary(results: Dict[str, Any]) -> None:
     elif eks['status'] == 'simulated':
         print(f"   ⚠️  {eks['message']}")
     else:
-        print(f"   ✅ Successfully applied manifest")
+        print("   ✅ Successfully applied manifest")
     print()
-    
+
     # PagerDuty Results
     pd = results['pagerduty_alert']
     print(f"📟 PagerDuty Alert: {pd['status']}")
@@ -635,7 +633,7 @@ def print_test_summary(results: Dict[str, Any]) -> None:
     else:
         print(f"   ❌ Error: {pd.get('error', 'Unknown error')}")
     print()
-    
+
     # Agent Analysis Results
     agent = results['agent_analysis']
     print(f"🤖 AI Agent Analysis: {agent['status']}")
@@ -651,7 +649,7 @@ def print_test_summary(results: Dict[str, Any]) -> None:
                     print(f"      {line[:100]}...")
     else:
         print(f"   ❌ Error: {agent.get('error', 'Unknown error')}")
-    
+
     print("="*80)
 
 
@@ -676,7 +674,7 @@ async def main():
         help="Test with GitHub MCP server integration"
     )
     parser.add_argument(
-        "--notion-integration", 
+        "--notion-integration",
         action="store_true",
         help="Test with Notion integration"
     )
@@ -686,13 +684,13 @@ async def main():
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Logging level"
     )
-    
+
     args = parser.parse_args()
-    
+
     # Set up logging
     setup_logging(level=args.log_level)
     logger = logging.getLogger(__name__)
-    
+
     # Load configuration
     config = {
         "use_real_pagerduty": args.real_pagerduty,
@@ -706,24 +704,24 @@ async def main():
         "notion_database_id": "",  # Set if using Notion integration
         "notion_version": "2022-06-28"
     }
-    
+
     logger.info("🚀 Starting PagerDuty Alert Simulation")
-    
+
     if args.scenario == "all":
         scenarios = ["pod_crash", "oom_kill", "image_pull", "cpu_throttle", "service_down"]
         results = []
-        
+
         for scenario in scenarios:
             logger.info(f"\n{'='*50}")
             logger.info(f"Testing scenario: {scenario}")
             logger.info(f"{'='*50}")
-            
+
             result = await test_complete_alert_flow(scenario, config)
             results.append(result)
-            
+
             # Wait between scenarios
             await asyncio.sleep(5)
-        
+
         # Print overall summary
         print("\n" + "="*80)
         print("🎯 OVERALL TEST SUMMARY")
@@ -733,10 +731,10 @@ async def main():
         print(f"Successful: {len(successful)}")
         print(f"Failed: {len(results) - len(successful)}")
         print("="*80)
-        
+
     else:
         await test_complete_alert_flow(args.scenario, config)
-    
+
     logger.info("✅ PagerDuty Alert Simulation completed")
 
 

@@ -1,6 +1,5 @@
 """FastAPI server for webhook endpoints and API."""
 
-import asyncio
 import signal
 import sys
 from contextlib import asynccontextmanager
@@ -12,18 +11,17 @@ from fastapi.responses import JSONResponse
 
 from src.oncall_agent.api import webhooks
 from src.oncall_agent.api.routers import (
+    agent_router,
+    analytics_router,
     dashboard_router,
     incidents_router,
-    agent_router,
     integrations_router,
-    analytics_router,
-    security_router,
     monitoring_router,
-    settings_router
+    security_router,
+    settings_router,
 )
 from src.oncall_agent.config import get_config
 from src.oncall_agent.utils import get_logger
-
 
 logger = get_logger(__name__)
 config = get_config()
@@ -36,15 +34,15 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Oncall Agent API Server")
     logger.info(f"API Server running on {config.api_host}:{config.api_port}")
     logger.info(f"PagerDuty integration: {'enabled' if config.pagerduty_enabled else 'disabled'}")
-    
+
     # Initialize webhook handler
     if config.pagerduty_enabled:
         from src.oncall_agent.api.webhooks import get_agent_trigger
         trigger = await get_agent_trigger()
         logger.info("OncallAgent initialized for webhook handling")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down Oncall Agent API Server")
     if config.pagerduty_enabled:
@@ -96,7 +94,7 @@ async def health_check():
             "pagerduty_enabled": config.pagerduty_enabled,
         }
     }
-    
+
     # Check agent if initialized
     if config.pagerduty_enabled:
         try:
@@ -110,7 +108,7 @@ async def health_check():
         except Exception as e:
             health_status["checks"]["agent"] = f"error: {str(e)}"
             health_status["status"] = "degraded"
-    
+
     return health_status
 
 
@@ -157,7 +155,7 @@ def main():
     # Setup signal handlers
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     # Run server
     uvicorn.run(
         "api_server:app",

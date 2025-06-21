@@ -1,18 +1,18 @@
 """Direct Notion integration using the Notion API."""
 
-import httpx
 import json
-from typing import Dict, Any, List, Optional
 from datetime import datetime
-import logging
+from typing import Any
+
+import httpx
 
 from .base import MCPIntegration
 
 
 class NotionDirectIntegration(MCPIntegration):
     """Direct Notion integration using HTTP API calls."""
-    
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+
+    def __init__(self, config: dict[str, Any] | None = None):
         """Initialize Notion integration.
         
         Args:
@@ -27,10 +27,10 @@ class NotionDirectIntegration(MCPIntegration):
         self.notion_version = self.config.get("notion_version", "2022-06-28")
         self.base_url = "https://api.notion.com/v1"
         self.client = None
-        
+
         if not self.notion_token:
             raise ValueError("notion_token is required in config")
-    
+
     async def connect(self) -> None:
         """Connect to Notion API."""
         try:
@@ -43,7 +43,7 @@ class NotionDirectIntegration(MCPIntegration):
                     "Content-Type": "application/json"
                 }
             )
-            
+
             # Test connection by searching
             response = await self.client.post("/search", json={})
             if response.status_code == 200:
@@ -52,25 +52,25 @@ class NotionDirectIntegration(MCPIntegration):
                 self.logger.info("Connected to Notion API")
             else:
                 raise ConnectionError(f"Failed to connect: {response.status_code} - {response.text}")
-                
+
         except Exception as e:
             self.logger.error(f"Failed to connect to Notion: {e}")
             raise ConnectionError(f"Failed to connect to Notion: {e}")
-    
+
     async def disconnect(self) -> None:
         """Disconnect from Notion API."""
         if self.client:
             await self.client.aclose()
             self.client = None
-        
+
         self.connected = False
         self.connection_time = None
         self.logger.info("Disconnected from Notion API")
-    
-    async def fetch_context(self, context_type: str, **kwargs) -> Dict[str, Any]:
+
+    async def fetch_context(self, context_type: str, **kwargs) -> dict[str, Any]:
         """Fetch context information from Notion."""
         self.validate_connection()
-        
+
         if context_type == "search":
             return await self._search(**kwargs)
         elif context_type == "get_page":
@@ -79,11 +79,11 @@ class NotionDirectIntegration(MCPIntegration):
             return await self._get_database(**kwargs)
         else:
             raise ValueError(f"Unsupported context type: {context_type}")
-    
-    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
+
+    async def execute_action(self, action: str, params: dict[str, Any]) -> dict[str, Any]:
         """Execute an action in Notion."""
         self.validate_connection()
-        
+
         if action == "create_page":
             return await self._create_page(**params)
         elif action == "update_page":
@@ -92,8 +92,8 @@ class NotionDirectIntegration(MCPIntegration):
             return await self._append_to_page(**params)
         else:
             raise ValueError(f"Unsupported action: {action}")
-    
-    async def get_capabilities(self) -> Dict[str, List[str]]:
+
+    async def get_capabilities(self) -> dict[str, list[str]]:
         """Get capabilities of the Notion integration."""
         return {
             "context_types": [
@@ -113,8 +113,8 @@ class NotionDirectIntegration(MCPIntegration):
                 "page_operations"
             ]
         }
-    
-    async def _search(self, query: str = "", **kwargs) -> Dict[str, Any]:
+
+    async def _search(self, query: str = "", **kwargs) -> dict[str, Any]:
         """Search Notion."""
         try:
             body = {"query": query}
@@ -122,15 +122,15 @@ class NotionDirectIntegration(MCPIntegration):
                 body["filter"] = kwargs["filter"]
             if kwargs.get("sort"):
                 body["sort"] = kwargs["sort"]
-                
+
             response = await self.client.post("/search", json=body)
             response.raise_for_status()
             return response.json()
         except Exception as e:
             self.logger.error(f"Search failed: {e}")
             return {"error": str(e)}
-    
-    async def _get_page(self, page_id: str, **kwargs) -> Dict[str, Any]:
+
+    async def _get_page(self, page_id: str, **kwargs) -> dict[str, Any]:
         """Get a Notion page."""
         try:
             response = await self.client.get(f"/pages/{page_id}")
@@ -139,8 +139,8 @@ class NotionDirectIntegration(MCPIntegration):
         except Exception as e:
             self.logger.error(f"Get page failed: {e}")
             return {"error": str(e)}
-    
-    async def _get_database(self, database_id: str, **kwargs) -> Dict[str, Any]:
+
+    async def _get_database(self, database_id: str, **kwargs) -> dict[str, Any]:
         """Get a Notion database."""
         try:
             response = await self.client.get(f"/databases/{database_id}")
@@ -149,8 +149,8 @@ class NotionDirectIntegration(MCPIntegration):
         except Exception as e:
             self.logger.error(f"Get database failed: {e}")
             return {"error": str(e)}
-    
-    async def _create_page(self, **params) -> Dict[str, Any]:
+
+    async def _create_page(self, **params) -> dict[str, Any]:
         """Create a Notion page."""
         try:
             response = await self.client.post("/pages", json=params)
@@ -162,8 +162,8 @@ class NotionDirectIntegration(MCPIntegration):
         except Exception as e:
             self.logger.error(f"Create page failed: {e}")
             return {"error": str(e)}
-    
-    async def _update_page(self, page_id: str, properties: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+
+    async def _update_page(self, page_id: str, properties: dict[str, Any], **kwargs) -> dict[str, Any]:
         """Update a Notion page."""
         try:
             response = await self.client.patch(
@@ -175,8 +175,8 @@ class NotionDirectIntegration(MCPIntegration):
         except Exception as e:
             self.logger.error(f"Update page failed: {e}")
             return {"error": str(e)}
-    
-    async def _append_to_page(self, page_id: str, children: List[Dict[str, Any]], **kwargs) -> Dict[str, Any]:
+
+    async def _append_to_page(self, page_id: str, children: list[dict[str, Any]], **kwargs) -> dict[str, Any]:
         """Append blocks to a Notion page."""
         try:
             response = await self.client.patch(
@@ -188,13 +188,13 @@ class NotionDirectIntegration(MCPIntegration):
         except Exception as e:
             self.logger.error(f"Append to page failed: {e}")
             return {"error": str(e)}
-    
-    async def create_incident_documentation(self, alert_data: Dict[str, Any]) -> Dict[str, Any]:
+
+    async def create_incident_documentation(self, alert_data: dict[str, Any]) -> dict[str, Any]:
         """Create incident documentation in Notion."""
         try:
             # First, search for existing pages to get parent
             search_result = await self._search()
-            
+
             # Create page properties
             properties = {
                 "title": {
@@ -205,7 +205,7 @@ class NotionDirectIntegration(MCPIntegration):
                     }]
                 }
             }
-            
+
             # Create page content blocks
             children = [
                 {
@@ -315,7 +315,7 @@ class NotionDirectIntegration(MCPIntegration):
                     }
                 }
             ]
-            
+
             # Determine parent - if database_id is provided, use it
             parent = {}
             if self.database_id:
@@ -323,16 +323,16 @@ class NotionDirectIntegration(MCPIntegration):
             else:
                 # Use the workspace as parent if no database specified
                 parent = {"workspace": True}
-            
+
             # Create the page
             page_data = {
                 "parent": parent,
                 "properties": properties,
                 "children": children
             }
-            
+
             result = await self._create_page(**page_data)
-            
+
             if "error" not in result:
                 self.logger.info(f"Created incident page with ID: {result.get('id')}")
                 return {
@@ -346,7 +346,7 @@ class NotionDirectIntegration(MCPIntegration):
                     "success": False,
                     "error": result.get("error", "Unknown error")
                 }
-                
+
         except Exception as e:
             self.logger.error(f"Failed to create incident documentation: {e}")
             return {
