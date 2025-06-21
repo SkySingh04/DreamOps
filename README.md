@@ -4,15 +4,25 @@ An intelligent AI-powered oncall agent that automatically triages and resolves i
 
 ## 🚀 Features
 
+### Core Capabilities
 - **AI-Powered Analysis**: Uses Claude to intelligently analyze alerts and suggest solutions
 - **Kubernetes Integration**: Automatically debugs pod crashes, OOM issues, and configuration problems
 - **MCP Architecture**: Extensible integration system for connecting to various tools (Grafana, Slack, PagerDuty, etc.)
 - **Pattern Detection**: Recognizes common incident patterns and applies appropriate debugging strategies
 - **Safety Mechanisms**: Configurable automation levels with safety checks for destructive operations
 - **Real-time Processing**: Async architecture for handling multiple incidents concurrently
+
+### API & Web Interface
 - **REST API**: FastAPI backend with automatic documentation
+- **SaaS Frontend**: Next.js web interface with real-time dashboard
+- **WebSocket Support**: Real-time metrics and incident updates
+- **Comprehensive Endpoints**: Full incident management, analytics, and monitoring
+
+### Deployment & DevOps
 - **CI/CD Ready**: GitHub Actions workflows for automated deployment
 - **AWS Native**: Terraform modules for ECS, CloudFront, and EKS
+- **Container Ready**: Docker support with production-ready images
+- **Monitoring Integration**: Built-in CloudWatch, PagerDuty, and custom monitoring
 
 ## 🏗️ Architecture
 
@@ -102,7 +112,22 @@ cp .env.example .env
 ```bash
 cd frontend
 npm install
+npm run dev  # Starts on http://localhost:3000
 ```
+
+#### Default Authentication Credentials
+
+The frontend comes with pre-filled authentication credentials for easy testing:
+
+**Sign In (Admin Account):**
+- Email: `admin@oncall.ai`
+- Password: `AdminPass123!`
+
+**Sign Up (Random Test User):**
+- Email: Auto-generated (e.g., `user1234@example.com`)
+- Password: Auto-generated (e.g., `TestPass1234!`)
+
+These credentials are automatically filled in the login forms for quick access during development and testing.
 
 ## 🔧 Configuration
 
