@@ -21,3 +21,15 @@ variable "vpc_cidr" {
   type        = string
   default     = "10.1.0.0/16"
 }
+
+variable "pagerduty_endpoint" {
+  description = "PagerDuty SNS integration endpoint URL"
+  type        = string
+  default     = ""
+}
+
+variable "alarm_email" {
+  description = "Email for alarm notifications (testing)"
+  type        = string
+  default     = ""
+}
