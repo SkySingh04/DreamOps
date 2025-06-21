@@ -89,7 +89,8 @@ async def list_integrations() -> list[Integration]:
                 integration = agent.mcp_integrations[name]
                 is_healthy = await integration.health_check()
                 status = IntegrationStatus.CONNECTED if is_healthy else IntegrationStatus.ERROR
-                capabilities = integration.get_capabilities()
+                capabilities_dict = await integration.get_capabilities()
+                capabilities = capabilities_dict.get("actions", [])
 
                 health = IntegrationHealth(
                     name=name,
@@ -138,7 +139,8 @@ async def get_integration(
         integration = agent.mcp_integrations[integration_name]
         is_healthy = await integration.health_check()
         status = IntegrationStatus.CONNECTED if is_healthy else IntegrationStatus.ERROR
-        capabilities = integration.get_capabilities()
+        capabilities_dict = await integration.get_capabilities()
+        capabilities = capabilities_dict.get("actions", [])
 
         health = IntegrationHealth(
             name=integration_name,

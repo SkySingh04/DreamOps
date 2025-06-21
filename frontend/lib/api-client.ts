@@ -166,7 +166,30 @@ class APIClient {
 
   // Integration endpoints
   async getIntegrations(): Promise<APIResponse<Integration[]>> {
-    return this.request<Integration[]>('/api/v1/integrations');
+    return this.request<Integration[]>('/integrations');
+  }
+
+  async getMCPIntegrations(): Promise<APIResponse<{ integrations: Array<{ name: string; capabilities: string[]; connected: boolean }> }>> {
+    // Call the correct backend endpoint for real MCP integrations
+    const response = await this.request<Array<{ name: string; capabilities: string[]; status: string }>>('/api/v1/integrations/');
+    console.log('MCP Integrations Response:', response); // Debug log
+    
+    // Transform the response to match the expected format
+    if (response.status === 'success' && response.data) {
+      const transformedData = {
+        integrations: response.data.map((integration: any) => ({
+          name: integration.name,
+          capabilities: integration.capabilities || [],
+          connected: integration.status === 'connected'
+        }))
+      };
+      return {
+        status: 'success',
+        data: transformedData
+      };
+    }
+    
+    return response as any;
   }
 
   async getIntegration(id: string): Promise<APIResponse<Integration>> {
