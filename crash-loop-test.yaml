@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crash-loop-test
+  namespace: test-monitoring
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: crash-loop-test
+  template:
+    metadata:
+      labels:
+        app: crash-loop-test
+    spec:
+      containers:
+      - name: crash-container
+        image: busybox
+        command: ["/bin/sh"]
+        args: ["-c", "echo 'Starting container...'; sleep 10; echo 'Simulating crash...'; exit 1"]
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
