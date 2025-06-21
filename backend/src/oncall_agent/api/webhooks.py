@@ -65,7 +65,7 @@ async def pagerduty_webhook(
     logger.info("=" * 80)
     logger.info("📨 PAGERDUTY WEBHOOK RECEIVED!")
     logger.info("=" * 80)
-    
+
     try:
         # Get raw body for signature verification
         body = await request.body()
@@ -138,6 +138,24 @@ async def pagerduty_webhook(
                     incident,
                     {"webhook_event": v3_payload.event.event_type}
                 )
+
+                # Log the agent's analysis for visibility
+                if result.get("status") == "success" and result.get("agent_response", {}).get("analysis"):
+                    logger.info("\n" + "="*80)
+                    logger.info("🤖 AGENT ANALYSIS COMPLETE:")
+                    logger.info("="*80)
+                    analysis = result["agent_response"]["analysis"]
+                    for line in analysis.split('\n'):
+                        if line.strip():
+                            logger.info(line)
+                    logger.info("="*80 + "\n")
+
+                    # Log context gathered
+                    if result.get("agent_response", {}).get("context_gathered"):
+                        logger.info("📊 Context gathered from integrations:")
+                        for integration, success in result["agent_response"]["context_gathered"].items():
+                            logger.info(f"  - {integration}: {'✅ Success' if success else '❌ Failed'}")
+
                 results.append(result)
             else:
                 logger.info(f"Ignoring non-incident event: {v3_payload.event.event_type}")
@@ -196,6 +214,24 @@ async def pagerduty_webhook(
                         incident,
                         {"webhook_event": "incident.triggered"}
                     )
+
+                    # Log the agent's analysis for visibility
+                    if result.get("status") == "success" and result.get("agent_response", {}).get("analysis"):
+                        logger.info("\n" + "="*80)
+                        logger.info("🤖 AGENT ANALYSIS COMPLETE:")
+                        logger.info("="*80)
+                        analysis = result["agent_response"]["analysis"]
+                        for line in analysis.split('\n'):
+                            if line.strip():
+                                logger.info(line)
+                        logger.info("="*80 + "\n")
+
+                        # Log context gathered
+                        if result.get("agent_response", {}).get("context_gathered"):
+                            logger.info("📊 Context gathered from integrations:")
+                            for integration, success in result["agent_response"]["context_gathered"].items():
+                                logger.info(f"  - {integration}: {'✅ Success' if success else '❌ Failed'}")
+
                     results.append(result)
 
         # Return response

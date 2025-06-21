@@ -4,7 +4,7 @@ import asyncio
 import json
 import subprocess
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 from .base import MCPIntegration
 
@@ -34,14 +34,14 @@ class NotionMCPIntegration(MCPIntegration):
         """Connect to the Notion MCP server."""
         try:
             import os
-            
+
             # Set up environment variables for the MCP server
             env = os.environ.copy()
             env.update({
                 "NOTION_TOKEN": self.notion_token,
                 "NOTION_VERSION": self.notion_version
             })
-            
+
             # Use the local notion-mcp-server if available
             server_path = "../../notion-mcp-server/bin/cli.mjs"
 
@@ -65,7 +65,7 @@ class NotionMCPIntegration(MCPIntegration):
                 stdout = self.process.stdout.read() if self.process.stdout else ""
                 self.logger.error(f"Notion MCP server stderr: {stderr}")
                 self.logger.error(f"Notion MCP server stdout: {stdout}")
-                
+
                 # Fallback to npx if local server fails
                 self.logger.info("Falling back to npx notion-mcp-server...")
                 self.process = subprocess.Popen(
@@ -77,7 +77,7 @@ class NotionMCPIntegration(MCPIntegration):
                     env=env
                 )
                 await asyncio.sleep(3)
-                
+
                 if self.process.poll() is not None:
                     stderr = self.process.stderr.read() if self.process.stderr else ""
                     raise ConnectionError(f"Notion MCP server failed to start: {stderr}")
@@ -225,7 +225,7 @@ class NotionMCPIntegration(MCPIntegration):
     async def _create_incident_page(self, **params) -> dict[str, Any]:
         """Create a new incident documentation page."""
         alert_id = params.get("alert_id")
-        service_name = params.get("service_name") 
+        service_name = params.get("service_name")
         severity = params.get("severity")
         description = params.get("description")
         metadata = params.get("metadata", {})
@@ -241,13 +241,13 @@ class NotionMCPIntegration(MCPIntegration):
                 # Fallback to creating a mock response
                 self.logger.warning("MCP server not available, creating mock incident page")
                 return await self._create_mock_page(alert_id, service_name, severity, description, metadata)
-                
+
         except Exception as e:
             self.logger.error(f"Failed to create incident page: {e}")
             # Fallback to mock on any error
             return await self._create_mock_page(alert_id, service_name, severity, description, metadata)
-    
-    async def _create_page_via_mcp(self, alert_id: str, service_name: str, severity: str, description: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
+
+    async def _create_page_via_mcp(self, alert_id: str, service_name: str, severity: str, description: str, metadata: dict[str, Any]) -> dict[str, Any]:
         """Create page using MCP protocol."""
         try:
             # Create MCP request for page creation
@@ -267,7 +267,7 @@ class NotionMCPIntegration(MCPIntegration):
                         "children": [
                             {
                                 "object": "block",
-                                "type": "heading_2", 
+                                "type": "heading_2",
                                 "heading_2": {"rich_text": [{"text": {"content": "🚨 Incident Overview"}}]}
                             },
                             {
@@ -285,7 +285,7 @@ class NotionMCPIntegration(MCPIntegration):
                                 "heading_3": {"rich_text": [{"text": {"content": "📊 Metadata"}}]}
                             },
                             {
-                                "object": "block", 
+                                "object": "block",
                                 "type": "code",
                                 "code": {
                                     "rich_text": [{"text": {"content": json.dumps(metadata, indent=2)}}],
@@ -296,20 +296,20 @@ class NotionMCPIntegration(MCPIntegration):
                     }
                 }
             }
-            
+
             # Send request to MCP server
             self.process.stdin.write(json.dumps(mcp_request) + "\n")
             self.process.stdin.flush()
-            
+
             # Wait for response (simplified - real implementation would be more robust)
             await asyncio.sleep(1)
-            
+
             # Read response (this is simplified)
             response_line = await asyncio.wait_for(
-                asyncio.create_task(asyncio.to_thread(self.process.stdout.readline)), 
+                asyncio.create_task(asyncio.to_thread(self.process.stdout.readline)),
                 timeout=10
             )
-            
+
             if response_line:
                 response = json.loads(response_line.strip())
                 if "result" in response:
@@ -322,15 +322,15 @@ class NotionMCPIntegration(MCPIntegration):
                         "url": page_url,
                         "created_via": "mcp_server"
                     }
-            
+
             # If we get here, MCP didn't work properly
             raise Exception("MCP server communication failed")
-            
+
         except Exception as e:
             self.logger.error(f"MCP page creation failed: {e}")
             raise
-    
-    async def _create_mock_page(self, alert_id: str, service_name: str, severity: str, description: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
+
+    async def _create_mock_page(self, alert_id: str, service_name: str, severity: str, description: str, metadata: dict[str, Any]) -> dict[str, Any]:
         """Create mock page when MCP is not available."""
         page_id = f"mock-incident-{alert_id}-{int(datetime.now().timestamp())}"
         self.logger.info(f"Created mock incident page for alert {alert_id}")
@@ -342,15 +342,15 @@ class NotionMCPIntegration(MCPIntegration):
             "created_via": "mock",
             "properties": {
                 "Alert ID": alert_id,
-                "Service": service_name, 
+                "Service": service_name,
                 "Severity": severity,
                 "Status": "Open",
                 "Created": datetime.now().isoformat()
             },
             "content": f"## Incident Overview\n\n**Service:** {service_name}\n**Alert ID:** {alert_id}\n**Severity:** {severity}\n\n**Description:**\n{description}\n\n**Metadata:**\n```json\n{json.dumps(metadata, indent=2)}\n```\n\n## Investigation Log\n\n_Investigation steps will be logged here..._\n\n## Resolution\n\n_Resolution details will be added here..._"
         }
-    
-    async def _update_page(self, page_id: str, content: str, **kwargs) -> Dict[str, Any]:
+
+    async def _update_page(self, page_id: str, content: str, **kwargs) -> dict[str, Any]:
         """Update an existing page."""
         # Mock implementation - would use MCP protocol
         self.logger.info(f"Updated page {page_id}")

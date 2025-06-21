@@ -1,10 +1,10 @@
 """FastAPI server for webhook endpoints and API."""
 
 import json
+import logging
 import signal
 import sys
 from contextlib import asynccontextmanager
-import logging
 
 import uvicorn
 from fastapi import FastAPI, Request
@@ -195,7 +195,7 @@ def main():
     # Setup signal handlers
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     # Filter out ONLY WebSocket connection logs
     class WebSocketFilter(logging.Filter):
         def filter(self, record):
@@ -205,7 +205,7 @@ def main():
                 return False
             # Allow all other logs including PagerDuty webhooks
             return True
-    
+
     # Apply filter to uvicorn access logger
     uvicorn_access = logging.getLogger("uvicorn.access")
     uvicorn_access.addFilter(WebSocketFilter())
