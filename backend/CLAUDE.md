@@ -115,6 +115,28 @@ When asked to test changes:
 ### Testing and Validation
 - **Run demo**: `uv run python main.py` (runs a simulated alert through the agent)
 - **Validate setup**: `uv run python test_run.py` (checks Python version, packages, env vars)
+- **Run API server**: `uv run uvicorn src.oncall_agent.api:app --reload` (starts FastAPI server)
+- **Run tests**: `uv run pytest tests/` (runs all tests)
+- **Run linter**: `uv run ruff check .` (checks code style)
+- **Run type checker**: `uv run mypy . --ignore-missing-imports` (checks type annotations)
+
+### IMPORTANT: Pre-commit Checklist
+**ALWAYS run these commands before finishing any task:**
+```bash
+# 1. Run linter and fix any issues
+uv run ruff check . --fix
+
+# 2. Run type checker
+uv run mypy . --ignore-missing-imports
+
+# 3. Run all tests
+uv run pytest tests/
+
+# 4. Verify the application still runs
+uv run python main.py
+```
+
+If any of these fail, fix the issues before considering the task complete.
 
 ## Dependencies and Tools
 
@@ -123,6 +145,8 @@ When asked to test changes:
 - **Anthropic**: Claude API client
 - **Pydantic**: Data validation and settings
 - **aiohttp**: HTTP client for MCP server communication
+- **FastAPI**: Web framework for the REST API
+- **uvicorn**: ASGI server for running FastAPI
 
 ## GitHub MCP Integration
 
@@ -152,11 +176,53 @@ The integration is automatically registered when `GITHUB_TOKEN` is configured. I
 ### Testing
 Run `python test_github_integration.py` to test the integration.
 
+## API Development
+
+The project now includes a FastAPI REST API in `src/oncall_agent/api.py`:
+
+### API Endpoints
+- `GET /health` - Health check endpoint
+- `POST /alerts` - Submit new alerts for processing
+- `GET /alerts/{alert_id}` - Get alert details (placeholder)
+- `GET /integrations` - List available MCP integrations
+- `POST /integrations/{name}/health` - Check specific integration health
+
+### Running the API
+```bash
+# Development with auto-reload
+uv run uvicorn src.oncall_agent.api:app --reload
+
+# Production
+uv run uvicorn src.oncall_agent.api:app --host 0.0.0.0 --port 8000
+```
+
+### API Documentation
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+## Deployment
+
+The project includes comprehensive AWS deployment configuration:
+
+### Infrastructure
+- **Backend**: ECS Fargate with ALB
+- **Frontend**: S3 + CloudFront
+- **Monitoring**: CloudWatch dashboards and alarms
+- **Security**: Secrets Manager for sensitive data
+
+### CI/CD Pipelines
+- **Backend**: `.github/workflows/backend-ci.yml`
+- **Frontend**: `.github/workflows/frontend-ci.yml`
+- **Security**: `.github/workflows/security-scan.yml`
+
+See [DEPLOYMENT.md](../DEPLOYMENT.md) for detailed instructions.
+
 ## Debugging Tips
 
 1. Set `LOG_LEVEL=DEBUG` in `.env` for verbose logging
 2. Check agent state with `agent.mcp_integrations` dictionary
 3. Use `agent.health_check()` on integrations to verify connectivity
+4. For API issues, check FastAPI logs and use the `/docs` endpoint
 
 ## MCP Integration Interface
 
@@ -205,3 +271,8 @@ When making changes, keep these future directions in mind.
 3. Don't forget to validate connection state before operations
 4. Don't catch exceptions without logging them
 5. Don't forget to update type hints when changing function signatures
+6. Don't skip running tests and linters before committing
+7. Don't commit without checking `uv run ruff check .` passes
+8. Don't deploy without running the full test suite
+9. Don't expose API keys or secrets in code or logs
+10. Don't forget to update API documentation when adding endpoints

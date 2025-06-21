@@ -1,0 +1,97 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly scan
+
+jobs:
+  backend-security:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: './backend'
+        format: 'sarif'
+        output: 'backend-trivy-results.sarif'
+    
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'backend-trivy-results.sarif'
+    
+    - name: Run Bandit security linter
+      run: |
+        pip install bandit
+        bandit -r backend/src -f json -o backend-bandit-results.json || true
+    
+    - name: Upload Bandit results
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-scan-results
+        path: backend-bandit-results.json
+
+  frontend-security:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Run npm audit
+      working-directory: ./frontend
+      run: |
+        npm audit --json > npm-audit-results.json || true
+    
+    - name: Upload npm audit results
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-scan-results
+        path: frontend/npm-audit-results.json
+    
+    - name: Run ESLint security plugin
+      working-directory: ./frontend
+      run: |
+        npm install --save-dev eslint-plugin-security
+        npx eslint . --ext .js,.jsx,.ts,.tsx --format json --output-file eslint-security-results.json || true
+    
+    - name: Upload ESLint results
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-scan-results
+        path: frontend/eslint-security-results.json
+
+  docker-security:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Build backend Docker image
+      run: docker build -t oncall-backend:test -f backend/Dockerfile.prod ./backend
+    
+    - name: Run Trivy on Docker image
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'oncall-backend:test'
+        format: 'sarif'
+        output: 'docker-trivy-results.sarif'
+    
+    - name: Upload Docker scan results
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'docker-trivy-results.sarif'
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Run GitLeaks
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -3,9 +3,10 @@
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.oncall_agent.agent import OncallAgent, PagerAlert
+from src.oncall_agent.config import get_config
 from src.oncall_agent.utils import setup_logging
 from src.oncall_agent.config import get_config
 from src.oncall_agent.mcp_integrations.notion_direct import NotionDirectIntegration
@@ -15,7 +16,7 @@ async def simulate_pager_alert() -> PagerAlert:
     """Simulate receiving a pager alert for demonstration purposes."""
     # You can switch between different alert types for testing
     alert_type = "kubernetes"  # Change to "general" for non-k8s alert
-    
+
     if alert_type == "kubernetes":
         # Real Kubernetes pod crash alert from our cluster
         return PagerAlert(
@@ -23,7 +24,7 @@ async def simulate_pager_alert() -> PagerAlert:
             severity="critical",
             service_name="broken-database-app",
             description="Pod broken-database-app-55b6f9cfb5-h5ftt is in CrashLoopBackOff state - Database initialization failing",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             metadata={
                 "pod_name": "broken-database-app-55b6f9cfb5-h5ftt",
                 "namespace": "default",
@@ -40,7 +41,7 @@ async def simulate_pager_alert() -> PagerAlert:
             severity="high",
             service_name="api-gateway",
             description="API Gateway experiencing high error rate (15% 5xx responses)",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             metadata={
                 "error_rate": "15%",
                 "affected_endpoints": ["/api/v1/users", "/api/v1/orders"],
@@ -56,9 +57,9 @@ async def main():
     config = get_config()
     setup_logging(level=config.log_level)
     logger = logging.getLogger(__name__)
-    
+
     logger.info("Starting Oncall AI Agent")
-    
+
     try:
         # Initialize the agent
         agent = OncallAgent()
@@ -75,20 +76,20 @@ async def main():
         
         # Connect to any configured integrations
         await agent.connect_integrations()
-        
+
         # Simulate receiving a pager alert
         logger.info("Simulating pager alert reception...")
         alert = await simulate_pager_alert()
-        
+
         logger.info(f"Received alert: {alert.alert_id} - {alert.description}")
-        
+
         # Process the alert
         result = await agent.handle_pager_alert(alert)
-        
+
         # Display the results
         logger.info("Alert Analysis Complete:")
         logger.info(f"Status: {result.get('status')}")
-        
+
         # Show K8s-specific information if detected
         if result.get('k8s_alert_type'):
             logger.info(f"Kubernetes Alert Type: {result['k8s_alert_type']}")
@@ -96,15 +97,15 @@ async def main():
                 logger.info("Kubernetes context successfully gathered")
                 if result.get('suggested_actions'):
                     logger.info(f"Automated actions available: {len(result['suggested_actions'])}")
-        
+
         if result.get('analysis'):
             print("\n" + "="*60)
             print("ALERT ANALYSIS")
             print("="*60)
             print(result['analysis'])
             print("="*60 + "\n")
-        
-        # Demonstrate MCP integrations
+
+        # Demonstrate how MCP integrations would be used
         if result.get('available_integrations'):
             logger.info(f"Available MCP integrations: {', '.join(result['available_integrations'])}")
             
@@ -139,7 +140,7 @@ async def main():
         
         # Shutdown the agent
         await agent.shutdown()
-        
+
     except KeyboardInterrupt:
         logger.info("Received interrupt signal, shutting down...")
     except Exception as e:
