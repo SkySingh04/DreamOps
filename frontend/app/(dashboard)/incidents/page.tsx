@@ -41,7 +41,12 @@ import {
   Copy,
   Download,
   Send,
-  Loader2
+  Loader2,
+  Skull,
+  Flame,
+  Bomb,
+  ShieldAlert,
+  Siren
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient, queryKeys } from '@/lib/api-client';
@@ -70,9 +75,66 @@ export default function IncidentsPage() {
   const [filterSeverity, setFilterSeverity] = useState<Severity | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showMockDialog, setShowMockDialog] = useState(false);
+  const [showChaosDialog, setShowChaosDialog] = useState(false);
+  const [showChaosConfirmDialog, setShowChaosConfirmDialog] = useState(false);
+  const [showServiceSelector, setShowServiceSelector] = useState(false);
+  const [chaosLoading, setChaosLoading] = useState(false);
+  const [chaosResults, setChaosResults] = useState<string[]>([]);
+  const [selectedService, setSelectedService] = useState<string | null>(null);
+  const [serviceStatuses, setServiceStatuses] = useState<Record<string, 'pending' | 'loading' | 'success' | 'error'>>({});
+  const [nukeProgress, setNukeProgress] = useState({ current: 0, total: 0 });
   const [expandedIncident, setExpandedIncident] = useState<string | null>(null);
   const [showAgentLogs, setShowAgentLogs] = useState(true);
   const queryClient = useQueryClient();
+
+  // Define the 5 chaos services from the script
+  const chaosServices = [
+    {
+      id: 'pod_crash',
+      name: 'Pod Crash',
+      shortName: 'PODS',
+      description: 'Simulate CrashLoopBackOff',
+      icon: '💥',
+      details: 'Creates pods that repeatedly crash and restart',
+      severity: 'high'
+    },
+    {
+      id: 'image_pull',
+      name: 'Image Pull Error',
+      shortName: 'IMAGES',
+      description: 'Simulate ImagePullBackOff',
+      icon: '🚫',
+      details: 'Creates pods with non-existent images',
+      severity: 'high'
+    },
+    {
+      id: 'oom_kill',
+      name: 'OOM Kill',
+      shortName: 'MEMORY',
+      description: 'Simulate memory exhaustion',
+      icon: '💀',
+      details: 'Creates memory-hungry pods that get killed',
+      severity: 'critical'
+    },
+    {
+      id: 'deployment_failure',
+      name: 'Deployment Failure',
+      shortName: 'DEPLOYS',
+      description: 'Simulate failed deployments',
+      icon: '⚠️',
+      details: 'Creates deployments that fail to roll out',
+      severity: 'medium'
+    },
+    {
+      id: 'service_unavailable',
+      name: 'Service Unavailable',
+      shortName: 'SERVICES',
+      description: 'Simulate broken services',
+      icon: '🔴',
+      details: 'Creates services with no working endpoints',
+      severity: 'medium'
+    }
+  ];
   
   // Agent logs hook for real-time monitoring
   const { logs, isConnected, activeIncidents, currentStage, currentProgress } = useAgentLogs();
@@ -144,6 +206,186 @@ export default function IncidentsPage() {
       toast.success('Action rolled back');
     },
   });
+
+  // Execute individual service chaos
+  const executeServiceChaos = async (serviceId: string, retries = 2): Promise<{ success: boolean; results: string[]; error?: string }> => {
+    const service = chaosServices.find(s => s.id === serviceId);
+    if (!service) throw new Error(`Service ${serviceId} not found`);
+
+    for (let attempt = 1; attempt <= retries + 1; attempt++) {
+      try {
+        console.log(`🔥 Attempting to nuke ${service.name} (attempt ${attempt}/${retries + 1})`);
+        
+        const response = await fetch('/api/chaos-engineering', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ service: serviceId })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || `Failed to nuke ${service.name}`);
+        }
+
+        return {
+          success: true,
+          results: data.results || [`✅ ${service.name} successfully nuked!`]
+        };
+
+      } catch (error) {
+        console.error(`❌ Failed to nuke ${service.name} (attempt ${attempt}):`, error);
+        
+        if (attempt === retries + 1) {
+          return {
+            success: false,
+            results: [`❌ Failed to nuke ${service.name} after ${retries + 1} attempts`],
+            error: error instanceof Error ? error.message : 'Unknown error'
+          };
+        }
+        
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+      }
+    }
+
+    return { success: false, results: [], error: 'Max retries exceeded' };
+  };
+
+  const executeChaosEngineering = async (serviceId?: string) => {
+    setChaosLoading(true);
+    setChaosResults([]);
+    setShowChaosDialog(true);
+    setShowChaosConfirmDialog(false);
+    setShowServiceSelector(false);
+    
+    try {
+      const service = serviceId ? chaosServices.find(s => s.id === serviceId) : null;
+      const isAllServices = !serviceId;
+      
+      // Initialize service statuses
+      if (isAllServices) {
+        const initialStatuses: Record<string, 'pending' | 'loading' | 'success' | 'error'> = {};
+        chaosServices.forEach(s => {
+          initialStatuses[s.id] = 'pending';
+        });
+        setServiceStatuses(initialStatuses);
+        setNukeProgress({ current: 0, total: chaosServices.length });
+      } else if (serviceId) {
+        setServiceStatuses({ [serviceId]: 'loading' });
+        setNukeProgress({ current: 0, total: 1 });
+      }
+      
+      // Show initial loading message
+      setChaosResults([
+        `🔥 Initializing ${service ? service.name : 'ALL SERVICES'} chaos...`, 
+        '⚡ Connecting to Kubernetes cluster...'
+      ]);
+
+      if (isAllServices) {
+        // Sequential execution for "nuke all" to prevent conflicts
+        setChaosResults(prev => [...prev, '', '🎯 NUCLEAR PROTOCOL: Sequential service destruction initiated', '']);
+        
+        let successCount = 0;
+        let failureCount = 0;
+        const allResults: string[] = [];
+
+        for (let i = 0; i < chaosServices.length; i++) {
+          const currentService = chaosServices[i];
+          
+          // Update current service status to loading
+          setServiceStatuses(prev => ({ ...prev, [currentService.id]: 'loading' }));
+          setNukeProgress({ current: i + 1, total: chaosServices.length });
+          
+          setChaosResults(prev => [
+            ...prev, 
+            `${currentService.icon} [${i + 1}/${chaosServices.length}] Nuking ${currentService.name}...`
+          ]);
+
+          const result = await executeServiceChaos(currentService.id);
+          
+          if (result.success) {
+            successCount++;
+            setServiceStatuses(prev => ({ ...prev, [currentService.id]: 'success' }));
+            setChaosResults(prev => [
+              ...prev, 
+              `✅ [${i + 1}/${chaosServices.length}] ${currentService.name} successfully destroyed!`
+            ]);
+          } else {
+            failureCount++;
+            setServiceStatuses(prev => ({ ...prev, [currentService.id]: 'error' }));
+            setChaosResults(prev => [
+              ...prev, 
+              `❌ [${i + 1}/${chaosServices.length}] ${currentService.name} failed: ${result.error}`
+            ]);
+          }
+          
+          allResults.push(...result.results);
+          
+          // Add delay between services to prevent conflicts
+          if (i < chaosServices.length - 1) {
+            setChaosResults(prev => [...prev, '⏳ Waiting 3 seconds before next service...']);
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+        }
+
+        // Final results
+        setChaosResults(prev => [
+          ...prev,
+          '',
+          `🎯 NUCLEAR RESULTS: ${successCount}/${chaosServices.length} services destroyed`,
+          successCount === chaosServices.length ? '🎉 TOTAL INFRASTRUCTURE ANNIHILATION COMPLETE!' : 
+          `⚠️ Partial success: ${failureCount} services failed to nuke`,
+          '',
+          '📋 Detailed Results:',
+          ...allResults
+        ]);
+
+        toast.success(`Infrastructure chaos deployed! 💥`, {
+          description: `${successCount}/${chaosServices.length} services successfully nuked`,
+        });
+
+      } else if (service) {
+        // Single service execution
+        setServiceStatuses({ [service.id]: 'loading' });
+        
+        const result = await executeServiceChaos(service.id);
+        
+        if (result.success) {
+          setServiceStatuses({ [service.id]: 'success' });
+          setChaosResults(prev => [
+            ...prev,
+            `${service.icon} Deploying ${service.name.toLowerCase()} simulation`,
+            `📋 ${service.details}`,
+            '📊 Triggering CloudWatch alarms...',
+            '🎯 Activating PagerDuty alerts...',
+            `✅ ${service.name} successfully compromised!`,
+            '',
+            '🎉 MISSION ACCOMPLISHED: Service chaos deployed!',
+            '',
+            '📋 Detailed Results:',
+            ...result.results
+          ]);
+          
+          toast.success(`${service.name} successfully nuked! 💥`, {
+            description: 'Service chaos deployed successfully',
+          });
+        } else {
+          setServiceStatuses({ [service.id]: 'error' });
+          throw new Error(result.error || 'Service nuke failed');
+        }
+      }
+      
+      setChaosLoading(false);
+      
+    } catch (error) {
+      setChaosLoading(false);
+      setChaosResults(prev => [...prev, '', '❌ Chaos engineering failed:', error instanceof Error ? error.message : 'Unknown error']);
+      toast.error('Chaos engineering failed', {
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+      });
+    }
+  };
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
@@ -276,6 +518,33 @@ export default function IncidentsPage() {
 
   return (
     <section className="flex-1 p-4 lg:p-8 space-y-6">
+      {/* Prominent FUCK INFRA Button - Top Center */}
+      <div className="flex justify-center mb-8">
+        <Button 
+          onClick={() => setShowServiceSelector(true)}
+          className="bg-gradient-to-r from-red-600 via-red-700 to-red-800 hover:from-red-700 hover:via-red-800 hover:to-red-900 text-white border-red-600 shadow-2xl hover:shadow-3xl transform hover:scale-110 transition-all duration-300 font-bold text-3xl px-12 py-6 h-auto rounded-xl border-4 border-red-500 animate-pulse"
+          disabled={chaosLoading}
+          size="lg"
+        >
+          {chaosLoading ? (
+            <>
+              <Loader2 className="h-8 w-8 mr-4 animate-spin" />
+              <Flame className="h-6 w-6 mr-2 animate-bounce" />
+              NUKING INFRA...
+              <Flame className="h-6 w-6 ml-2 animate-bounce" />
+            </>
+          ) : (
+            <>
+              <Bomb className="h-8 w-8 mr-4 animate-bounce" />
+              <Flame className="h-6 w-6 mr-2" />
+              FUCK INFRA
+              <Flame className="h-6 w-6 ml-2" />
+              <Skull className="h-8 w-8 ml-4 animate-bounce" />
+            </>
+          )}
+        </Button>
+      </div>
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Incident Management</h1>
@@ -289,10 +558,6 @@ export default function IncidentsPage() {
           >
             <Terminal className="h-4 w-4 mr-2" />
             {showAgentLogs ? 'Hide' : 'Show'} AI Logs
-          </Button>
-          <Button onClick={() => setShowMockDialog(true)}>
-            <Zap className="h-4 w-4 mr-2" />
-            Trigger Test Incident
           </Button>
         </div>
       </div>
@@ -483,34 +748,303 @@ export default function IncidentsPage() {
         </div>
       </div>
 
-      {/* Mock Incident Dialog */}
-      <Dialog open={showMockDialog} onOpenChange={setShowMockDialog}>
-        <DialogContent>
+      {/* Service Selector Modal */}
+      <Dialog open={showServiceSelector} onOpenChange={setShowServiceSelector}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Trigger Test Incident</DialogTitle>
+            <DialogTitle className="flex items-center justify-center gap-3 text-3xl text-red-600 mb-4">
+              <Bomb className="h-8 w-8 animate-pulse" />
+              <Flame className="h-6 w-6" />
+              INFRASTRUCTURE CHAOS CONTROL
+              <Flame className="h-6 w-6" />
+              <Skull className="h-8 w-8 animate-pulse" />
+            </DialogTitle>
+            <DialogDescription className="text-center text-lg">
+              Choose your target or go nuclear with all services
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            {/* Individual Service Options - Horizontal Cards */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-800 text-center">Choose Target Service</h3>
+              <div className="space-y-3">
+                {chaosServices.map((service) => (
+                  <div 
+                    key={service.id} 
+                    className="w-full bg-white border-2 border-gray-200 hover:border-red-300 rounded-lg p-4 transition-all duration-200 min-h-[100px] flex items-center justify-between"
+                  >
+                    {/* Left: Icon */}
+                    <div className="flex items-center justify-center w-16 h-16 bg-gray-50 rounded-lg border">
+                      <span className="text-3xl">{service.icon}</span>
+                    </div>
+                    
+                    {/* Middle: Service Info */}
+                    <div className="flex-1 px-4">
+                      <div className="flex items-center gap-3 mb-1">
+                        <h4 className="text-lg font-semibold text-gray-800">{service.name}</h4>
+                        <Badge 
+                          variant="outline" 
+                          className={`text-xs ${
+                            service.severity === 'critical' ? 'border-red-500 text-red-700 bg-red-50' :
+                            service.severity === 'high' ? 'border-orange-500 text-orange-700 bg-orange-50' :
+                            'border-yellow-500 text-yellow-700 bg-yellow-50'
+                          }`}
+                        >
+                          {service.severity}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-gray-600">{service.description}</p>
+                      <p className="text-xs text-gray-500 mt-1">{service.details}</p>
+                    </div>
+                    
+                    {/* Right: NUKE Button */}
+                    <div className="flex-shrink-0">
+                      <Button
+                        onClick={() => {
+                          setSelectedService(service.id);
+                          setShowChaosConfirmDialog(true);
+                          setShowServiceSelector(false);
+                        }}
+                        className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 text-sm rounded-lg shadow-md hover:shadow-lg transition-all duration-200 min-w-[140px]"
+                        size="default"
+                      >
+                        <Flame className="h-4 w-4 mr-2" />
+                        NUKE {service.shortName}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Nuclear Option - NUKE IT ALL */}
+            <div className="border-t pt-6">
+              <div className="text-center space-y-4">
+                <div className="bg-red-50 border-2 border-red-300 rounded-lg p-6">
+                  <div className="flex items-center justify-center mb-4">
+                    <Bomb className="h-12 w-12 text-red-600 animate-pulse mr-4" />
+                    <div>
+                      <h3 className="text-2xl font-bold text-red-800">NUCLEAR OPTION</h3>
+                      <p className="text-red-700">Destroy ALL 5 services simultaneously</p>
+                    </div>
+                    <Skull className="h-12 w-12 text-red-600 animate-pulse ml-4" />
+                  </div>
+                  <Button
+                    onClick={() => {
+                      setSelectedService(null);
+                      setShowChaosConfirmDialog(true);
+                      setShowServiceSelector(false);
+                    }}
+                    className="bg-gradient-to-r from-red-700 via-red-800 to-red-900 hover:from-red-800 hover:via-red-900 hover:to-black text-white font-bold text-xl px-8 py-4 h-auto rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+                    size="lg"
+                  >
+                    <Bomb className="h-6 w-6 mr-3" />
+                    <Flame className="h-5 w-5 mr-2" />
+                    💣 NUKE IT ALL 💣
+                    <Flame className="h-5 w-5 ml-2" />
+                    <Skull className="h-6 w-6 ml-3" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowServiceSelector(false)}>
+              🛡️ Keep Infrastructure Safe
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Chaos Engineering Confirmation Dialog */}
+      <Dialog open={showChaosConfirmDialog} onOpenChange={setShowChaosConfirmDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <ShieldAlert className="h-5 w-5" />
+              ⚠️ {selectedService ? 'SERVICE' : 'INFRASTRUCTURE'} CHAOS WARNING ⚠️
+            </DialogTitle>
+            <DialogDescription className="text-center">
+              <div className="space-y-4 mt-4">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-center justify-center mb-3">
+                    <Bomb className="h-8 w-8 text-red-600 animate-pulse" />
+                  </div>
+                  {selectedService ? (
+                    <>
+                      {(() => {
+                        const service = chaosServices.find(s => s.id === selectedService);
+                        return service ? (
+                          <>
+                            <div className="flex items-center justify-center gap-3 mb-3">
+                              <span className="text-4xl">{service.icon}</span>
+                              <div>
+                                <p className="text-red-800 font-bold text-lg">{service.name}</p>
+                                <p className="text-red-700 text-sm">{service.description}</p>
+                              </div>
+                            </div>
+                            <p className="text-red-700 text-sm mb-2">
+                              Are you sure you want to nuke {service.name}?
+                            </p>
+                            <p className="text-red-600 text-xs">{service.details}</p>
+                          </>
+                        ) : null;
+                      })()}
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-red-800 font-semibold mb-2">
+                        Are you absolutely sure you want to nuke ALL infrastructure?
+                      </p>
+                      <p className="text-red-700 text-sm">
+                        This will intentionally break ALL 5 Kubernetes services:
+                      </p>
+                      <ul className="text-left text-sm text-red-700 mt-2 space-y-1">
+                        {chaosServices.map(service => (
+                          <li key={service.id}>• {service.name} ({service.description})</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </div>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <p className="text-yellow-800 text-sm font-medium">
+                    🔥 This will create real incidents and trigger PagerDuty alerts!
+                  </p>
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-center">
+            <Button variant="outline" onClick={() => {
+              setShowChaosConfirmDialog(false);
+              setSelectedService(null);
+            }}>
+              🛡️ Keep Infrastructure Safe
+            </Button>
+            <Button 
+              onClick={() => executeChaosEngineering(selectedService || undefined)}
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={chaosLoading}
+            >
+              {chaosLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Nuking...
+                </>
+              ) : (
+                <>
+                  <Skull className="h-4 w-4 mr-2" />
+                  💣 {selectedService ? 'NUKE SERVICE' : 'NUKE IT ALL'}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Chaos Results Dialog */}
+      <Dialog open={showChaosDialog} onOpenChange={setShowChaosDialog}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Siren className="h-5 w-5 animate-pulse" />
+              🔥 INFRASTRUCTURE CHAOS RESULTS 🔥
+            </DialogTitle>
             <DialogDescription>
-              Create a mock incident to test the system response
+              Real-time chaos deployment status and results
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid gap-3">
-              <Button variant="outline" onClick={() => triggerMockMutation.mutate('critical server_down')}>
-                <AlertCircle className="h-4 w-4 mr-2" />
-                Critical: Server Down
-              </Button>
-              <Button variant="outline" onClick={() => triggerMockMutation.mutate('high database_error')}>
-                <AlertTriangle className="h-4 w-4 mr-2" />
-                High: Database Error
-              </Button>
-              <Button variant="outline" onClick={() => triggerMockMutation.mutate('medium memory_usage')}>
-                <Info className="h-4 w-4 mr-2" />
-                Medium: High Memory Usage
-              </Button>
+            {/* Progress tracking for nuke all */}
+            {nukeProgress.total > 1 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-blue-800">Nuclear Progress</span>
+                  <span className="text-sm text-blue-600">{nukeProgress.current}/{nukeProgress.total} services</span>
+                </div>
+                <Progress value={(nukeProgress.current / nukeProgress.total) * 100} className="h-2" />
+              </div>
+            )}
+
+            {/* Service status grid for nuke all */}
+            {Object.keys(serviceStatuses).length > 1 && (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-gray-800 mb-3">Service Status</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {chaosServices.map((service) => {
+                    const status = serviceStatuses[service.id];
+                    if (!status) return null;
+                    
+                    return (
+                      <div key={service.id} className="flex items-center gap-2 text-sm">
+                        <span className="text-lg">{service.icon}</span>
+                        <span className="flex-1 truncate">{service.shortName}</span>
+                        {status === 'pending' && <Clock className="h-4 w-4 text-gray-400" />}
+                        {status === 'loading' && <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />}
+                        {status === 'success' && <CheckCircle className="h-4 w-4 text-green-600" />}
+                        {status === 'error' && <XCircle className="h-4 w-4 text-red-600" />}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Chaos logs */}
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 max-h-96 overflow-y-auto">
+              {chaosResults.length > 0 ? (
+                <div className="space-y-2">
+                  {chaosResults.map((result, index) => (
+                    <div key={index} className="flex items-start gap-2 text-sm">
+                      <Flame className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
+                      <span className="text-red-800 font-mono">{result}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-red-600 mx-auto mb-2" />
+                  <p className="text-red-700">Deploying chaos across infrastructure...</p>
+                </div>
+              )}
             </div>
+
+            {/* Success/completion message */}
+            {chaosResults.length > 0 && !chaosLoading && (
+              <Alert className="border-yellow-200 bg-yellow-50">
+                <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                <AlertTitle className="text-yellow-800">
+                  {Object.keys(serviceStatuses).length > 1 ? 'Nuclear Mission Status' : 'Mission Accomplished!'}
+                </AlertTitle>
+                <AlertDescription className="text-yellow-700">
+                  {Object.keys(serviceStatuses).length > 1 ? (
+                    <>
+                      {Object.values(serviceStatuses).filter(s => s === 'success').length} out of {Object.keys(serviceStatuses).length} services successfully destroyed.
+                      Check your monitoring systems and PagerDuty for alerts.
+                    </>
+                  ) : (
+                    'Infrastructure has been successfully compromised. Check your monitoring systems and PagerDuty for alerts. Your oncall agent should start analyzing and attempting to resolve these incidents automatically.'
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowMockDialog(false)}>
-              Cancel
+            <Button variant="outline" onClick={() => setShowChaosDialog(false)}>
+              Close Chaos Report
+            </Button>
+            <Button 
+              onClick={() => {
+                navigator.clipboard.writeText(chaosResults.join('\n'));
+                toast.success('Chaos logs copied to clipboard');
+              }}
+              disabled={chaosResults.length === 0}
+            >
+              <Copy className="h-4 w-4 mr-2" />
+              Copy Logs
             </Button>
           </DialogFooter>
         </DialogContent>
