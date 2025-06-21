@@ -11,7 +11,7 @@ terraform {
   backend "s3" {
     bucket = "oncall-agent-terraform-state"
     key    = "infrastructure/terraform.tfstate"
-    region = "us-east-1"
+    region = "ap-south-1"
   }
 }
 
