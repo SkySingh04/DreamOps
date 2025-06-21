@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from src.oncall_agent.agent import OncallAgent, PagerAlert
 from src.oncall_agent.utils import setup_logging
 from src.oncall_agent.config import get_config
+from src.oncall_agent.mcp_integrations.notion_direct import NotionDirectIntegration
 
 
 async def simulate_pager_alert() -> PagerAlert:
@@ -62,7 +63,17 @@ async def main():
         # Initialize the agent
         agent = OncallAgent()
         
-        # Connect to any configured integrations (none for now)
+        # Register Notion MCP integration if configured
+        if config.notion_token:
+            logger.info("Registering Notion MCP integration")
+            notion_integration = NotionDirectIntegration({
+                "notion_token": config.notion_token,
+                "database_id": config.notion_database_id,
+                "notion_version": config.notion_version
+            })
+            agent.register_mcp_integration("notion", notion_integration)
+        
+        # Connect to any configured integrations
         await agent.connect_integrations()
         
         # Simulate receiving a pager alert
@@ -93,16 +104,38 @@ async def main():
             print(result['analysis'])
             print("="*60 + "\n")
         
-        # Demonstrate how MCP integrations would be used
+        # Demonstrate MCP integrations
         if result.get('available_integrations'):
             logger.info(f"Available MCP integrations: {', '.join(result['available_integrations'])}")
             
-            # Example of how to use MCP integrations (when implemented)
-            logger.info("In a real scenario, the agent would now:")
+            # If Notion is available, create incident documentation
+            if "notion" in result['available_integrations']:
+                logger.info("Creating incident documentation in Notion...")
+                try:
+                    notion_integration = agent.mcp_integrations["notion"]
+                    doc_result = await notion_integration.create_incident_documentation({
+                        "alert_id": alert.alert_id,
+                        "service_name": alert.service_name,
+                        "severity": alert.severity,
+                        "description": alert.description
+                    })
+                    
+                    if doc_result.get('success'):
+                        logger.info("✅ Incident documentation created successfully")
+                        logger.info(f"   Page ID: {doc_result.get('page_id')}")
+                        if doc_result.get('url'):
+                            logger.info(f"   Page URL: {doc_result.get('url')}")
+                    else:
+                        logger.error(f"❌ Failed to create documentation: {doc_result.get('error')}")
+                        
+                except Exception as e:
+                    logger.error(f"Error creating Notion documentation: {e}")
+            
+            # Example of other MCP integrations (when implemented)
+            logger.info("In a real scenario, the agent would also:")
             logger.info("1. Fetch metrics from Grafana MCP")
             logger.info("2. Check pod status via Kubernetes MCP")
             logger.info("3. Review recent deployments through GitHub MCP")
-            logger.info("4. Update incident notes in Notion MCP")
         
         # Shutdown the agent
         await agent.shutdown()

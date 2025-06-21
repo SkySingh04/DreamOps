@@ -22,6 +22,11 @@ class Config(BaseSettings):
     mcp_timeout: int = Field(30, env="MCP_TIMEOUT")  # seconds
     mcp_retry_attempts: int = Field(3, env="MCP_RETRY_ATTEMPTS")
     
+    # Notion MCP settings
+    notion_token: Optional[str] = Field(None, env="NOTION_TOKEN")
+    notion_database_id: Optional[str] = Field(None, env="NOTION_DATABASE_ID")
+    notion_version: str = Field("2022-06-28", env="NOTION_VERSION")
+    
     # Alert handling settings
     alert_auto_acknowledge: bool = Field(False, env="ALERT_AUTO_ACKNOWLEDGE")
     alert_priority_threshold: str = Field("high", env="ALERT_PRIORITY_THRESHOLD")
