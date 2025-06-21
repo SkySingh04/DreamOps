@@ -425,6 +425,37 @@ class SystemStatus(BaseModel):
 
 
 # Settings Models
+class AISettings(BaseModel):
+    """AI configuration settings."""
+    model: str = "claude-3-5-sonnet"
+    additional_context: str = ""
+    auto_analyze: bool = True
+    confidence_threshold: float = 0.8
+    max_tokens: int = 4000
+    temperature: float = 0.3
+
+class AlertSettings(BaseModel):
+    """Alert processing settings."""
+    priority_threshold: Severity = Severity.HIGH
+    auto_acknowledge: bool = False
+    deduplication_enabled: bool = True
+    deduplication_window_minutes: int = 15
+    escalation_delay_minutes: int = 30
+
+class SecuritySettings(BaseModel):
+    """Security and compliance settings."""
+    audit_logs_enabled: bool = True
+    data_retention_days: int = 90
+    require_2fa: bool = False
+    session_timeout_minutes: int = 480
+    ip_whitelist: list[str] = []
+
+class APIKeySettings(BaseModel):
+    """API keys and authentication."""
+    anthropic_api_key: str = ""
+    webhook_url: str = ""
+    webhook_secret: str = ""
+    
 class NotificationSettings(BaseModel):
     """Notification preferences."""
     email_enabled: bool = True
@@ -450,9 +481,20 @@ class GlobalSettings(BaseModel):
     organization_name: str
     timezone: str = "UTC"
     retention_days: int = 90
+    ai: AISettings = AISettings()
+    alerts: AlertSettings = AlertSettings()
+    security: SecuritySettings = SecuritySettings()
+    api_keys: APIKeySettings = APIKeySettings()
     notifications: NotificationSettings
     automation: AutomationSettings
     integrations: dict[str, IntegrationConfig] = {}
+
+class IntegrationTestResult(BaseModel):
+    """Result of integration connection test."""
+    success: bool
+    message: str
+    details: dict[str, Any] = {}
+    latency_ms: float | None = None
 
 
 # WebSocket Models
