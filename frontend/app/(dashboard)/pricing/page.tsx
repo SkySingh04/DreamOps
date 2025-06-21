@@ -1,49 +1,36 @@
-import { checkoutAction } from '@/lib/payments/actions';
 import { Check } from 'lucide-react';
-import { getStripePrices, getStripeProducts } from '@/lib/payments/stripe';
-import { SubmitButton } from './submit-button';
-
-// Prices are fresh for one hour max
-export const revalidate = 3600;
 
 export default async function PricingPage() {
-  const [prices, products] = await Promise.all([
-    getStripePrices(),
-    getStripeProducts(),
-  ]);
-
-  const basePlan = products.find((product) => product.name === 'Base');
-  const plusPlan = products.find((product) => product.name === 'Plus');
-
-  const basePrice = prices.find((price) => price.productId === basePlan?.id);
-  const plusPrice = prices.find((price) => price.productId === plusPlan?.id);
-
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="text-center mb-12">
+        <h1 className="text-4xl font-bold text-gray-900 mb-4">Pricing</h1>
+        <p className="text-xl text-gray-600">Stripe integration has been removed</p>
+        <p className="text-lg text-gray-500 mt-2">This is now a simplified OnCall Agent dashboard</p>
+      </div>
+      
       <div className="grid md:grid-cols-2 gap-8 max-w-xl mx-auto">
         <PricingCard
-          name={basePlan?.name || 'Base'}
-          price={basePrice?.unitAmount || 800}
-          interval={basePrice?.interval || 'month'}
-          trialDays={basePrice?.trialPeriodDays || 7}
+          name="OnCall Agent"
+          price="Free"
           features={[
-            'Unlimited Usage',
-            'Unlimited Workspace Members',
-            'Email Support',
+            'AI-Powered Incident Response',
+            'Kubernetes Integration',
+            'GitHub MCP Support',
+            'PagerDuty Webhooks',
+            'Real-time Monitoring'
           ]}
-          priceId={basePrice?.id}
         />
         <PricingCard
-          name={plusPlan?.name || 'Plus'}
-          price={plusPrice?.unitAmount || 1200}
-          interval={plusPrice?.interval || 'month'}
-          trialDays={plusPrice?.trialPeriodDays || 7}
+          name="Enterprise"
+          price="Contact Us"
           features={[
-            'Everything in Base, and:',
-            'Early Access to New Features',
-            '24/7 Support + Slack Access',
+            'Everything in Free, and:',
+            'Custom Integrations',
+            'Priority Support',
+            'Advanced Analytics',
+            'Multi-tenant Support'
           ]}
-          priceId={plusPrice?.id}
         />
       </div>
     </main>
@@ -53,29 +40,17 @@ export default async function PricingPage() {
 function PricingCard({
   name,
   price,
-  interval,
-  trialDays,
   features,
-  priceId,
 }: {
   name: string;
-  price: number;
-  interval: string;
-  trialDays: number;
+  price: string;
   features: string[];
-  priceId?: string;
 }) {
   return (
-    <div className="pt-6">
+    <div className="pt-6 border rounded-lg p-6 bg-white shadow-sm">
       <h2 className="text-2xl font-medium text-gray-900 mb-2">{name}</h2>
-      <p className="text-sm text-gray-600 mb-4">
-        with {trialDays} day free trial
-      </p>
       <p className="text-4xl font-medium text-gray-900 mb-6">
-        ${price / 100}{' '}
-        <span className="text-xl font-normal text-gray-600">
-          per user / {interval}
-        </span>
+        {price}
       </p>
       <ul className="space-y-4 mb-8">
         {features.map((feature, index) => (
@@ -85,10 +60,6 @@ function PricingCard({
           </li>
         ))}
       </ul>
-      <form action={checkoutAction}>
-        <input type="hidden" name="priceId" value={priceId} />
-        <SubmitButton />
-      </form>
     </div>
   );
 }
