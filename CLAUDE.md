@@ -822,6 +822,168 @@ logger.error("Integration failed", extra={
 - **ruff**: Fast Python linter
 - **mypy**: Static type checker
 
+## GitHub MCP Server - Local Development
+
+### Remote vs Local GitHub MCP Server
+
+The project includes both remote and local GitHub MCP server options:
+
+**Remote Server** (Hosted by GitHub):
+- Easiest setup with OAuth support
+- No local installation required
+- URL: `https://api.githubcopilot.com/mcp/`
+
+**Local Server** (For development):
+- Full control and debugging capabilities
+- Docker-based deployment
+- Local configuration and customization
+
+### Local GitHub MCP Server Setup
+
+1. **Prerequisites**:
+   - Docker installed and running
+   - GitHub Personal Access Token
+
+2. **Docker Configuration**:
+   ```json
+   {
+     "servers": {
+       "github": {
+         "command": "docker",
+         "args": [
+           "run", "-i", "--rm",
+           "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+           "ghcr.io/github/github-mcp-server"
+         ],
+         "env": {
+           "GITHUB_PERSONAL_ACCESS_TOKEN": "${input:github_token}"
+         }
+       }
+     }
+   }
+   ```
+
+3. **Available Tools**:
+   - `add_issue_comment`, `create_branch`, `create_issue`
+   - `create_or_update_file`, `create_pull_request`
+   - `get_file_contents`, `get_issue`, `list_commits`
+   - `search_code`, `search_repositories`, `search_users`
+
+### mcpcurl - MCP CLI Tool
+
+A command-line tool for testing MCP servers:
+
+```bash
+# List available tools
+./mcpcurl --stdio-server-cmd "docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN mcp/github" tools --help
+
+# Get help for specific tool
+./mcpcurl --stdio-server-cmd "docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN mcp/github" tools get_issue --help
+
+# Execute a tool
+./mcpcurl --stdio-server-cmd "docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN mcp/github" tools get_issue --owner golang --repo go --issue_number 1
+```
+
+**Features**:
+- Dynamic command generation from MCP schemas
+- Parameter validation and type checking
+- JSON-RPC request/response handling
+- Pretty-printed output
+
+## End-to-End Testing
+
+### GitHub MCP Server E2E Tests
+
+For testing the GitHub MCP server with live API interactions:
+
+```bash
+# Run E2E tests (requires GitHub token)
+GITHUB_MCP_SERVER_E2E_TOKEN=<YOUR_TOKEN> go test -v --tags e2e ./e2e
+```
+
+**Test Capabilities**:
+- Docker image building and container execution
+- Stdio MCP communication testing
+- Live GitHub API interaction validation
+- Black-box behavior verification
+
+**Debugging Options**:
+```bash
+# Debug mode (in-process testing)
+GITHUB_MCP_SERVER_E2E_DEBUG=true go test -v --tags e2e ./e2e
+```
+
+**Test Limitations**:
+- Limited scope to avoid maintenance overhead
+- Intentionally verbose for clarity
+- Some tools excluded due to global state mutations
+
+### MCP Integration Testing Best Practices
+
+1. **Mock External Services**:
+   - Use nginx-based mock servers
+   - Provide realistic API responses
+   - Test error conditions and edge cases
+
+2. **Test Isolation**:
+   - Each test should be independent
+   - Clean up resources after tests
+   - Use dedicated namespaces/containers
+
+3. **Comprehensive Coverage**:
+   - Test all MCP integration paths
+   - Verify error handling and retries
+   - Check timeout and circuit breaker behavior
+
+## Advanced MCP Development
+
+### Custom MCP Integration Development
+
+1. **Base Class Extension**:
+   ```python
+   from src.oncall_agent.mcp_integrations.base import MCPIntegration
+   
+   class CustomIntegration(MCPIntegration):
+       def __init__(self):
+           super().__init__(name="custom_integration")
+       
+       async def connect(self):
+           # Establish MCP connection
+           pass
+       
+       async def fetch_context(self, params: Dict[str, Any]):
+           # Implement context retrieval
+           pass
+   ```
+
+2. **MCP Protocol Implementation**:
+   - JSON-RPC 2.0 communication
+   - Tool schema definition and validation
+   - Resource management and cleanup
+   - Error handling and recovery
+
+3. **Integration Registry**:
+   - Register new integrations in the main agent
+   - Configure integration-specific settings
+   - Handle integration lifecycle management
+
+### MCP Server Management
+
+1. **Automatic Server Startup**:
+   - Subprocess management for local MCP servers
+   - Health check implementation
+   - Graceful shutdown handling
+
+2. **Connection Management**:
+   - Stdio-based communication
+   - Connection pooling and reuse
+   - Timeout and retry logic
+
+3. **Schema Management**:
+   - Dynamic tool discovery
+   - Schema validation and caching
+   - Version compatibility checking
+
 ## Important Notes
 
 1. **Test files location**: All test files should be in the `tests/` directory
@@ -834,3 +996,5 @@ logger.error("Integration failed", extra={
 8. **Type hints required**: All new functions need type annotations
 9. **Error handling**: Always log errors with context
 10. **Documentation**: Update README.md for any user-facing changes
+11. **MCP Testing**: Use Docker-based integration tests for comprehensive validation
+12. **GitHub MCP**: Local development supports full debugging, remote for production

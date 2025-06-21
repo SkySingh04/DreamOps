@@ -7,10 +7,15 @@ from fastapi.responses import JSONResponse
 
 from src.oncall_agent.api.schemas import (
     ActionType,
+    AISettings,
+    AlertSettings,
+    APIKeySettings,
     AutomationSettings,
     GlobalSettings,
     IntegrationConfig,
+    IntegrationTestResult,
     NotificationSettings,
+    SecuritySettings,
     Severity,
     SuccessResponse,
 )
@@ -24,6 +29,33 @@ GLOBAL_SETTINGS = GlobalSettings(
     organization_name="Acme Corp",
     timezone="UTC",
     retention_days=90,
+    ai=AISettings(
+        model="claude-3-5-sonnet",
+        additional_context="You are an expert oncall engineer specializing in Kubernetes and AWS infrastructure.",
+        auto_analyze=True,
+        confidence_threshold=0.8,
+        max_tokens=4000,
+        temperature=0.3
+    ),
+    alerts=AlertSettings(
+        priority_threshold=Severity.HIGH,
+        auto_acknowledge=False,
+        deduplication_enabled=True,
+        deduplication_window_minutes=15,
+        escalation_delay_minutes=30
+    ),
+    security=SecuritySettings(
+        audit_logs_enabled=True,
+        data_retention_days=90,
+        require_2fa=False,
+        session_timeout_minutes=480,
+        ip_whitelist=[]
+    ),
+    api_keys=APIKeySettings(
+        anthropic_api_key="sk-ant-api03-***",
+        webhook_url="https://oncall-agent.com/api/alerts",
+        webhook_secret="wh_secret_***"
+    ),
     notifications=NotificationSettings(
         email_enabled=True,
         slack_enabled=True,
@@ -47,15 +79,27 @@ GLOBAL_SETTINGS = GlobalSettings(
     integrations={
         "kubernetes": IntegrationConfig(
             enabled=True,
-            config={"namespace": "default", "cluster": "production"}
+            config={"namespace": "default", "cluster": "production", "kubeconfig_path": "/etc/kubernetes/config"}
         ),
         "github": IntegrationConfig(
             enabled=True,
-            config={"org": "acme-corp", "token": "***"}
+            config={"org": "acme-corp", "token": "***", "repos": ["backend", "frontend"]}
         ),
         "pagerduty": IntegrationConfig(
             enabled=True,
-            config={"api_key": "***", "service_ids": ["P123456"]}
+            config={"api_key": "***", "service_ids": ["P123456"], "routing_key": "***"}
+        ),
+        "slack": IntegrationConfig(
+            enabled=False,
+            config={"webhook_url": "", "channel": "#incidents", "bot_token": "***"}
+        ),
+        "notion": IntegrationConfig(
+            enabled=False,
+            config={"token": "***", "database_id": "***"}
+        ),
+        "grafana": IntegrationConfig(
+            enabled=False,
+            config={"url": "", "api_key": "***", "org_id": "1"}
         )
     }
 )
@@ -417,3 +461,187 @@ async def restore_settings_backup(backup_id: str) -> SuccessResponse:
     except Exception as e:
         logger.error(f"Error restoring backup: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# Individual settings sections
+@router.get("/ai", response_model=AISettings)
+async def get_ai_settings() -> AISettings:
+    """Get AI configuration settings."""
+    try:
+        return GLOBAL_SETTINGS.ai
+    except Exception as e:
+        logger.error(f"Error fetching AI settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/ai", response_model=SuccessResponse)
+async def update_ai_settings(
+    settings: AISettings = Body(..., description="AI settings")
+) -> SuccessResponse:
+    """Update AI configuration settings."""
+    try:
+        GLOBAL_SETTINGS.ai = settings
+        logger.info("AI settings updated")
+        
+        return SuccessResponse(
+            success=True,
+            message="AI settings updated successfully"
+        )
+    except Exception as e:
+        logger.error(f"Error updating AI settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/alerts", response_model=AlertSettings)
+async def get_alert_settings() -> AlertSettings:
+    """Get alert processing settings."""
+    try:
+        return GLOBAL_SETTINGS.alerts
+    except Exception as e:
+        logger.error(f"Error fetching alert settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/alerts", response_model=SuccessResponse)
+async def update_alert_settings(
+    settings: AlertSettings = Body(..., description="Alert settings")
+) -> SuccessResponse:
+    """Update alert processing settings."""
+    try:
+        GLOBAL_SETTINGS.alerts = settings
+        logger.info("Alert settings updated")
+        
+        return SuccessResponse(
+            success=True,
+            message="Alert settings updated successfully"
+        )
+    except Exception as e:
+        logger.error(f"Error updating alert settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/security", response_model=SecuritySettings)
+async def get_security_settings() -> SecuritySettings:
+    """Get security and compliance settings."""
+    try:
+        return GLOBAL_SETTINGS.security
+    except Exception as e:
+        logger.error(f"Error fetching security settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/security", response_model=SuccessResponse)
+async def update_security_settings(
+    settings: SecuritySettings = Body(..., description="Security settings")
+) -> SuccessResponse:
+    """Update security and compliance settings."""
+    try:
+        GLOBAL_SETTINGS.security = settings
+        logger.info("Security settings updated")
+        
+        return SuccessResponse(
+            success=True,
+            message="Security settings updated successfully"
+        )
+    except Exception as e:
+        logger.error(f"Error updating security settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api-keys", response_model=APIKeySettings)
+async def get_api_key_settings() -> APIKeySettings:
+    """Get API keys and authentication settings."""
+    try:
+        # Mask sensitive values for security
+        masked_settings = GLOBAL_SETTINGS.api_keys.copy()
+        if masked_settings.anthropic_api_key:
+            masked_settings.anthropic_api_key = masked_settings.anthropic_api_key[:12] + "***"
+        if masked_settings.webhook_secret:
+            masked_settings.webhook_secret = "***"
+        return masked_settings
+    except Exception as e:
+        logger.error(f"Error fetching API key settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/api-keys", response_model=SuccessResponse)
+async def update_api_key_settings(
+    settings: APIKeySettings = Body(..., description="API key settings")
+) -> SuccessResponse:
+    """Update API keys and authentication settings."""
+    try:
+        # Only update non-masked values
+        if settings.anthropic_api_key and not settings.anthropic_api_key.endswith("***"):
+            GLOBAL_SETTINGS.api_keys.anthropic_api_key = settings.anthropic_api_key
+        if settings.webhook_secret and settings.webhook_secret != "***":
+            GLOBAL_SETTINGS.api_keys.webhook_secret = settings.webhook_secret
+        if settings.webhook_url:
+            GLOBAL_SETTINGS.api_keys.webhook_url = settings.webhook_url
+            
+        logger.info("API key settings updated")
+        
+        return SuccessResponse(
+            success=True,
+            message="API key settings updated successfully"
+        )
+    except Exception as e:
+        logger.error(f"Error updating API key settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Integration test connections
+@router.post("/integrations/{integration_name}/test", response_model=IntegrationTestResult)
+async def test_integration_connection(integration_name: str) -> IntegrationTestResult:
+    """Test connection to a specific integration."""
+    try:
+        # Get agent instance for real integration testing
+        from src.oncall_agent.api.routers.integrations import get_agent_instance
+        agent = await get_agent_instance()
+        
+        if not agent:
+            return IntegrationTestResult(
+                success=False,
+                message="Agent instance not available",
+                details={"error": "Agent not initialized"}
+            )
+        
+        if integration_name not in agent.mcp_integrations:
+            return IntegrationTestResult(
+                success=False,
+                message=f"Integration '{integration_name}' not found",
+                details={"available": list(agent.mcp_integrations.keys())}
+            )
+        
+        # Test the actual integration
+        integration = agent.mcp_integrations[integration_name]
+        start_time = datetime.now()
+        
+        is_healthy = await integration.health_check()
+        latency = (datetime.now() - start_time).total_seconds() * 1000
+        
+        if is_healthy:
+            capabilities = integration.get_capabilities()
+            return IntegrationTestResult(
+                success=True,
+                message=f"Successfully connected to {integration_name}",
+                details={
+                    "capabilities": capabilities,
+                    "status": "connected"
+                },
+                latency_ms=latency
+            )
+        else:
+            return IntegrationTestResult(
+                success=False,
+                message=f"Failed to connect to {integration_name}",
+                details={"status": "disconnected"},
+                latency_ms=latency
+            )
+            
+    except Exception as e:
+        logger.error(f"Error testing {integration_name} integration: {e}")
+        return IntegrationTestResult(
+            success=False,
+            message=f"Test failed: {str(e)}",
+            details={"error": str(e)}
+        )

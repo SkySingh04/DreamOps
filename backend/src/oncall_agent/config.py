@@ -54,6 +54,12 @@ class Config(BaseSettings):
     k8s_namespace: str = Field("default", env="K8S_NAMESPACE")
     k8s_mcp_server_url: str = Field("http://localhost:8080", env="K8S_MCP_SERVER_URL")
     k8s_enable_destructive_operations: bool = Field(False, env="K8S_ENABLE_DESTRUCTIVE_OPERATIONS")
+    
+    # K8s MCP Server settings
+    k8s_use_mcp_server: bool = Field(False, env="K8S_USE_MCP_SERVER")
+    k8s_mcp_server_path: str = Field("kubernetes-mcp-server", env="K8S_MCP_SERVER_PATH")
+    k8s_mcp_server_host: str = Field("localhost", env="K8S_MCP_SERVER_HOST")
+    k8s_mcp_server_port: int = Field(8085, env="K8S_MCP_SERVER_PORT")
 
     # PagerDuty integration settings
     pagerduty_webhook_secret: str | None = Field(None, env="PAGERDUTY_WEBHOOK_SECRET")

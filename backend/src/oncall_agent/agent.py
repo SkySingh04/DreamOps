@@ -54,8 +54,17 @@ class OncallAgent:
 
         # Initialize Kubernetes integration if enabled
         if self.config.k8s_enabled:
-            self.k8s_integration = KubernetesMCPIntegration()
-            self.register_mcp_integration("kubernetes", self.k8s_integration)
+            # Check if we should use the enhanced MCP integration
+            use_enhanced = self.config.get("k8s_enable_destructive_operations", False)
+            if use_enhanced:
+                from .mcp_integrations.kubernetes_mcp import KubernetesMCPServerIntegration
+                self.k8s_integration = KubernetesMCPServerIntegration()
+                self.register_mcp_integration("kubernetes", self.k8s_integration)
+                self.logger.info("Using enhanced K8s integration with command execution")
+            else:
+                self.k8s_integration = KubernetesMCPIntegration()
+                self.register_mcp_integration("kubernetes", self.k8s_integration)
+                self.logger.info("Using read-only K8s integration")
 
         # Initialize Notion integration if configured
         if self.config.notion_token:

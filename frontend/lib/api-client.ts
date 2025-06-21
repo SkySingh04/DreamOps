@@ -296,6 +296,68 @@ class APIClient {
     });
   }
 
+  // Settings endpoints
+  async getSettings(): Promise<APIResponse<any>> {
+    return this.request<any>('/api/v1/settings');
+  }
+
+  async updateSettings(settings: any): Promise<APIResponse<any>> {
+    return this.request<any>('/api/v1/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
+  }
+
+  async getAISettings(): Promise<APIResponse<any>> {
+    return this.request<any>('/api/v1/settings/ai');
+  }
+
+  async updateAISettings(settings: any): Promise<APIResponse<any>> {
+    return this.request<any>('/api/v1/settings/ai', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
+  }
+
+  async getAlertSettings(): Promise<APIResponse<any>> {
+    return this.request<any>('/api/v1/settings/alerts');
+  }
+
+  async updateAlertSettings(settings: any): Promise<APIResponse<any>> {
+    return this.request<any>('/api/v1/settings/alerts', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
+  }
+
+  async getSecuritySettings(): Promise<APIResponse<any>> {
+    return this.request<any>('/api/v1/settings/security');
+  }
+
+  async updateSecuritySettings(settings: any): Promise<APIResponse<any>> {
+    return this.request<any>('/api/v1/settings/security', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
+  }
+
+  async getAPIKeySettings(): Promise<APIResponse<any>> {
+    return this.request<any>('/api/v1/settings/api-keys');
+  }
+
+  async updateAPIKeySettings(settings: any): Promise<APIResponse<any>> {
+    return this.request<any>('/api/v1/settings/api-keys', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
+  }
+
+  async testIntegrationConnection(integrationName: string): Promise<APIResponse<any>> {
+    return this.request<any>(`/api/v1/settings/integrations/${integrationName}/test`, {
+      method: 'POST',
+    });
+  }
+
   // Analytics endpoints
   async getAnalytics(params?: {
     start_date?: string;
