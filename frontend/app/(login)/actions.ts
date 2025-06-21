@@ -101,13 +101,14 @@ export const signIn = validatedAction(signInSchema, async (data, formData) => {
 });
 
 const signUpSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100),
   email: z.string().email(),
   password: z.string().min(8),
   inviteId: z.string().optional()
 });
 
 export const signUp = validatedAction(signUpSchema, async (data, formData) => {
-  const { email, password, inviteId } = data;
+  const { name, email, password, inviteId } = data;
 
   const existingUser = await db
     .select()
@@ -118,6 +119,7 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
   if (existingUser.length > 0) {
     return {
       error: 'Failed to create user. Please try again.',
+      name,
       email,
       password
     };
@@ -126,6 +128,7 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
   const passwordHash = await hashPassword(password);
 
   const newUser: NewUser = {
+    name,
     email,
     passwordHash,
     role: 'owner' // Default role, will be overridden if there's an invitation
@@ -136,6 +139,7 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
   if (!createdUser) {
     return {
       error: 'Failed to create user. Please try again.',
+      name,
       email,
       password
     };
@@ -176,12 +180,13 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
         .where(eq(teams.id, teamId))
         .limit(1);
     } else {
-      return { error: 'Invalid or expired invitation.', email, password };
+      return { error: 'Invalid or expired invitation.', name, email, password };
     }
   } else {
     // Create a new team if there's no invitation
     const newTeam: NewTeam = {
-      name: `${email}'s Team`
+      name: `${email}'s Team`,
+      subscriptionStatus: 'trial'
     };
 
     [createdTeam] = await db.insert(teams).values(newTeam).returning();
@@ -189,6 +194,7 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
     if (!createdTeam) {
       return {
         error: 'Failed to create team. Please try again.',
+        name,
         email,
         password
       };

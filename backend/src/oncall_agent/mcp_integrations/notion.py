@@ -4,7 +4,7 @@ import asyncio
 import json
 import subprocess
 from datetime import datetime
-from typing import Any
+from typing import Any, Dict
 
 from .base import MCPIntegration
 

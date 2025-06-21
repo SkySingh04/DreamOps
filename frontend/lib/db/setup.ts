@@ -91,7 +91,9 @@ async function getPostgresURL(): Promise<string> {
     console.log(
       'You can find Postgres databases at: https://vercel.com/marketplace?category=databases'
     );
-    return await question('Enter your POSTGRES_URL: ');
+    const defaultNeonUrl = 'postgresql://neondb_owner:npg_WrUfbv5qu4tG@ep-wild-cherry-a8lnti87-pooler.eastus2.azure.neon.tech/neondb?sslmode=require';
+    const userInput = await question(`Enter your POSTGRES_URL (default: ${defaultNeonUrl}): `);
+    return userInput.trim() || defaultNeonUrl;
   }
 }
 
