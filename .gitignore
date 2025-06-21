@@ -90,3 +90,6 @@ Thumbs.db
 .cache/
 tmp/
 temp/
+
+# Tests
+# tests/ - removed to track test files

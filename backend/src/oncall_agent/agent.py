@@ -11,6 +11,8 @@ from anthropic import AsyncAnthropic
 from .config import get_config
 from .mcp_integrations.base import MCPIntegration
 from .mcp_integrations.kubernetes import KubernetesMCPIntegration
+from .mcp_integrations.grafana_mcp import GrafanaMCPIntegration
+from .mcp_integrations.notion import NotionMCPIntegration
 
 
 class PagerAlert(BaseModel):
@@ -50,6 +52,28 @@ class OncallAgent:
         if self.config.k8s_enabled:
             self.k8s_integration = KubernetesMCPIntegration()
             self.register_mcp_integration("kubernetes", self.k8s_integration)
+        
+        # Initialize Notion integration if configured
+        if self.config.notion_token:
+            self.notion_integration = NotionMCPIntegration({
+                "notion_token": self.config.notion_token,
+                "database_id": self.config.notion_database_id,
+                "notion_version": self.config.notion_version
+            })
+            self.register_mcp_integration("notion", self.notion_integration)
+        
+        # Initialize Grafana integration if configured
+        if self.config.grafana_url and (self.config.grafana_api_key or (self.config.grafana_username and self.config.grafana_password)):
+            self.grafana_integration = GrafanaMCPIntegration({
+                "grafana_url": self.config.grafana_url,
+                "grafana_api_key": self.config.grafana_api_key,
+                "grafana_username": self.config.grafana_username,
+                "grafana_password": self.config.grafana_password,
+                "mcp_server_path": self.config.grafana_mcp_server_path,
+                "server_host": self.config.grafana_mcp_host,
+                "server_port": self.config.grafana_mcp_port
+            })
+            self.register_mcp_integration("grafana", self.grafana_integration)
     
     def register_mcp_integration(self, name: str, integration: MCPIntegration) -> None:
         """Register an MCP integration with the agent."""

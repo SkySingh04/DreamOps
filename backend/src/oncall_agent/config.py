@@ -27,6 +27,15 @@ class Config(BaseSettings):
     notion_database_id: Optional[str] = Field(None, env="NOTION_DATABASE_ID")
     notion_version: str = Field("2022-06-28", env="NOTION_VERSION")
     
+    # Grafana MCP settings
+    grafana_url: Optional[str] = Field(None, env="GRAFANA_URL")
+    grafana_api_key: Optional[str] = Field(None, env="GRAFANA_API_KEY")
+    grafana_username: Optional[str] = Field(None, env="GRAFANA_USERNAME")
+    grafana_password: Optional[str] = Field(None, env="GRAFANA_PASSWORD")
+    grafana_mcp_server_path: str = Field("../../mcp-grafana/dist/mcp-grafana", env="GRAFANA_MCP_SERVER_PATH")
+    grafana_mcp_host: str = Field("localhost", env="GRAFANA_MCP_HOST")
+    grafana_mcp_port: int = Field(8081, env="GRAFANA_MCP_PORT")
+    
     # Alert handling settings
     alert_auto_acknowledge: bool = Field(False, env="ALERT_AUTO_ACKNOWLEDGE")
     alert_priority_threshold: str = Field("high", env="ALERT_PRIORITY_THRESHOLD")
