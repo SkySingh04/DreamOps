@@ -112,8 +112,8 @@ export async function POST(request: NextRequest) {
       console.log(`🔥 CHAOS OUTPUT (${service || 'all'}):`, output);
       
       // Parse the output and extract meaningful results
-      const lines = output.split('\n').filter(line => line.trim());
-      lines.forEach(line => {
+      const lines = output.split('\n').filter((line: string) => line.trim());
+      lines.forEach((line: string) => {
         // Remove ANSI color codes and filter meaningful lines
         const cleanLine = line.replace(/\x1b\[[0-9;]*m/g, '');
         if (cleanLine.includes('✓') || cleanLine.includes('simulation deployed') || 
@@ -133,8 +133,8 @@ export async function POST(request: NextRequest) {
       errorOutput += error;
       
       // Also add significant errors to results for visibility
-      const lines = error.split('\n').filter(line => line.trim());
-      lines.forEach(line => {
+      const lines = error.split('\n').filter((line: string) => line.trim());
+      lines.forEach((line: string) => {
         if (line.includes('Error') || line.includes('failed') || line.includes('kubectl')) {
           results.push(`❌ ${line.trim()}`);
         }
