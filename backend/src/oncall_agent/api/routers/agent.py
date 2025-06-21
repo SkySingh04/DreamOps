@@ -37,6 +37,7 @@ router = APIRouter(prefix="/agent", tags=["ai-agent"])
 
 # Global agent instance (shared with main API)
 agent_instance: OncallAgent | None = None
+enhanced_agent_instance = None  # Enhanced agent with execution capabilities
 
 # Agent metrics storage
 AGENT_METRICS = {
@@ -948,4 +949,85 @@ async def get_agent_prompts() -> JSONResponse:
 
     except Exception as e:
         logger.error(f"Error getting prompts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/execute-action", response_model=dict)
+async def execute_remediation_action(
+    action_type: str,
+    params: dict[str, Any],
+    dry_run: bool = False,
+    auto_approve: bool = False
+) -> dict:
+    """Execute a specific remediation action (for testing/manual execution)."""
+    try:
+        # Import here to avoid circular dependency
+        from src.oncall_agent.agent_enhanced import EnhancedOncallAgent
+        from src.oncall_agent.mcp_integrations.kubernetes_mcp import KubernetesMCPServerIntegration
+        
+        global enhanced_agent_instance
+        
+        # Create enhanced agent if needed
+        if not enhanced_agent_instance:
+            enhanced_agent_instance = EnhancedOncallAgent(ai_mode=AGENT_CONFIG.mode)
+            await enhanced_agent_instance.connect_integrations()
+        
+        # Execute via K8s MCP integration
+        if enhanced_agent_instance.k8s_mcp:
+            result = await enhanced_agent_instance.k8s_mcp.execute_action(
+                action_type,
+                {**params, "dry_run": dry_run, "auto_approve": auto_approve}
+            )
+            
+            # Add execution metadata
+            result["executed_by"] = "manual_api_call"
+            result["mode"] = AGENT_CONFIG.mode.value
+            result["timestamp"] = datetime.now(timezone.utc).isoformat()
+            
+            return result
+        else:
+            return {
+                "success": False,
+                "error": "Kubernetes integration not available",
+                "executed_by": "manual_api_call"
+            }
+            
+    except Exception as e:
+        logger.error(f"Error executing action: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/execution-history", response_model=list[dict])
+async def get_execution_history(limit: int = 50) -> list[dict]:
+    """Get history of executed remediation actions."""
+    try:
+        global enhanced_agent_instance
+        
+        if enhanced_agent_instance and enhanced_agent_instance.agent_executor:
+            history = enhanced_agent_instance.agent_executor.get_execution_history()
+            # Return most recent entries
+            return history[-limit:]
+        else:
+            return []
+            
+    except Exception as e:
+        logger.error(f"Error getting execution history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/k8s-audit-log", response_model=list[dict])
+async def get_k8s_audit_log(limit: int = 100) -> list[dict]:
+    """Get Kubernetes command audit log."""
+    try:
+        global enhanced_agent_instance
+        
+        if enhanced_agent_instance and enhanced_agent_instance.k8s_mcp:
+            audit_log = enhanced_agent_instance.k8s_mcp.get_audit_log()
+            # Return most recent entries
+            return audit_log[-limit:]
+        else:
+            return []
+            
+    except Exception as e:
+        logger.error(f"Error getting K8s audit log: {e}")
         raise HTTPException(status_code=500, detail=str(e))
