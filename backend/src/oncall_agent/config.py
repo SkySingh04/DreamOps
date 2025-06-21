@@ -26,10 +26,22 @@ class Config(BaseSettings):
     alert_auto_acknowledge: bool = Field(False, env="ALERT_AUTO_ACKNOWLEDGE")
     alert_priority_threshold: str = Field("high", env="ALERT_PRIORITY_THRESHOLD")
     
+    # Kubernetes settings
+    k8s_enabled: bool = Field(True, env="K8S_ENABLED")
+    k8s_config_path: str = Field("~/.kube/config", env="K8S_CONFIG_PATH")
+    k8s_context: str = Field("default", env="K8S_CONTEXT")
+    k8s_namespace: str = Field("default", env="K8S_NAMESPACE")
+    k8s_mcp_server_url: str = Field("http://localhost:8080", env="K8S_MCP_SERVER_URL")
+    k8s_enable_destructive_operations: bool = Field(False, env="K8S_ENABLE_DESTRUCTIVE_OPERATIONS")
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
+        
+    def get(self, key: str, default=None):
+        """Get config value by key (for backward compatibility)."""
+        return getattr(self, key.lower(), default)
 
 
 _config: Optional[Config] = None

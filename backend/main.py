@@ -12,19 +12,41 @@ from src.oncall_agent.config import get_config
 
 async def simulate_pager_alert() -> PagerAlert:
     """Simulate receiving a pager alert for demonstration purposes."""
-    return PagerAlert(
-        alert_id="ALERT-12345",
-        severity="high",
-        service_name="api-gateway",
-        description="API Gateway experiencing high error rate (15% 5xx responses)",
-        timestamp=datetime.now(timezone.utc).isoformat(),
-        metadata={
-            "error_rate": "15%",
-            "affected_endpoints": ["/api/v1/users", "/api/v1/orders"],
-            "duration": "5 minutes",
-            "region": "us-east-1"
-        }
-    )
+    # You can switch between different alert types for testing
+    alert_type = "kubernetes"  # Change to "general" for non-k8s alert
+    
+    if alert_type == "kubernetes":
+        # Kubernetes pod crash alert
+        return PagerAlert(
+            alert_id="K8S-ALERT-001",
+            severity="critical",
+            service_name="payment-service",
+            description="Pod payment-service-7d9f8b6c5-x2n4m is in CrashLoopBackOff state, restarting every 30 seconds",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            metadata={
+                "pod_name": "payment-service-7d9f8b6c5-x2n4m",
+                "namespace": "production",
+                "deployment_name": "payment-service",
+                "restart_count": 12,
+                "last_restart": "30 seconds ago",
+                "cluster": "prod-us-east-1"
+            }
+        )
+    else:
+        # General service alert
+        return PagerAlert(
+            alert_id="ALERT-12345",
+            severity="high",
+            service_name="api-gateway",
+            description="API Gateway experiencing high error rate (15% 5xx responses)",
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            metadata={
+                "error_rate": "15%",
+                "affected_endpoints": ["/api/v1/users", "/api/v1/orders"],
+                "duration": "5 minutes",
+                "region": "us-east-1"
+            }
+        )
 
 
 async def main():
@@ -55,6 +77,14 @@ async def main():
         # Display the results
         logger.info("Alert Analysis Complete:")
         logger.info(f"Status: {result.get('status')}")
+        
+        # Show K8s-specific information if detected
+        if result.get('k8s_alert_type'):
+            logger.info(f"Kubernetes Alert Type: {result['k8s_alert_type']}")
+            if result.get('k8s_context') and not result['k8s_context'].get('error'):
+                logger.info("Kubernetes context successfully gathered")
+                if result.get('suggested_actions'):
+                    logger.info(f"Automated actions available: {len(result['suggested_actions'])}")
         
         if result.get('analysis'):
             print("\n" + "="*60)
