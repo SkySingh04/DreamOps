@@ -17,15 +17,25 @@ export function IncidentAIAnalysis({ incidentId, className }: IncidentAIAnalysis
   const [analysisFromLogs, setAnalysisFromLogs] = useState<any>(null)
   
   // Fetch analysis from API
-  const { data: analysisData, isLoading, error } = useQuery({
+  const { data: analysisData, isLoading, error, refetch } = useQuery({
     queryKey: ['incident-analysis', incidentId],
     queryFn: async () => {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/incidents/${incidentId}/analysis`)
       if (!response.ok) throw new Error('Failed to fetch analysis')
       return response.json()
     },
-    refetchInterval: analysisData?.status === 'pending' ? 5000 : false, // Poll if pending
   })
+
+  // Set up polling for pending analysis
+  useEffect(() => {
+    if (analysisData?.status === 'pending') {
+      const interval = setInterval(() => {
+        refetch()
+      }, 5000)
+      
+      return () => clearInterval(interval)
+    }
+  }, [analysisData?.status, refetch])
   
   // Listen for analysis from agent logs
   useEffect(() => {

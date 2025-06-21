@@ -16,6 +16,7 @@ dependencies = [
     "uvicorn[standard]>=0.34.3",
     "pydantic-settings>=2.0.0",
     "sse-starlette>=2.3.6",
+    "aiohttp>=3.12.13",
 ]
 
 [dependency-groups]
