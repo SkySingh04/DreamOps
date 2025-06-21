@@ -96,52 +96,49 @@ resource "kubernetes_config_map" "cwagentconfig" {
   }
 
   data = {
-    "cwagentconfig.json" = jsonencode({
-      agent = {
-        region = var.aws_region
-      }
-      logs = {
-        metrics_collected = {
-          kubernetes = {
-            cluster_name = module.eks.cluster_name
-            metrics_collection_interval = 60
-          }
-        }
-        force_flush_interval = 5
-      }
-      metrics = {
-        namespace = "ContainerInsights"
-        metrics_collected = {
-          cpu = {
-            measurement = ["cpu_usage_idle", "cpu_usage_user", "cpu_usage_system"]
-            metrics_collection_interval = 60
-            totalcpu = false
-          }
-          disk = {
-            measurement = ["used_percent"]
-            metrics_collection_interval = 60
-            resources = ["*"]
-          }
-          diskio = {
-            measurement = ["io_time", "read_bytes", "write_bytes", "reads", "writes"]
-            metrics_collection_interval = 60
-            resources = ["*"]
-          }
-          mem = {
-            measurement = ["mem_used_percent"]
-            metrics_collection_interval = 60
-          }
-          netstat = {
-            measurement = ["tcp_established", "tcp_time_wait"]
-            metrics_collection_interval = 60
-          }
-          swap = {
-            measurement = ["swap_used_percent"]
-            metrics_collection_interval = 60
-          }
-        }
-      }
-    })
+    # Proper Container Insights configuration for EKS
+    "otel-config.yaml" = <<-EOT
+      extensions:
+        health_check:
+        server:
+          listen_address: 0.0.0.0:8888
+
+      receivers:
+        awscontainerinsightreceiver:
+          collection_interval: 60s
+          cluster_name: ${module.eks.cluster_name}
+          add_service_as_attribute: true
+          prefer_full_pod_name: true
+
+      processors:
+        batch/metrics:
+          timeout: 60s
+
+      exporters:
+        awsemf/containerinsights:
+          namespace: ContainerInsights
+          log_group_name: '/aws/containerinsights/${module.eks.cluster_name}/performance'
+          dimension_rollup_option: NoDimensionRollup
+          metric_declarations:
+            - dimensions: [[ClusterName]]
+              metric_name_selectors:
+                - pod_restart_total
+                - pod_number_of_container_restarts
+                - cluster_node_count
+                - cluster_pod_count
+                - cluster_failed_pod_count
+                - pod_cpu_utilization
+                - pod_memory_utilization
+                - container_memory_utilization
+
+      service:
+        extensions: [health_check, server]
+        pipelines:
+          metrics:
+            receivers: [awscontainerinsightreceiver]
+            processors: [batch/metrics]
+            exporters: [awsemf/containerinsights]
+    EOT
   }
   
   depends_on = [module.eks]
@@ -173,7 +170,7 @@ resource "kubernetes_daemonset" "cloudwatch_agent" {
         
         container {
           name  = "cloudwatch-agent"
-          image = "amazon/cloudwatch-agent:1.300026.2b250880"
+          image = "public.ecr.aws/cloudwatch-agent/cloudwatch-agent:latest"
           
           resources {
             limits = {
@@ -186,6 +183,9 @@ resource "kubernetes_daemonset" "cloudwatch_agent" {
             }
           }
 
+          # Container Insights specific configuration
+          args = ["-config=/etc/cwagentconfig/otel-config.yaml"]
+
           env {
             name = "HOST_IP"
             value_from {
@@ -196,8 +196,12 @@ resource "kubernetes_daemonset" "cloudwatch_agent" {
           }
 
           env {
-            name = "HOST_PATH"
-            value = "/rootfs"
+            name = "HOST_NAME"
+            value_from {
+              field_ref {
+                field_path = "spec.nodeName"
+              }
+            }
           }
 
           env {
@@ -313,6 +317,77 @@ resource "kubernetes_daemonset" "cloudwatch_agent" {
   depends_on = [
     module.eks,
     kubernetes_config_map.cwagentconfig,
+    kubernetes_service_account.cloudwatch_agent
+  ]
+}
+
+# ClusterRole for CloudWatch Agent
+resource "kubernetes_cluster_role" "cloudwatch_agent" {
+  metadata {
+    name = "cloudwatch-agent-role"
+  }
+
+  rule {
+    api_groups = [""]
+    resources = [
+      "nodes",
+      "nodes/proxy",
+      "nodes/stats",
+      "services",
+      "endpoints",
+      "pods",
+      "pods/proxy"
+    ]
+    verbs = ["get", "list"]
+  }
+
+  rule {
+    api_groups = [""]
+    resources  = ["configmaps"]
+    verbs      = ["get", "update"]
+  }
+
+  rule {
+    api_groups = [""]
+    resources = [
+      "nodes/stats",
+      "configmaps",
+      "events"
+    ]
+    verbs = ["create"]
+  }
+
+  rule {
+    api_groups     = [""]
+    resources      = ["configmaps"]
+    resource_names = ["cwagent-clusterleader"]
+    verbs          = ["get", "update"]
+  }
+
+  depends_on = [module.eks]
+}
+
+# ClusterRoleBinding for CloudWatch Agent
+resource "kubernetes_cluster_role_binding" "cloudwatch_agent" {
+  metadata {
+    name = "cloudwatch-agent-role-binding"
+  }
+
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "ClusterRole"
+    name      = kubernetes_cluster_role.cloudwatch_agent.metadata[0].name
+  }
+
+  subject {
+    kind      = "ServiceAccount"
+    name      = kubernetes_service_account.cloudwatch_agent.metadata[0].name
+    namespace = kubernetes_namespace.amazon_cloudwatch.metadata[0].name
+  }
+
+  depends_on = [
+    module.eks,
+    kubernetes_cluster_role.cloudwatch_agent,
     kubernetes_service_account.cloudwatch_agent
   ]
 }

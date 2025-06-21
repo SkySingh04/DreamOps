@@ -20,6 +20,20 @@ export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
     { error: '' }
   );
 
+  // Generate random user data for sign-up
+  const generateRandomUser = () => {
+    const randomNum = Math.floor(Math.random() * 10000);
+    return {
+      email: `user${randomNum}@example.com`,
+      password: `TestPass${randomNum}!`
+    };
+  };
+
+  // Default credentials
+  const defaultCredentials = mode === 'signin' 
+    ? { email: 'admin@oncall.ai', password: 'AdminPass123!' }
+    : generateRandomUser();
+
   return (
     <div className="min-h-[100dvh] flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
@@ -34,6 +48,15 @@ export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <p className="text-sm text-blue-800">
+            <strong>Demo Credentials:</strong>
+            <br />
+            Email: {defaultCredentials.email}
+            <br />
+            Password: {defaultCredentials.password}
+          </p>
+        </div>
         <form className="space-y-6" action={formAction}>
           <input type="hidden" name="redirect" value={redirect || ''} />
           <input type="hidden" name="priceId" value={priceId || ''} />
@@ -51,7 +74,7 @@ export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
                 name="email"
                 type="email"
                 autoComplete="email"
-                defaultValue={state.email}
+                defaultValue={state.email || defaultCredentials.email}
                 required
                 maxLength={50}
                 className="appearance-none rounded-full relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm"
@@ -75,7 +98,7 @@ export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
                 autoComplete={
                   mode === 'signin' ? 'current-password' : 'new-password'
                 }
-                defaultValue={state.password}
+                defaultValue={state.password || defaultCredentials.password}
                 required
                 minLength={8}
                 maxLength={100}

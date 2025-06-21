@@ -8,9 +8,11 @@ This is an oncall AI agent built with:
 - **AGNO Framework**: For building AI agents
 - **Claude API**: For intelligent incident analysis
 - **MCP (Model Context Protocol)**: For integrating with external tools
-- **FastAPI**: Web framework for the REST API
+- **FastAPI**: Web framework for the REST API and webhooks
 - **Python AsyncIO**: For concurrent operations
 - **uv**: For package management
+- **Next.js**: Frontend SaaS interface
+- **Terraform**: AWS infrastructure deployment
 
 ## Key Architecture Decisions
 
@@ -158,6 +160,27 @@ When asked to test changes:
 1. Add to `Config` class in `config.py`
 2. Add to `.env.example` with description
 3. Document in README.md
+
+### Testing Kubernetes Alerting
+The project includes `fuck_kubernetes.sh` for simulating Kubernetes failures:
+
+```bash
+# Usage from project root
+./fuck_kubernetes.sh [1-5|all|random|clean]
+
+# Simulates:
+# 1 - Pod crashes (CrashLoopBackOff)
+# 2 - Image pull errors (ImagePullBackOff)  
+# 3 - OOM kills
+# 4 - Deployment failures
+# 5 - Service unavailability
+
+# The script:
+# - Creates issues in 'fuck-kubernetes-test' namespace
+# - Triggers CloudWatch alarms within 60 seconds
+# - Sends alerts through SNS → PagerDuty → Slack
+# - Helps verify the entire alerting pipeline
+```
 
 ## API Development
 
@@ -351,6 +374,425 @@ When making changes, keep these future directions in mind.
 3. Is this configuration that should be in `.env`?
 4. Have I added appropriate logging?
 5. Have I updated the README for user-facing changes?
+
+---
+
+# 📚 Additional Development Guidance
+
+## Backend Project Structure
+
+```
+backend/
+├── src/oncall_agent/
+│   ├── agent.py              # Core agent logic
+│   ├── api.py                # FastAPI REST API
+│   ├── config.py             # Configuration management
+│   ├── api/                  # API-specific modules
+│   │   ├── webhooks.py      # PagerDuty webhook handlers
+│   │   ├── alert_context_parser.py  # Alert parsing logic
+│   │   ├── oncall_agent_trigger.py  # Bridge webhooks to agent
+│   │   ├── models.py        # Data models
+│   │   ├── schemas.py       # API schemas
+│   │   └── routers/         # FastAPI routers
+│   ├── mcp_integrations/     # MCP integration modules
+│   │   ├── base.py          # Base integration class
+│   │   ├── kubernetes.py    # Kubernetes integration
+│   │   ├── github_mcp.py    # GitHub integration
+│   │   ├── enhanced_github_mcp.py  # Enhanced GitHub features
+│   │   └── notion_direct.py # Notion integration
+│   ├── strategies/          # Resolution strategies
+│   │   └── kubernetes_resolver.py
+│   └── utils/              # Utilities
+│       └── logger.py       # Logging utilities
+├── tests/                    # All test files
+├── examples/                 # Example scripts
+├── scripts/                  # Utility scripts
+├── main.py                   # CLI entry point
+├── api_server.py            # FastAPI server entry point
+└── Dockerfile.prod          # Production Docker image
+```
+
+## Enhanced Development Workflow
+
+### When Adding New Features
+
+1. **Check existing patterns** - Look at similar implementations first
+2. **Follow async patterns** - Use `async/await` for all I/O operations
+3. **Add proper error handling** - Use try/catch with logging
+4. **Update configuration** - Add new settings to `config.py` and `.env.example`
+5. **Write tests** - Add tests to `tests/` directory
+6. **Update documentation** - Modify README.md for user-facing changes
+
+### PagerDuty Integration Development
+
+1. **Webhook Handler**: `src/oncall_agent/api/webhooks.py`
+   - FastAPI routes for receiving PagerDuty webhooks
+   - Signature verification and payload validation
+   - Error handling and logging
+
+2. **Context Parser**: `src/oncall_agent/api/alert_context_parser.py`
+   - Extracts technical details from alert payloads
+   - Handles different alert types (database, server, security, network)
+   - Normalizes data for agent processing
+
+3. **Agent Trigger**: `src/oncall_agent/api/oncall_agent_trigger.py`
+   - Bridges webhook handlers to agent logic
+   - Manages async processing of alerts
+   - Provides status tracking and response formatting
+
+4. **Testing Framework**: 
+   - `test_pagerduty_alerts.py` - Generate realistic test webhooks
+   - `test_k8s_pagerduty_integration.py` - End-to-end Kubernetes testing
+   - `test_all_integrations.py` - Comprehensive integration testing
+
+### API Development Guidelines
+
+#### FastAPI Best Practices
+
+1. **Use dependency injection** for shared resources
+2. **Implement proper error handling** with custom exception handlers
+3. **Add request/response models** using Pydantic
+4. **Include comprehensive docstrings** for auto-generated documentation
+5. **Use background tasks** for long-running operations
+
+#### API Structure Patterns
+
+```python
+# Router structure
+from fastapi import APIRouter, Depends, HTTPException
+from ..models import AlertModel, ResponseModel
+
+router = APIRouter(prefix="/api/v1", tags=["alerts"])
+
+@router.post("/alerts", response_model=ResponseModel)
+async def create_alert(alert: AlertModel, background_tasks: BackgroundTasks):
+    # Implementation
+    pass
+```
+
+#### Error Response Format
+
+```python
+# Consistent error format
+{
+    "success": false,
+    "error": "Error message",
+    "details": {},
+    "request_id": "req-123",
+    "timestamp": "2024-01-01T00:00:00Z"
+}
+```
+
+## Enhanced Testing Strategy
+
+### Integration Testing Approach
+
+1. **Mock External Services** - Use pytest fixtures for MCP integrations
+2. **Test Alert Flows** - End-to-end testing from webhook to response
+3. **Kubernetes Scenarios** - Real cluster testing with Kind
+4. **Performance Testing** - Load testing with multiple concurrent alerts
+5. **Error Scenarios** - Test malformed payloads and network failures
+
+### Testing Commands
+
+```bash
+# Full test suite
+uv run pytest tests/ -v
+
+# Specific test categories
+uv run pytest tests/test_api.py -v
+uv run pytest tests/test_integrations.py -v
+uv run pytest tests/test_kubernetes.py -v
+
+# Integration tests with real services
+uv run python test_all_integrations.py
+
+# Performance/stress testing
+uv run python test_pagerduty_alerts.py --stress 50 --rate 5.0
+```
+
+## Kubernetes Development
+
+### Local Development with Kind
+
+1. **Cluster Setup**:
+   ```bash
+   # Create cluster with port mappings
+   kind create cluster --config kind-config.yaml --name oncall-agent
+   ```
+
+2. **Demo Applications**:
+   - `k8s-demo-apps.yaml` - Intentionally broken apps for testing
+   - Different failure scenarios: CrashLoopBackOff, OOMKilled, ImagePullBackOff
+   - `setup-k8s-demo.sh` - Automated deployment script
+
+3. **Monitoring Integration**:
+   - Real-time cluster monitoring
+   - Automatic alert generation for common issues
+   - Integration with PagerDuty webhook format
+
+### EKS Production Setup
+
+1. **Infrastructure as Code**:
+   - `infrastructure/eks/` - Terraform configuration
+   - CloudWatch Container Insights integration
+   - Automatic alarm creation and PagerDuty integration
+
+2. **Monitoring Stack**:
+   - CloudWatch metrics and logs
+   - Fluent Bit for log collection
+   - Custom dashboards and alerts
+
+## Configuration Management
+
+### Environment Variables Strategy
+
+```env
+# Core Configuration
+ANTHROPIC_API_KEY=sk-ant-...
+LOG_LEVEL=INFO
+ENVIRONMENT=development
+
+# API Server
+API_HOST=0.0.0.0
+API_PORT=8000
+API_RELOAD=true
+CORS_ORIGINS=["http://localhost:3000"]
+
+# PagerDuty Integration
+PAGERDUTY_WEBHOOK_SECRET=your-webhook-secret
+PAGERDUTY_ROUTING_KEY=your-routing-key
+
+# Kubernetes
+K8S_ENABLED=true
+K8S_CONFIG_PATH=~/.kube/config
+K8S_CONTEXT=default
+K8S_NAMESPACE=default
+K8S_ENABLE_DESTRUCTIVE_OPERATIONS=false
+
+# GitHub Integration
+GITHUB_TOKEN=ghp_...
+GITHUB_ORGANIZATION=your-org
+
+# MCP Settings
+MCP_MAX_RETRIES=3
+MCP_TIMEOUT_SECONDS=30
+```
+
+### Configuration Validation
+
+The codebase uses Pydantic for configuration validation:
+
+```python
+# Example configuration class
+class Config(BaseSettings):
+    anthropic_api_key: str
+    log_level: str = "INFO"
+    api_host: str = "0.0.0.0"
+    api_port: int = 8000
+    
+    # Kubernetes settings
+    k8s_enabled: bool = True
+    k8s_config_path: Optional[str] = None
+    k8s_enable_destructive_operations: bool = False
+    
+    class Config:
+        env_file = ".env"
+        case_sensitive = False
+```
+
+## Deployment Considerations
+
+### Production Checklist
+
+1. **Security**:
+   - Use AWS Secrets Manager for sensitive values
+   - Enable webhook signature verification
+   - Set `K8S_ENABLE_DESTRUCTIVE_OPERATIONS=false`
+   - Use IAM roles instead of access keys
+
+2. **Monitoring**:
+   - Enable CloudWatch logging
+   - Set up CloudWatch alarms
+   - Configure PagerDuty integration for system alerts
+   - Monitor API response times and error rates
+
+3. **Scalability**:
+   - Use ECS Fargate for auto-scaling
+   - Configure appropriate resource limits
+   - Implement connection pooling for external services
+   - Use async processing for webhook handling
+
+4. **Reliability**:
+   - Implement circuit breakers for external calls
+   - Add retry logic with exponential backoff
+   - Set up health checks and readiness probes
+   - Configure graceful shutdown handling
+
+## Debugging and Troubleshooting
+
+### Common Development Issues
+
+1. **Import Errors**:
+   ```bash
+   # Check Python path and virtual environment
+   uv run python -c "import sys; print(sys.path)"
+   uv run python -c "from src.oncall_agent.config import get_config"
+   ```
+
+2. **Configuration Issues**:
+   ```bash
+   # Validate configuration
+   uv run python -c "from src.oncall_agent.config import get_config; print(get_config())"
+   ```
+
+3. **MCP Integration Failures**:
+   ```bash
+   # Test individual integrations
+   uv run python examples/test_kubernetes_integration.py
+   uv run python examples/test_github_integration.py
+   ```
+
+4. **API Server Issues**:
+   ```bash
+   # Check port availability
+   lsof -i :8000
+   
+   # Test health endpoint
+   curl http://localhost:8000/health
+   ```
+
+### Logging Strategy
+
+The codebase uses structured logging:
+
+```python
+# Logger setup
+from src.oncall_agent.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+# Usage patterns
+logger.info("Processing alert", extra={
+    "alert_id": alert.id,
+    "alert_type": alert.type,
+    "processing_time": time.time() - start_time
+})
+
+logger.error("Integration failed", extra={
+    "integration": "kubernetes",
+    "error": str(e),
+    "retry_count": retry_count
+})
+```
+
+## Advanced Features
+
+### Real-time Features
+
+1. **WebSocket Support**:
+   - Real-time metrics streaming
+   - Live alert processing updates
+   - Dashboard real-time updates
+
+2. **Background Processing**:
+   - Async alert processing
+   - Scheduled maintenance tasks
+   - Automatic integration health checks
+
+3. **Caching Strategy**:
+   - Alert context caching
+   - Integration response caching
+   - Configuration caching
+
+### Extensibility Points
+
+1. **Custom MCP Integrations**:
+   - Extend `MCPIntegration` base class
+   - Implement required interface methods
+   - Add to integration registry
+
+2. **Alert Processing Strategies**:
+   - Custom alert parsers
+   - Domain-specific resolution strategies
+   - Custom notification channels
+
+3. **Monitoring Extensions**:
+   - Custom metrics collection
+   - Extended logging formats
+   - Integration with external monitoring systems
+
+## Performance Optimization
+
+### Key Metrics to Monitor
+
+1. **API Performance**:
+   - Request/response times
+   - Concurrent request handling
+   - Error rates and types
+
+2. **Integration Performance**:
+   - MCP call latencies
+   - Success/failure rates
+   - Retry patterns and backoff effectiveness
+
+3. **Agent Performance**:
+   - Alert processing times
+   - Claude API response times
+   - Context gathering efficiency
+
+### Optimization Strategies
+
+1. **Async Processing**:
+   - All I/O operations use async/await
+   - Concurrent MCP integration calls
+   - Background task processing
+
+2. **Caching**:
+   - Configuration caching
+   - Integration response caching
+   - Alert context caching
+
+3. **Resource Management**:
+   - Connection pooling for external services
+   - Proper cleanup of resources
+   - Memory usage monitoring
+
+## Security Best Practices
+
+### API Security
+
+1. **Authentication**:
+   - API key authentication for external access
+   - Webhook signature verification
+   - Rate limiting per client
+
+2. **Data Protection**:
+   - No sensitive data in logs
+   - Encrypted storage for secrets
+   - Secure transmission (HTTPS only)
+
+3. **Access Control**:
+   - Principle of least privilege
+   - Role-based access control
+   - Audit logging for all actions
+
+### Infrastructure Security
+
+1. **Network Security**:
+   - VPC with private subnets
+   - Security groups with minimal access
+   - WAF for public endpoints
+
+2. **Secrets Management**:
+   - AWS Secrets Manager integration
+   - No hardcoded credentials
+   - Regular secret rotation
+
+3. **Monitoring and Alerting**:
+   - CloudTrail for audit logging
+   - GuardDuty for threat detection
+   - Real-time security alerts
 
 ## Common Pitfalls to Avoid
 
