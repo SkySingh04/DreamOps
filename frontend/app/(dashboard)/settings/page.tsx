@@ -24,7 +24,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Save, Key, Bell, Brain, Shield, CheckCircle, XCircle, Loader2, Eye, EyeOff, TestTube } from 'lucide-react';
+import { Save, Key, Bell, Brain, Shield, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient, queryKeys } from '@/lib/api-client';
 
@@ -75,13 +75,18 @@ interface GlobalSettings {
   integrations: Record<string, IntegrationConfig>;
 }
 
+// Utility function to safely handle number values for inputs
+const safeNumberValue = (value: number | undefined | null): string | number => {
+  if (value == null || isNaN(value)) return '';
+  return value;
+};
+
 export default function SettingsPage() {
   const [showAPIKeys, setShowAPIKeys] = useState(false);
   const [localAISettings, setLocalAISettings] = useState<AISettings | null>(null);
   const [localAlertSettings, setLocalAlertSettings] = useState<AlertSettings | null>(null);
   const [localSecuritySettings, setLocalSecuritySettings] = useState<SecuritySettings | null>(null);
   const [localAPIKeySettings, setLocalAPIKeySettings] = useState<APIKeySettings | null>(null);
-  const [testingIntegration, setTestingIntegration] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   // Fetch all settings
@@ -154,28 +159,6 @@ export default function SettingsPage() {
     },
   });
 
-  const testIntegrationMutation = useMutation({
-    mutationFn: (integrationName: string) => apiClient.testIntegrationConnection(integrationName),
-    onSuccess: (data, integrationName) => {
-      const result = data.data;
-      if (result.success) {
-        toast.success(`${integrationName} connection test passed`, {
-          description: result.message,
-        });
-      } else {
-        toast.error(`${integrationName} connection test failed`, {
-          description: result.message,
-        });
-      }
-      setTestingIntegration(null);
-    },
-    onError: (error: any, integrationName) => {
-      toast.error(`Failed to test ${integrationName} connection`, {
-        description: error.message,
-      });
-      setTestingIntegration(null);
-    },
-  });
 
   // Initialize local state when settings load
   useEffect(() => {
@@ -211,10 +194,6 @@ export default function SettingsPage() {
     }
   };
 
-  const handleTestIntegration = (integrationName: string) => {
-    setTestingIntegration(integrationName);
-    testIntegrationMutation.mutate(integrationName);
-  };
 
   const getIntegrationStatus = (name: string) => {
     const integration = integrations.find((i: any) => i.name === name);
@@ -276,7 +255,31 @@ export default function SettingsPage() {
   }
 
   if (!settings || !localAISettings || !localAlertSettings || !localSecuritySettings || !localAPIKeySettings) {
-    return null;
+    return (
+      <section className="flex-1 p-4 lg:p-8">
+        <div className="mb-6">
+          <Skeleton className="h-8 w-64 mb-2" />
+          <Skeleton className="h-4 w-96" />
+        </div>
+        <div className="space-y-6">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i}>
+              <CardHeader>
+                <Skeleton className="h-6 w-32" />
+                <Skeleton className="h-4 w-80" />
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-6 w-24" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
+    );
   }
 
   return (
@@ -338,8 +341,8 @@ export default function SettingsPage() {
                   min="0"
                   max="1"
                   step="0.1"
-                  value={localAISettings.confidence_threshold}
-                  onChange={(e) => setLocalAISettings({...localAISettings, confidence_threshold: parseFloat(e.target.value)})}
+                  value={safeNumberValue(localAISettings?.confidence_threshold)}
+                  onChange={(e) => setLocalAISettings({...localAISettings, confidence_threshold: parseFloat(e.target.value) || 0})}
                   className="mt-2"
                 />
               </div>
@@ -351,8 +354,8 @@ export default function SettingsPage() {
                   min="0"
                   max="2"
                   step="0.1"
-                  value={localAISettings.temperature}
-                  onChange={(e) => setLocalAISettings({...localAISettings, temperature: parseFloat(e.target.value)})}
+                  value={safeNumberValue(localAISettings?.temperature)}
+                  onChange={(e) => setLocalAISettings({...localAISettings, temperature: parseFloat(e.target.value) || 0})}
                   className="mt-2"
                 />
               </div>
@@ -431,8 +434,8 @@ export default function SettingsPage() {
                   id="dedup-window"
                   type="number"
                   min="1"
-                  value={localAlertSettings.deduplication_window_minutes}
-                  onChange={(e) => setLocalAlertSettings({...localAlertSettings, deduplication_window_minutes: parseInt(e.target.value)})}
+                  value={safeNumberValue(localAlertSettings?.deduplication_window_minutes)}
+                  onChange={(e) => setLocalAlertSettings({...localAlertSettings, deduplication_window_minutes: parseInt(e.target.value) || 1})}
                   className="mt-2"
                 />
               </div>
@@ -442,8 +445,8 @@ export default function SettingsPage() {
                   id="escalation-delay"
                   type="number"
                   min="1"
-                  value={localAlertSettings.escalation_delay_minutes}
-                  onChange={(e) => setLocalAlertSettings({...localAlertSettings, escalation_delay_minutes: parseInt(e.target.value)})}
+                  value={safeNumberValue(localAlertSettings?.escalation_delay_minutes)}
+                  onChange={(e) => setLocalAlertSettings({...localAlertSettings, escalation_delay_minutes: parseInt(e.target.value) || 1})}
                   className="mt-2"
                 />
               </div>
@@ -617,19 +620,6 @@ export default function SettingsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Switch checked={config.enabled} disabled />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleTestIntegration(name)}
-                    disabled={testingIntegration === name}
-                  >
-                    {testingIntegration === name ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <TestTube className="h-4 w-4" />
-                    )}
-                    Test
-                  </Button>
                 </div>
               </div>
             ))}
@@ -662,8 +652,8 @@ export default function SettingsPage() {
                 type="number"
                 min="1"
                 max="365"
-                value={localSecuritySettings.data_retention_days}
-                onChange={(e) => setLocalSecuritySettings({...localSecuritySettings, data_retention_days: parseInt(e.target.value)})}
+                value={safeNumberValue(localSecuritySettings?.data_retention_days)}
+                onChange={(e) => setLocalSecuritySettings({...localSecuritySettings, data_retention_days: parseInt(e.target.value) || 1})}
                 className="mt-2"
               />
             </div>
@@ -675,8 +665,8 @@ export default function SettingsPage() {
                 type="number"
                 min="15"
                 max="1440"
-                value={localSecuritySettings.session_timeout_minutes}
-                onChange={(e) => setLocalSecuritySettings({...localSecuritySettings, session_timeout_minutes: parseInt(e.target.value)})}
+                value={safeNumberValue(localSecuritySettings?.session_timeout_minutes)}
+                onChange={(e) => setLocalSecuritySettings({...localSecuritySettings, session_timeout_minutes: parseInt(e.target.value) || 15})}
                 className="mt-2"
               />
             </div>

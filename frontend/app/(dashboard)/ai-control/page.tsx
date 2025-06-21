@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Card,
@@ -19,6 +19,10 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   Bot, 
   Shield, 
@@ -38,7 +42,12 @@ import {
   Terminal,
   Gauge,
   FileText,
-  Bell
+  Bell,
+  Plus,
+  Trash2,
+  Edit2,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient, queryKeys } from '@/lib/api-client';
@@ -98,8 +107,189 @@ const RISK_ACTIONS = {
   ],
 };
 
+// Risk Matrix Editor Component
+interface RiskMatrixEditorProps {
+  isOpen: boolean;
+  onClose: () => void;
+  riskMatrix: Record<string, string[]>;
+  onSave: (newMatrix: Record<string, string[]>) => void;
+}
+
+function RiskMatrixEditor({ isOpen, onClose, riskMatrix, onSave }: RiskMatrixEditorProps) {
+  const [editedMatrix, setEditedMatrix] = useState<Record<string, string[]>>(riskMatrix);
+  const [newActionInput, setNewActionInput] = useState<Record<string, string>>({
+    low: '',
+    medium: '',
+    high: ''
+  });
+
+  // Reset when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      setEditedMatrix(JSON.parse(JSON.stringify(riskMatrix)));
+    }
+  }, [isOpen, riskMatrix]);
+
+  const handleAddAction = (level: string) => {
+    const newAction = newActionInput[level]?.trim();
+    if (!newAction) return;
+
+    setEditedMatrix(prev => ({
+      ...prev,
+      [level]: [...(prev[level] || []), newAction]
+    }));
+    setNewActionInput(prev => ({ ...prev, [level]: '' }));
+  };
+
+  const handleRemoveAction = (level: string, index: number) => {
+    setEditedMatrix(prev => ({
+      ...prev,
+      [level]: prev[level].filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleMoveAction = (fromLevel: string, toLevel: string, index: number) => {
+    const action = editedMatrix[fromLevel][index];
+    setEditedMatrix(prev => ({
+      ...prev,
+      [fromLevel]: prev[fromLevel].filter((_, i) => i !== index),
+      [toLevel]: [...prev[toLevel], action]
+    }));
+  };
+
+  const handleSave = () => {
+    onSave(editedMatrix);
+    onClose();
+  };
+
+  const getLevelColor = (level: string) => {
+    switch (level) {
+      case 'high':
+        return 'text-red-600 border-red-300 bg-red-50';
+      case 'medium':
+        return 'text-yellow-600 border-yellow-300 bg-yellow-50';
+      case 'low':
+        return 'text-green-600 border-green-300 bg-green-50';
+      default:
+        return '';
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[80vh]">
+        <DialogHeader>
+          <DialogTitle>Customize Risk Matrix</DialogTitle>
+          <DialogDescription>
+            Define which actions fall into each risk category. Drag actions between categories or add new ones.
+          </DialogDescription>
+        </DialogHeader>
+
+        <ScrollArea className="h-[500px] pr-4">
+          <div className="space-y-6">
+            {['low', 'medium', 'high'].map((level) => (
+              <div key={level} className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className={getLevelColor(level)}
+                  >
+                    {level} risk
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">
+                    {editedMatrix[level]?.length || 0} actions
+                  </span>
+                </div>
+
+                <div className={`border-2 rounded-lg p-4 ${getLevelColor(level)}`}>
+                  <div className="space-y-2">
+                    {editedMatrix[level]?.map((action, index) => (
+                      <div
+                        key={`${level}-${index}`}
+                        className="flex items-center justify-between bg-white rounded-md p-2 shadow-sm"
+                      >
+                        <span className="text-sm">{action}</span>
+                        <div className="flex items-center gap-1">
+                          {level !== 'low' && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                const targetLevel = level === 'high' ? 'medium' : 'low';
+                                handleMoveAction(level, targetLevel, index);
+                              }}
+                              title={`Move to ${level === 'high' ? 'medium' : 'low'} risk`}
+                            >
+                              <ChevronDown className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {level !== 'high' && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                const targetLevel = level === 'low' ? 'medium' : 'high';
+                                handleMoveAction(level, targetLevel, index);
+                              }}
+                              title={`Move to ${level === 'low' ? 'medium' : 'high'} risk`}
+                            >
+                              <ChevronUp className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleRemoveAction(level, index)}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-600" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-3 flex gap-2">
+                    <Input
+                      placeholder={`Add new ${level} risk action...`}
+                      value={newActionInput[level]}
+                      onChange={(e) => setNewActionInput(prev => ({ ...prev, [level]: e.target.value }))}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          handleAddAction(level);
+                        }
+                      }}
+                      className="flex-1"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => handleAddAction(level)}
+                      disabled={!newActionInput[level]?.trim()}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave}>
+            Save Changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function AIControlPage() {
   const [isEmergencyStopActive, setIsEmergencyStopActive] = useState(false);
+  const [isRiskMatrixEditorOpen, setIsRiskMatrixEditorOpen] = useState(false);
   const queryClient = useQueryClient();
 
   // Fetch AI config
@@ -275,6 +465,12 @@ export default function AIControlPage() {
 
   const handleRollback = (actionId: string) => {
     rollbackMutation.mutate(actionId);
+  };
+
+  const handleSaveRiskMatrix = (newMatrix: Record<string, string[]>) => {
+    updateConfigMutation.mutate({
+      risk_matrix: newMatrix
+    });
   };
 
   const getRiskLevelStats = () => {
@@ -730,7 +926,10 @@ export default function AIControlPage() {
               </div>
 
               <div className="mt-6 flex justify-end">
-                <Button variant="outline">
+                <Button 
+                  variant="outline"
+                  onClick={() => setIsRiskMatrixEditorOpen(true)}
+                >
                   <Settings className="h-4 w-4 mr-2" />
                   Customize Risk Matrix
                 </Button>
@@ -984,6 +1183,14 @@ export default function AIControlPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Risk Matrix Editor Dialog */}
+      <RiskMatrixEditor
+        isOpen={isRiskMatrixEditorOpen}
+        onClose={() => setIsRiskMatrixEditorOpen(false)}
+        riskMatrix={config.risk_matrix}
+        onSave={handleSaveRiskMatrix}
+      />
     </section>
   );
 }

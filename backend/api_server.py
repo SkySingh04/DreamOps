@@ -97,9 +97,12 @@ async def log_requests(request: Request, call_next):
         # Important: Create a new request with the body we read
         from starlette.requests import Request as StarletteRequest
 
+        async def receive():
+            return {"type": "http.request", "body": body}
+
         request = StarletteRequest(
             scope=request.scope,
-            receive=lambda: {"type": "http.request", "body": body}
+            receive=receive
         )
 
     response = await call_next(request)
