@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Card,
   CardContent,
@@ -10,16 +10,138 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Activity, AlertCircle, CheckCircle, Clock, TrendingUp, Shield, Server } from 'lucide-react';
+import { Activity, AlertCircle, CheckCircle, Clock, TrendingUp, Shield, Server, Plus } from 'lucide-react';
+import { useWebSocket } from '@/lib/hooks/use-websocket';
+import { Button } from '@/components/ui/button';
+
+interface DashboardMetrics {
+  activeIncidents: number;
+  resolvedToday: number;
+  avgResponseTime: string;
+  healthScore: number;
+  aiAgentStatus: 'online' | 'offline';
+}
+
+interface RecentIncident {
+  id: number;
+  title: string;
+  severity: string;
+  status: string;
+  createdAt: string;
+}
+
+interface RecentAiAction {
+  id: number;
+  action: string;
+  description: string | null;
+  createdAt: string;
+}
 
 export default function DashboardPage() {
-  // Mock data - will be replaced with API calls
-  const metrics = {
-    activeIncidents: 2,
-    resolvedToday: 8,
-    avgResponseTime: '3.2 min',
+  const queryClient = useQueryClient();
+  const [teamId, setTeamId] = useState<number | null>(null);
+
+  // Fetch dashboard metrics
+  const { data: metrics, isLoading: metricsLoading } = useQuery<DashboardMetrics>({
+    queryKey: ['dashboard-metrics'],
+    queryFn: async () => {
+      const response = await fetch('/api/dashboard/metrics');
+      if (!response.ok) throw new Error('Failed to fetch metrics');
+      return response.json();
+    },
+    refetchInterval: 30000, // Refetch every 30 seconds
+  });
+
+  // Fetch recent incidents
+  const { data: incidents, isLoading: incidentsLoading } = useQuery<RecentIncident[]>({
+    queryKey: ['recent-incidents'],
+    queryFn: async () => {
+      const response = await fetch('/api/dashboard/incidents?limit=5');
+      if (!response.ok) throw new Error('Failed to fetch incidents');
+      return response.json();
+    },
+    refetchInterval: 30000,
+  });
+
+  // Fetch recent AI actions
+  const { data: aiActions, isLoading: aiActionsLoading } = useQuery<RecentAiAction[]>({
+    queryKey: ['recent-ai-actions'],
+    queryFn: async () => {
+      const response = await fetch('/api/dashboard/ai-actions?limit=5');
+      if (!response.ok) throw new Error('Failed to fetch AI actions');
+      return response.json();
+    },
+    refetchInterval: 30000,
+  });
+
+  // Get team ID from user session
+  useEffect(() => {
+    async function fetchTeamId() {
+      try {
+        const response = await fetch('/api/user/team');
+        if (response.ok) {
+          const { teamId: userTeamId } = await response.json();
+          setTeamId(userTeamId);
+        } else {
+          // Fallback to team 1 for testing
+          setTeamId(1);
+        }
+      } catch (error) {
+        console.error('Error fetching team ID:', error);
+        // Fallback to team 1 for testing
+        setTeamId(1);
+      }
+    }
+    
+    fetchTeamId();
+  }, []);
+
+  // Set up WebSocket for real-time updates
+  const { isConnected } = useWebSocket({
+    teamId: teamId || undefined,
+    onMetricsUpdate: (newMetrics) => {
+      queryClient.setQueryData(['dashboard-metrics'], newMetrics);
+    },
+    onIncidentUpdate: (incident) => {
+      queryClient.invalidateQueries({ queryKey: ['recent-incidents'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-metrics'] });
+    },
+    onAiActionUpdate: (action) => {
+      queryClient.invalidateQueries({ queryKey: ['recent-ai-actions'] });
+    },
+  });
+
+  // Default values for loading states
+  const defaultMetrics: DashboardMetrics = {
+    activeIncidents: 0,
+    resolvedToday: 0,
+    avgResponseTime: '0 min',
     healthScore: 95,
-    ai_agent_status: 'online'
+    aiAgentStatus: 'online'
+  };
+
+  const currentMetrics = metrics || defaultMetrics;
+
+  // Test function to create incident
+  const createTestIncident = async () => {
+    try {
+      const response = await fetch('/api/test/create-incident', {
+        method: 'POST',
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Test incident created:', result);
+        // Refetch data to update the dashboard
+        queryClient.invalidateQueries({ queryKey: ['recent-incidents'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard-metrics'] });
+        queryClient.invalidateQueries({ queryKey: ['recent-ai-actions'] });
+      } else {
+        console.error('Failed to create test incident');
+      }
+    } catch (error) {
+      console.error('Error creating test incident:', error);
+    }
   };
 
   return (
@@ -35,16 +157,37 @@ export default function DashboardPage() {
           <Badge 
             variant="outline" 
             className={`px-3 py-1 ${
-              metrics?.ai_agent_status === 'online' 
+              isConnected 
+                ? 'bg-blue-50 text-blue-700 border-blue-300' 
+                : 'bg-gray-50 text-gray-700 border-gray-300'
+            }`}
+          >
+            <span className={`mr-2 h-2 w-2 rounded-full ${
+              isConnected ? 'bg-blue-600' : 'bg-gray-600'
+            }`}></span>
+            {isConnected ? 'Live' : 'Disconnected'}
+          </Badge>
+          <Badge 
+            variant="outline" 
+            className={`px-3 py-1 ${
+              currentMetrics.aiAgentStatus === 'online' 
                 ? 'bg-green-50 text-green-700 border-green-300' 
                 : 'bg-red-50 text-red-700 border-red-300'
             }`}
           >
             <span className={`mr-2 h-2 w-2 rounded-full ${
-              metrics?.ai_agent_status === 'online' ? 'bg-green-600' : 'bg-red-600'
+              currentMetrics.aiAgentStatus === 'online' ? 'bg-green-600' : 'bg-red-600'
             }`}></span>
-            AI Agent {metrics?.ai_agent_status === 'online' ? 'Online' : 'Offline'}
+            AI Agent {currentMetrics.aiAgentStatus === 'online' ? 'Online' : 'Offline'}
           </Badge>
+          <Button
+            onClick={createTestIncident}
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Create Test Incident
+          </Button>
         </div>
       </div>
       
@@ -58,7 +201,9 @@ export default function DashboardPage() {
             <AlertCircle className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{metrics.activeIncidents}</div>
+            <div className="text-2xl font-bold">
+              {metricsLoading ? '...' : currentMetrics.activeIncidents}
+            </div>
             <p className="text-xs text-gray-600">
               Requires immediate attention
             </p>
@@ -73,7 +218,9 @@ export default function DashboardPage() {
             <CheckCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{metrics.resolvedToday}</div>
+            <div className="text-2xl font-bold">
+              {metricsLoading ? '...' : currentMetrics.resolvedToday}
+            </div>
             <p className="text-xs text-gray-600">
               <TrendingUp className="inline h-3 w-3 mr-1" />
               +12% from yesterday
@@ -89,7 +236,9 @@ export default function DashboardPage() {
             <Clock className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{metrics.avgResponseTime}</div>
+            <div className="text-2xl font-bold">
+              {metricsLoading ? '...' : currentMetrics.avgResponseTime}
+            </div>
             <p className="text-xs text-gray-600">
               Target: &lt; 5 min
             </p>
@@ -104,8 +253,10 @@ export default function DashboardPage() {
             <Activity className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{metrics.healthScore}%</div>
-            <Progress value={metrics.healthScore} className="mt-2" />
+            <div className="text-2xl font-bold">
+              {metricsLoading ? '...' : `${currentMetrics.healthScore}%`}
+            </div>
+            <Progress value={currentMetrics.healthScore} className="mt-2" />
           </CardContent>
         </Card>
       </div>
@@ -118,27 +269,38 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-red-500" />
-                  <span className="text-sm">API Gateway High Error Rate</span>
-                </div>
-                <Badge variant="destructive" className="text-xs">Critical</Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Server className="h-4 w-4 text-yellow-500" />
-                  <span className="text-sm">Database Connection Pool</span>
-                </div>
-                <Badge variant="secondary" className="text-xs">Resolved</Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-blue-500" />
-                  <span className="text-sm">High Memory Usage</span>
-                </div>
-                <Badge variant="outline" className="text-xs">Monitoring</Badge>
-              </div>
+              {incidentsLoading ? (
+                <div className="text-sm text-gray-500">Loading incidents...</div>
+              ) : incidents && incidents.length > 0 ? (
+                incidents.map((incident) => (
+                  <div key={incident.id} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className={`h-4 w-4 ${
+                        incident.severity === 'critical' ? 'text-red-500' :
+                        incident.severity === 'high' ? 'text-orange-500' :
+                        incident.severity === 'medium' ? 'text-yellow-500' :
+                        'text-blue-500'
+                      }`} />
+                      <span className="text-sm truncate">{incident.title}</span>
+                    </div>
+                    <Badge 
+                      variant={
+                        incident.status === 'resolved' ? 'secondary' :
+                        incident.severity === 'critical' ? 'destructive' :
+                        'outline'
+                      } 
+                      className="text-xs"
+                    >
+                      {incident.status === 'resolved' ? 'Resolved' : 
+                       incident.severity === 'critical' ? 'Critical' :
+                       incident.severity === 'high' ? 'High' :
+                       'Active'}
+                    </Badge>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-gray-500">No recent incidents</div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -149,27 +311,28 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Shield className="h-4 w-4 text-green-500" />
-                  <span className="text-sm">Auto-scaled deployment</span>
-                </div>
-                <span className="text-xs text-gray-500">2 min ago</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                  <span className="text-sm">Cleared Redis cache</span>
-                </div>
-                <span className="text-xs text-gray-500">5 min ago</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-blue-500" />
-                  <span className="text-sm">Analyzed log patterns</span>
-                </div>
-                <span className="text-xs text-gray-500">8 min ago</span>
-              </div>
+              {aiActionsLoading ? (
+                <div className="text-sm text-gray-500">Loading AI actions...</div>
+              ) : aiActions && aiActions.length > 0 ? (
+                aiActions.map((action) => (
+                  <div key={action.id} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-4 w-4 text-green-500" />
+                      <span className="text-sm truncate">
+                        {action.description || action.action}
+                      </span>
+                    </div>
+                    <span className="text-xs text-gray-500">
+                      {new Date(action.createdAt).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-gray-500">No recent AI actions</div>
+              )}
             </div>
           </CardContent>
         </Card>
