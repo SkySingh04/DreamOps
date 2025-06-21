@@ -84,22 +84,28 @@ class APIClient {
     return this.request<Incident>(`/api/v1/incidents/${id}`);
   }
 
-  async acknowledgeIncident(id: string): Promise<APIResponse<Incident>> {
-    return this.request<Incident>(`/api/v1/incidents/${id}/acknowledge`, {
+  async acknowledgeIncident(id: string, user: string = 'user'): Promise<APIResponse<Incident>> {
+    return this.request<Incident>(`/api/v1/incidents/${id}/acknowledge?user=${encodeURIComponent(user)}`, {
       method: 'POST',
     });
   }
 
-  async resolveIncident(id: string): Promise<APIResponse<Incident>> {
-    return this.request<Incident>(`/api/v1/incidents/${id}/resolve`, {
+  async resolveIncident(id: string, resolution: string = 'Resolved by user', user: string = 'user'): Promise<APIResponse<Incident>> {
+    return this.request<Incident>(`/api/v1/incidents/${id}/resolve?resolution=${encodeURIComponent(resolution)}&user=${encodeURIComponent(user)}`, {
       method: 'POST',
     });
   }
 
   async triggerMockIncident(type: string): Promise<APIResponse<Incident>> {
-    return this.request<Incident>('/api/v1/incidents/mock', {
+    return this.request<Incident>('/api/v1/incidents', {
       method: 'POST',
-      body: JSON.stringify({ incident_type: type }),
+      body: JSON.stringify({ 
+        title: `Mock ${type} incident`,
+        description: `This is a mock ${type} incident for testing`,
+        severity: type.includes('critical') ? 'critical' : 'high',
+        service_name: 'test-service',
+        alert_source: 'manual'
+      }),
     });
   }
 

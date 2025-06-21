@@ -162,7 +162,7 @@ Please provide brief analysis and recommendations."""
             self.logger.info("✅ Agent processing complete")
             self.logger.info(f"📋 Agent Response Summary: {result.get('status', 'unknown')}")
 
-            # Emit structured log for completion
+            # Emit structured log for completion with full analysis
             await log_stream_manager.log_success(
                 f"✅ AI ANALYSIS COMPLETE - {processing_time:.2f}s response time",
                 incident_id=pager_alert.alert_id,
@@ -172,7 +172,11 @@ Please provide brief analysis and recommendations."""
                     "response_time": f"{processing_time:.2f}s",
                     "status": result.get("status", "unknown"),
                     "severity": result.get("severity", pager_alert.severity),
-                    "actions_recommended": len(result.get("recommended_actions", [])) if isinstance(result.get("recommended_actions"), list) else 0
+                    "actions_recommended": len(result.get("recommended_actions", [])) if isinstance(result.get("recommended_actions"), list) else 0,
+                    "analysis": result.get("analysis", ""),
+                    "parsed_analysis": result.get("parsed_analysis", {}),
+                    "confidence_score": result.get("confidence_score", 0.85),
+                    "risk_level": result.get("risk_level", "medium")
                 }
             )
 

@@ -277,6 +277,9 @@ class OncallAgent:
                     stage="claude_analysis",
                     progress=0.7
                 )
+            
+            # Parse the analysis into structured sections
+            parsed_analysis = self._parse_claude_analysis(analysis)
 
             # STEP 4: Send AI analysis action to dashboard
             try:
@@ -303,6 +306,7 @@ class OncallAgent:
                 "alert_id": alert.alert_id,
                 "status": "analyzed",
                 "analysis": analysis,
+                "parsed_analysis": parsed_analysis,
                 "timestamp": alert.timestamp,
                 "severity": alert.severity,
                 "service": alert.service_name,
@@ -312,6 +316,8 @@ class OncallAgent:
                 },
                 "full_context": all_context,
                 "available_integrations": list(self.mcp_integrations.keys()),
+                "confidence_score": parsed_analysis.get("confidence_score", 0.85),
+                "risk_level": parsed_analysis.get("risk_level", "medium"),
             }
 
             # Add automated actions if available
@@ -513,3 +519,73 @@ class OncallAgent:
                 self.logger.info(f"Disconnected from {name}")
             except Exception as e:
                 self.logger.error(f"Error disconnecting from {name}: {e}")
+    
+    def _parse_claude_analysis(self, analysis: str) -> dict[str, Any]:
+        """Parse Claude's analysis into structured sections."""
+        import re
+        
+        sections = {
+            "immediate_actions": [],
+            "root_cause": [],
+            "impact": [],
+            "remediation": [],
+            "monitoring": [],
+            "automation": [],
+            "follow_up": [],
+            "confidence_score": 0.85,
+            "risk_level": "medium",
+            "commands": []
+        }
+        
+        # Section patterns
+        section_patterns = {
+            "immediate_actions": r"(?:IMMEDIATE ACTIONS?|🎯.*IMMEDIATE.*?)[\s:]*\n(.*?)(?=\n\d+\.|🔍|💥|🛠️|📊|🚀|📝|$)",
+            "root_cause": r"(?:ROOT CAUSE.*?|🔍.*ROOT CAUSE.*?)[\s:]*\n(.*?)(?=\n\d+\.|🎯|💥|🛠️|📊|🚀|📝|$)",
+            "impact": r"(?:IMPACT.*?|💥.*IMPACT.*?)[\s:]*\n(.*?)(?=\n\d+\.|🎯|🔍|🛠️|📊|🚀|📝|$)",
+            "remediation": r"(?:REMEDIATION.*?|🛠️.*REMEDIATION.*?)[\s:]*\n(.*?)(?=\n\d+\.|🎯|🔍|💥|📊|🚀|📝|$)",
+            "monitoring": r"(?:MONITORING.*?|📊.*MONITORING.*?)[\s:]*\n(.*?)(?=\n\d+\.|🎯|🔍|💥|🛠️|🚀|📝|$)",
+            "automation": r"(?:AUTOMATION.*?|🚀.*AUTOMATION.*?)[\s:]*\n(.*?)(?=\n\d+\.|🎯|🔍|💥|🛠️|📊|📝|$)",
+            "follow_up": r"(?:FOLLOW-?UP.*?|📝.*FOLLOW.*?)[\s:]*\n(.*?)(?=\n\d+\.|🎯|🔍|💥|🛠️|📊|🚀|$)"
+        }
+        
+        # Extract sections
+        for section, pattern in section_patterns.items():
+            match = re.search(pattern, analysis, re.DOTALL | re.IGNORECASE)
+            if match:
+                content = match.group(1).strip()
+                # Split by newlines and clean up
+                items = [line.strip() for line in content.split('\n') if line.strip()]
+                # Remove numbering and clean up
+                cleaned_items = []
+                for item in items:
+                    # Remove leading numbers, bullets, etc.
+                    cleaned = re.sub(r'^[\d\-\*\•]+\.\s*', '', item)
+                    if cleaned and not cleaned.startswith(('🎯', '🔍', '💥', '🛠️', '📊', '🚀', '📝')):
+                        cleaned_items.append(cleaned)
+                sections[section] = cleaned_items
+        
+        # Extract all commands (bash/kubectl commands)
+        command_pattern = r'(?:```(?:bash|sh)?\n(.*?)```|`([^`]+)`)'
+        commands = []
+        for match in re.finditer(command_pattern, analysis, re.DOTALL):
+            if match.group(1):  # Multi-line code block
+                cmds = [cmd.strip() for cmd in match.group(1).split('\n') if cmd.strip()]
+                commands.extend(cmds)
+            elif match.group(2):  # Inline code
+                commands.append(match.group(2).strip())
+        
+        sections["commands"] = commands
+        
+        # Extract confidence score if mentioned
+        confidence_match = re.search(r'(?:confidence|confident)[\s:]*(\d+)%', analysis, re.IGNORECASE)
+        if confidence_match:
+            sections["confidence_score"] = int(confidence_match.group(1)) / 100.0
+        
+        # Extract risk level if mentioned
+        risk_match = re.search(r'(?:risk|severity)[\s:]*(?:is\s+)?(\w+)', analysis, re.IGNORECASE)
+        if risk_match:
+            risk = risk_match.group(1).lower()
+            if risk in ["low", "medium", "high", "critical"]:
+                sections["risk_level"] = risk
+        
+        return sections

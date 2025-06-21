@@ -27,6 +27,9 @@ interface AIAnalysisDisplayProps {
   timestamp?: string
   responseTime?: string
   className?: string
+  parsedAnalysis?: any
+  confidenceScore?: number
+  riskLevel?: string
 }
 
 interface ParsedAnalysis {
@@ -197,10 +200,26 @@ export function AIAnalysisDisplay({
   analysis, 
   timestamp, 
   responseTime,
-  className 
+  className,
+  parsedAnalysis: providedParsedAnalysis,
+  confidenceScore,
+  riskLevel
 }: AIAnalysisDisplayProps) {
-  const parsedAnalysis = parseAnalysis(analysis)
-  const hasAnalysis = Object.keys(parsedAnalysis).length > 0
+  // Use provided parsed analysis or parse it ourselves
+  const parsedData = providedParsedAnalysis || parseAnalysis(analysis)
+  
+  // Map the parsed data to our expected format
+  const parsedAnalysis: ParsedAnalysis = {
+    immediateActions: parsedData.immediate_actions || parsedData.immediateActions || [],
+    rootCause: parsedData.root_cause || parsedData.rootCause || [],
+    impact: parsedData.impact || [],
+    remediation: parsedData.remediation || [],
+    monitoring: parsedData.monitoring || [],
+    automation: parsedData.automation || [],
+    followUp: parsedData.follow_up || parsedData.followUp || []
+  }
+  
+  const hasAnalysis = Object.values(parsedAnalysis).some(arr => arr && arr.length > 0)
 
   if (!hasAnalysis) {
     return (

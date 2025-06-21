@@ -90,6 +90,17 @@ export function useAgentLogs(incidentId?: string) {
             if (logEntry.incident_id) {
               if (logEntry.stage === 'complete') {
                 newActiveIncidents.delete(logEntry.incident_id)
+                
+                // Emit event for analysis completion
+                if (logEntry.metadata?.analysis) {
+                  window.dispatchEvent(new CustomEvent('agent-log-update', {
+                    detail: {
+                      incident_id: logEntry.incident_id,
+                      stage: logEntry.stage,
+                      metadata: logEntry.metadata
+                    }
+                  }))
+                }
               } else if (logEntry.stage === 'activation') {
                 newActiveIncidents.add(logEntry.incident_id)
               }

@@ -52,6 +52,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { AgentLogs } from '@/components/incidents/agent-logs';
 import { AgentStatusPanel } from '@/components/incidents/agent-status-panel';
 import { AIAnalysisDisplay } from '@/components/incidents/ai-analysis-display';
+import { IncidentAIAnalysis } from '@/components/incidents/incident-ai-analysis';
 
 const MOCK_INCIDENT_TYPES = [
   { value: 'server_down', label: 'Server Down', severity: 'critical' },
@@ -76,46 +77,14 @@ export default function IncidentsPage() {
   // Agent logs hook for real-time monitoring
   const { logs, isConnected, activeIncidents, currentStage, currentProgress } = useAgentLogs();
 
-  // Using mock data for now
-  const incidents = [
-    {
-      id: 'INC-001',
-      title: 'API Gateway High Error Rate',
-      service: { name: 'api-gateway' },
-      severity: 'critical',
-      status: 'active',
-      created_at: '2024-06-21T10:30:00Z',
-      assignee: 'John Doe',
-      ai_analysis: {
-        summary: 'Claude identified potential database connection issues',
-        confidence_score: 0.92,
-        recommendations: [
-          'Check database connection pool',
-          'Review recent deployments',
-          'Monitor API response times'
-        ]
-      }
-    },
-    {
-      id: 'INC-002',
-      title: 'Database Connection Pool Exhausted',
-      service: { name: 'user-service' },
-      severity: 'high',
-      status: 'resolved',
-      created_at: '2024-06-21T08:15:00Z',
-      resolved_at: '2024-06-21T09:45:00Z',
-      assignee: 'Jane Smith',
-      ai_analysis: {
-        summary: 'Claude recommended connection pool size increase',
-        confidence_score: 0.88,
-        recommendations: [
-          'Increase connection pool size',
-          'Add connection pooling metrics',
-          'Set up alerting for pool exhaustion'
-        ]
-      }
-    }
-  ];
+  // Fetch real incidents from API
+  const { data: incidentsData, isLoading } = useQuery({
+    queryKey: queryKeys.incidents(),
+    queryFn: () => apiClient.getIncidents(),
+    refetchInterval: 30000, // Refetch every 30 seconds
+  });
+  
+  const incidents = incidentsData?.incidents || [];
 
   // WebSocket for real-time updates - DISABLED
   // useWebSocket({
@@ -443,37 +412,13 @@ export default function IncidentsPage() {
               {expandedIncident === incident.id && (
                 <CardContent className="pt-0">
                   <div className="border-t pt-4">
+                    {/* Full AI Analysis Display */}
+                    <IncidentAIAnalysis 
+                      incidentId={incident.id}
+                      className="mb-6"
+                    />
+                    
                     <div className="grid gap-6 md:grid-cols-2">
-                      {/* AI Analysis */}
-                      <div>
-                        <h4 className="font-medium mb-3 flex items-center gap-2">
-                          <Bot className="h-4 w-4" />
-                          AI Analysis
-                        </h4>
-                        <div className="space-y-3">
-                          <div className="p-3 bg-blue-50 rounded-lg">
-                            <p className="text-sm">{incident.ai_analysis?.summary}</p>
-                            <div className="flex items-center gap-2 mt-2">
-                              <Shield className="h-3 w-3" />
-                              <span className="text-xs">
-                                Confidence: {Math.round((incident.ai_analysis?.confidence_score || 0) * 100)}%
-                              </span>
-                            </div>
-                          </div>
-                          
-                          <div>
-                            <h5 className="text-sm font-medium mb-2">Recommendations:</h5>
-                            <ul className="space-y-1">
-                              {incident.ai_analysis?.recommendations?.map((rec, index) => (
-                                <li key={index} className="text-sm text-gray-600 flex items-start gap-2">
-                                  <span className="text-blue-500">•</span>
-                                  {rec}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        </div>
-                      </div>
 
                       {/* Actions */}
                       <div>
@@ -504,7 +449,11 @@ export default function IncidentsPage() {
                                 <RotateCcw className="h-4 w-4 mr-2" />
                                 Restart Service
                               </Button>
-                              <Button size="sm" className="w-full">
+                              <Button 
+                                size="sm" 
+                                className="w-full"
+                                onClick={() => resolveMutation.mutate(incident.id)}
+                              >
                                 <CheckCircle className="h-4 w-4 mr-2" />
                                 Mark as Resolved
                               </Button>
@@ -547,15 +496,15 @@ export default function IncidentsPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid gap-3">
-              <Button variant="outline" onClick={() => toast.success('Mock critical incident triggered')}>
+              <Button variant="outline" onClick={() => triggerMockMutation.mutate('critical server_down')}>
                 <AlertCircle className="h-4 w-4 mr-2" />
                 Critical: Server Down
               </Button>
-              <Button variant="outline" onClick={() => toast.success('Mock high incident triggered')}>
+              <Button variant="outline" onClick={() => triggerMockMutation.mutate('high database_error')}>
                 <AlertTriangle className="h-4 w-4 mr-2" />
                 High: Database Error
               </Button>
-              <Button variant="outline" onClick={() => toast.success('Mock medium incident triggered')}>
+              <Button variant="outline" onClick={() => triggerMockMutation.mutate('medium memory_usage')}>
                 <Info className="h-4 w-4 mr-2" />
                 Medium: High Memory Usage
               </Button>

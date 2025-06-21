@@ -14,8 +14,11 @@ from src.oncall_agent.api.models import (
     PagerDutyWebhookPayload,
 )
 from src.oncall_agent.api.oncall_agent_trigger import OncallAgentTrigger
+from src.oncall_agent.api.routers.incidents import INCIDENTS_DB, ANALYSIS_DB
+from src.oncall_agent.api.schemas import Incident, IncidentStatus, Severity, AIAnalysis
 from src.oncall_agent.config import get_config
 from src.oncall_agent.utils import get_logger
+from datetime import datetime, UTC
 
 router = APIRouter(prefix="/webhook", tags=["webhooks"])
 logger = get_logger(__name__)
@@ -148,27 +151,101 @@ async def pagerduty_webhook(
                     }
                 )
 
+                # Store incident in our database
+                severity_map = {
+                    "low": Severity.LOW,
+                    "medium": Severity.MEDIUM, 
+                    "high": Severity.HIGH,
+                    "critical": Severity.CRITICAL
+                }
+                
+                # Create incident record
+                inc_record = Incident(
+                    id=incident.id,
+                    title=incident.title,
+                    description=incident.description or "",
+                    severity=severity_map.get(incident.urgency.lower(), Severity.HIGH),
+                    status=IncidentStatus.TRIGGERED,
+                    service_name=incident.service.name if incident.service else "unknown",
+                    alert_source="pagerduty",
+                    created_at=datetime.now(UTC),
+                    metadata={
+                        "incident_number": incident.incident_number,
+                        "html_url": incident.html_url,
+                        "webhook_event": v3_payload.event.event_type
+                    },
+                    timeline=[{
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "event": "incident_created",
+                        "description": f"Incident triggered via PagerDuty webhook"
+                    }]
+                )
+                
+                INCIDENTS_DB[incident.id] = inc_record
+                
                 # Process immediately
                 result = await trigger.trigger_oncall_agent(
                     incident,
                     {"webhook_event": v3_payload.event.event_type}
                 )
 
-                # Log the agent's analysis for visibility
-                if result.get("status") == "success" and result.get("agent_response", {}).get("analysis"):
+                # Store the analysis result
+                if result.get("status") == "success" and result.get("agent_response"):
+                    agent_response = result["agent_response"]
+                    
+                    # Store full analysis data
+                    ANALYSIS_DB[incident.id] = {
+                        "incident_id": incident.id,
+                        "status": "analyzed",
+                        "analysis": agent_response.get("analysis", ""),
+                        "parsed_analysis": agent_response.get("parsed_analysis", {}),
+                        "confidence_score": agent_response.get("confidence_score", 0.85),
+                        "risk_level": agent_response.get("risk_level", "medium"),
+                        "context_gathered": agent_response.get("context_gathered", {}),
+                        "full_context": agent_response.get("full_context", {}),
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "processing_time": result.get("processing_time", 0)
+                    }
+                    
+                    # Update incident with AI analysis
+                    inc_record.ai_analysis = AIAnalysis(
+                        summary=agent_response.get("parsed_analysis", {}).get("root_cause", ["Analysis processing"])[0] if agent_response.get("parsed_analysis", {}).get("root_cause") else "AI analysis completed",
+                        root_cause=" ".join(agent_response.get("parsed_analysis", {}).get("root_cause", [])),
+                        impact_assessment=" ".join(agent_response.get("parsed_analysis", {}).get("impact", [])),
+                        recommended_actions=[
+                            {
+                                "action": action,
+                                "reason": "AI recommended action",
+                                "priority": "high" if i < 2 else "medium"
+                            }
+                            for i, action in enumerate(agent_response.get("parsed_analysis", {}).get("immediate_actions", [])[:5])
+                        ],
+                        confidence_score=agent_response.get("confidence_score", 0.85),
+                        related_incidents=[],
+                        knowledge_base_references=[]
+                    )
+                    
+                    # Add to timeline
+                    inc_record.timeline.append({
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "event": "ai_analysis_complete",
+                        "description": f"AI analysis completed with {agent_response.get('confidence_score', 0.85)*100:.0f}% confidence",
+                        "automated": True
+                    })
+                    
                     logger.info("\n" + "="*80)
                     logger.info("🤖 AGENT ANALYSIS COMPLETE:")
                     logger.info("="*80)
-                    analysis = result["agent_response"]["analysis"]
+                    analysis = agent_response.get("analysis", "")
                     for line in analysis.split('\n'):
                         if line.strip():
                             logger.info(line)
                     logger.info("="*80 + "\n")
 
                     # Log context gathered
-                    if result.get("agent_response", {}).get("context_gathered"):
+                    if agent_response.get("context_gathered"):
                         logger.info("📊 Context gathered from integrations:")
-                        for integration, success in result["agent_response"]["context_gathered"].items():
+                        for integration, success in agent_response["context_gathered"].items():
                             logger.info(f"  - {integration}: {'✅ Success' if success else '❌ Failed'}")
 
                 results.append(result)
