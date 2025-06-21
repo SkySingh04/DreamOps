@@ -1,0 +1,140 @@
+# AI Assistant Instructions for Oncall Agent Codebase
+
+This document provides instructions for AI assistants (like Claude, GPT-4, etc.) on how to effectively work with this codebase.
+
+## Project Overview
+
+This is an oncall AI agent built with:
+- **AGNO Framework**: For building AI agents
+- **Claude API**: For intelligent incident analysis
+- **MCP (Model Context Protocol)**: For integrating with external tools
+- **Python AsyncIO**: For concurrent operations
+- **uv**: For package management
+
+## Key Architecture Decisions
+
+1. **Modular MCP Integrations**: All integrations extend `MCPIntegration` base class in `src/oncall_agent/mcp_integrations/base.py`
+2. **Async-First**: All operations are async to handle concurrent MCP calls efficiently
+3. **Configuration-Driven**: Uses pydantic for config validation and environment variables
+4. **Type-Safe**: Extensive use of type hints throughout the codebase
+
+## Working with the Codebase
+
+### When Adding New MCP Integrations
+
+1. **Always extend the base class**:
+   ```python
+   from src.oncall_agent.mcp_integrations.base import MCPIntegration
+   ```
+
+2. **Follow the established pattern**:
+   - Implement all abstract methods
+   - Use the retry mechanism for network operations
+   - Log all operations appropriately
+   - Handle errors gracefully
+
+3. **File location**: Create new integrations in `src/oncall_agent/mcp_integrations/`
+
+### Code Style Guidelines
+
+- Use descriptive variable names
+- Add type hints to all functions
+- Include docstrings for all public methods
+- Follow PEP 8 conventions
+- Use `async/await` for all I/O operations
+
+### Common Patterns in This Codebase
+
+1. **Error Handling**:
+   ```python
+   try:
+       result = await operation()
+   except Exception as e:
+       self.logger.error(f"Operation failed: {e}")
+       return {"error": str(e)}
+   ```
+
+2. **Configuration Access**:
+   ```python
+   from src.oncall_agent.config import get_config
+   config = get_config()
+   ```
+
+3. **Logging**:
+   ```python
+   from src.oncall_agent.utils import get_logger
+   logger = get_logger(__name__)
+   ```
+
+## Important Files to Understand
+
+1. **`src/oncall_agent/agent.py`**: Core agent logic, study this to understand the main flow
+2. **`src/oncall_agent/mcp_integrations/base.py`**: Base class defining the MCP interface
+3. **`src/oncall_agent/config.py`**: Configuration schema and defaults
+4. **`main.py`**: Entry point showing how to use the agent
+
+## Testing Approach
+
+When asked to test changes:
+1. Check if `.env` exists, if not copy from `.env.example`
+2. Ensure `ANTHROPIC_API_KEY` is set
+3. Run with: `uv run python main.py`
+4. For specific integrations, create mock implementations first
+
+## Common Tasks
+
+### Adding a New MCP Integration
+1. Create file in `src/oncall_agent/mcp_integrations/`
+2. Extend `MCPIntegration` base class
+3. Implement all abstract methods
+4. Add configuration to `.env.example`
+5. Update README.md with usage instructions
+
+### Modifying Alert Handling
+1. Look at `PagerAlert` model in `agent.py`
+2. Modify `handle_pager_alert` method
+3. Update the prompt sent to Claude if needed
+
+### Adding New Configuration Options
+1. Add to `Config` class in `config.py`
+2. Add to `.env.example` with description
+3. Document in README.md
+
+## Dependencies and Tools
+
+- **uv**: Package manager (use `uv add <package>` to add dependencies)
+- **AGNO**: Agent framework (check their docs for advanced features)
+- **Anthropic**: Claude API client
+- **Pydantic**: Data validation and settings
+
+## Debugging Tips
+
+1. Set `LOG_LEVEL=DEBUG` in `.env` for verbose logging
+2. Check agent state with `agent.mcp_integrations` dictionary
+3. Use `agent.health_check()` on integrations to verify connectivity
+
+## Future Architecture Considerations
+
+The codebase is designed to support:
+- Multiple alert sources (not just pagers)
+- Different LLM backends (not just Claude)
+- Plugin-based remediation actions
+- Distributed agent deployment
+
+When making changes, keep these future directions in mind.
+
+## Questions to Ask When Working on This Codebase
+
+1. Is this operation async? (It probably should be)
+2. Does this need retry logic? (Network operations do)
+3. Is this configuration that should be in `.env`?
+4. Have I added appropriate logging?
+5. Have I updated the README for user-facing changes?
+
+## Common Pitfalls to Avoid
+
+1. Don't make synchronous network calls
+2. Don't hardcode configuration values
+3. Don't forget to validate connection state before operations
+4. Don't catch exceptions without logging them
+5. Don't forget to update type hints when changing function signatures
