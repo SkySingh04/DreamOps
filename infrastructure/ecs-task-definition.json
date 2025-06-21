@@ -46,11 +46,11 @@
         }
       },
       "healthCheck": {
-        "command": ["CMD-SHELL", "python -c 'import sys; sys.exit(0)'"],
+        "command": ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"],
         "interval": 30,
         "timeout": 5,
         "retries": 3,
-        "startPeriod": 60
+        "startPeriod": 120
       }
     }
   ]

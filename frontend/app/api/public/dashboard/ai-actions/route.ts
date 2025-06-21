@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
       // Create default team if not exists
       const newTeam = await db.insert(teams).values({
         name: 'Default Team',
-        subscription_status: 'trial',
+        subscriptionStatus: 'trial',
       }).returning();
       teamId = newTeam[0].id;
     } else {

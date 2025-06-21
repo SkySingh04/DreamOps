@@ -19,8 +19,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState } from 'react'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
+// import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+// import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 interface AIAnalysisDisplayProps {
   analysis: string
@@ -121,17 +121,9 @@ function CodeBlock({ code }: { code: string }) {
       >
         {copied ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
       </Button>
-      <SyntaxHighlighter
-        language="bash"
-        style={oneDark}
-        customStyle={{
-          margin: 0,
-          borderRadius: '0.375rem',
-          fontSize: '0.875rem',
-        }}
-      >
-        {code}
-      </SyntaxHighlighter>
+      <pre className="bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto text-sm">
+        <code>{code}</code>
+      </pre>
     </div>
   )
 }
