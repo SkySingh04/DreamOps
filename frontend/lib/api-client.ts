@@ -170,6 +170,77 @@ class APIClient {
     });
   }
 
+  // Safety and Risk Management endpoints
+  async getSafetyConfig(): Promise<APIResponse<any>> {
+    return this.request<any>('/api/v1/agent/safety-config');
+  }
+
+  async updateSafetyConfig(config: any): Promise<APIResponse<any>> {
+    return this.request<any>('/api/v1/agent/safety-config', {
+      method: 'PUT',
+      body: JSON.stringify(config),
+    });
+  }
+
+  async executeDryRun(actionPlan: any[]): Promise<APIResponse<any[]>> {
+    return this.request<any[]>('/api/v1/agent/dry-run', {
+      method: 'POST',
+      body: JSON.stringify(actionPlan),
+    });
+  }
+
+  async calculateConfidence(incidentData: any): Promise<APIResponse<any>> {
+    return this.request<any>('/api/v1/agent/confidence-score', {
+      method: 'POST',
+      body: JSON.stringify(incidentData),
+    });
+  }
+
+  async assessRisk(actionType: string, actionDetails: any = {}): Promise<APIResponse<any>> {
+    return this.request<any>('/api/v1/agent/risk-assessment', {
+      method: 'POST',
+      body: JSON.stringify({ action_type: actionType, action_details: actionDetails }),
+    });
+  }
+
+  async getPendingApprovals(): Promise<APIResponse<any[]>> {
+    return this.request<any[]>('/api/v1/agent/approvals/pending');
+  }
+
+  async approveAction(approvalId: string, comments: string = ''): Promise<APIResponse<any>> {
+    return this.request<any>(`/api/v1/agent/approvals/${approvalId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ comments }),
+    });
+  }
+
+  async rejectAction(approvalId: string, comments: string = ''): Promise<APIResponse<any>> {
+    return this.request<any>(`/api/v1/agent/approvals/${approvalId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ comments }),
+    });
+  }
+
+  async getActionHistory(): Promise<APIResponse<any[]>> {
+    return this.request<any[]>('/api/v1/agent/action-history');
+  }
+
+  async rollbackAction(actionId: string): Promise<APIResponse<any>> {
+    return this.request<any>(`/api/v1/agent/rollback/${actionId}`, {
+      method: 'POST',
+    });
+  }
+
+  async rollbackLastAction(): Promise<APIResponse<any>> {
+    return this.request<any>('/api/v1/agent/rollback-last', {
+      method: 'POST',
+    });
+  }
+
+  async getConfidenceHistory(): Promise<APIResponse<any[]>> {
+    return this.request<any[]>('/api/v1/agent/confidence-history');
+  }
+
   // Integration endpoints
   async getIntegrations(): Promise<APIResponse<Integration[]>> {
     return this.request<Integration[]>('/api/v1/integrations');
@@ -333,6 +404,10 @@ export const queryKeys = {
   integration: (id: string) => ['integration', id],
   aiConfig: ['ai-agent', 'config'],
   agentStatus: ['ai-agent', 'status'],
+  safetyConfig: ['ai-agent', 'safety-config'],
+  pendingApprovals: ['ai-agent', 'approvals', 'pending'],
+  actionHistory: ['ai-agent', 'action-history'],
+  confidenceHistory: ['ai-agent', 'confidence-history'],
   analytics: (params?: any) => ['analytics', params],
   serviceHealth: (service?: string) => ['analytics', 'services', service],
   patterns: ['analytics', 'patterns'],
