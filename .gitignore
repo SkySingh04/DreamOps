@@ -26,7 +26,56 @@ frontend/yarn-error.log*
 
 # IDEs
 .vscode/
-.idea/
+*.code-workspace
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Project specific
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# GitHub MCP Server (external dependency - DO NOT COMMIT)
+github-mcp-server
+github-mcp-server.exe
+github-mcp-server-*
+/oncall/github-mcp-server/
+../github-mcp-server/
+**/github-mcp-server
+
+# Repository cache for offline access
+/tmp/oncall_repos/
+cache/
+repos_cache/
+*.git-cache/
+
+# UV
+.uv/
+
+# Temporary files
+*.tmp
+*.temp
 *.swp
 *.swo
 *~
