@@ -33,7 +33,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global agent instance
+# Global agent instance (deprecated - use api_server.py instead)
 agent: OncallAgent | None = None
 
 

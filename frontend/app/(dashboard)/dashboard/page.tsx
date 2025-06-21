@@ -85,6 +85,13 @@ export default function DashboardPage() {
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
+  // Fetch dashboard stats
+  const { data: statsData } = useQuery({
+    queryKey: queryKeys.dashboardStats,
+    queryFn: () => apiClient.getDashboardStats(),
+    refetchInterval: 30000,
+  });
+
   // Fetch recent incidents
   const { data: incidentsData } = useQuery({
     queryKey: queryKeys.incidents({ limit: 10 }),
@@ -95,6 +102,13 @@ export default function DashboardPage() {
   const { data: integrationsData } = useQuery({
     queryKey: queryKeys.integrations,
     queryFn: () => apiClient.getIntegrations(),
+  });
+
+  // Fetch activity feed
+  const { data: activityData } = useQuery({
+    queryKey: queryKeys.activityFeed,
+    queryFn: () => apiClient.getActivityFeed(10),
+    refetchInterval: 10000,
   });
 
   // WebSocket connection for real-time updates
@@ -111,8 +125,16 @@ export default function DashboardPage() {
     ...realtimeMetrics,
   } as DashboardMetrics;
 
-  const incidents = incidentsData?.data || [];
+  const stats = statsData?.data || {
+    total_incidents: 0,
+    active_incidents: 0,
+    mttr_minutes: 0,
+    ai_success_rate: 0,
+  };
+
+  const incidents = incidentsData?.data?.incidents || [];
   const integrations = integrationsData?.data || [];
+  const activities = activityData?.data || [];
 
   // Calculate integration health
   const integrationHealth = integrations.reduce(
@@ -186,12 +208,12 @@ export default function DashboardPage() {
       </div>
 
       {/* Alert for critical incidents */}
-      {metrics?.active_incidents > 0 && (
+      {stats.active_incidents > 0 && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Active Incidents</AlertTitle>
           <AlertDescription>
-            There are {metrics.active_incidents} active incidents requiring attention.
+            There are {stats.active_incidents} active incidents requiring attention.
           </AlertDescription>
         </Alert>
       )}
@@ -204,9 +226,9 @@ export default function DashboardPage() {
             <AlertCircle className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{metrics?.active_incidents || 0}</div>
+            <div className="text-2xl font-bold">{stats.active_incidents}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              {metrics?.active_incidents > 0 ? 'Requires immediate attention' : 'All clear'}
+              {stats.active_incidents > 0 ? 'Requires immediate attention' : 'All clear'}
             </p>
           </CardContent>
         </Card>
@@ -226,10 +248,10 @@ export default function DashboardPage() {
             <CheckCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{metrics?.resolved_today || 0}</div>
-            <Progress value={metrics?.success_rate || 0} className="mt-2" />
+            <div className="text-2xl font-bold">{stats.resolved_today || 0}</div>
+            <Progress value={stats.ai_success_rate || 0} className="mt-2" />
             <p className="text-xs text-muted-foreground mt-1">
-              {metrics?.success_rate || 0}% success rate
+              {stats.ai_success_rate || 0}% success rate
             </p>
           </CardContent>
         </Card>
@@ -248,7 +270,7 @@ export default function DashboardPage() {
             <Clock className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{metrics?.avg_resolution_time || '0m'}</div>
+            <div className="text-2xl font-bold">{stats.mttr_minutes}m</div>
             <p className="text-xs text-muted-foreground mt-1">
               <TrendingDown className="h-3 w-3 text-green-600 inline mr-1" />
               15% faster than last week
@@ -271,7 +293,7 @@ export default function DashboardPage() {
             <Zap className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{metrics?.time_saved_hours || 0}h</div>
+            <div className="text-2xl font-bold">{stats.time_saved_hours || 0}h</div>
             <p className="text-xs text-muted-foreground mt-1">
               By AI automation this month
             </p>
@@ -518,30 +540,36 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="flex items-start gap-3 text-sm">
-                  <Info className="h-4 w-4 text-blue-600 mt-0.5" />
-                  <div>
-                    <p className="font-medium">Analyzed K8s pod crash</p>
-                    <p className="text-muted-foreground">Identified OOM issue, recommended memory limit increase</p>
-                    <p className="text-xs text-muted-foreground mt-1">2 minutes ago</p>
+                {activities.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Activity className="h-12 w-12 mx-auto mb-4" />
+                    <p>No recent AI agent activity</p>
                   </div>
-                </div>
-                <div className="flex items-start gap-3 text-sm">
-                  <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
-                  <div>
-                    <p className="font-medium">Auto-resolved API timeout</p>
-                    <p className="text-muted-foreground">Scaled service replicas from 3 to 5</p>
-                    <p className="text-xs text-muted-foreground mt-1">15 minutes ago</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 text-sm">
-                  <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
-                  <div>
-                    <p className="font-medium">Requested approval for database restart</p>
-                    <p className="text-muted-foreground">High-risk action requires manual approval</p>
-                    <p className="text-xs text-muted-foreground mt-1">1 hour ago</p>
-                  </div>
-                </div>
+                ) : (
+                  activities.map((activity: any, index: number) => {
+                    const Icon = activity.status === 'success' ? CheckCircle :
+                                activity.status === 'warning' ? AlertTriangle :
+                                activity.status === 'info' ? Info :
+                                AlertCircle;
+                    const iconColor = activity.status === 'success' ? 'text-green-600' :
+                                    activity.status === 'warning' ? 'text-yellow-600' :
+                                    activity.status === 'info' ? 'text-blue-600' :
+                                    'text-red-600';
+                    
+                    return (
+                      <div key={index} className="flex items-start gap-3 text-sm">
+                        <Icon className={`h-4 w-4 ${iconColor} mt-0.5`} />
+                        <div>
+                          <p className="font-medium">{activity.action}</p>
+                          <p className="text-muted-foreground">{activity.description}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {activity.timestamp ? format(new Date(activity.timestamp), 'PP p') : 'Unknown time'}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </CardContent>
           </Card>

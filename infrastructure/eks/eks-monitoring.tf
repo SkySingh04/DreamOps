@@ -1,20 +1,20 @@
 # EKS CloudWatch Container Insights and PagerDuty Integration
 # This file adds comprehensive monitoring for the EKS cluster with PagerDuty alerts
 
-# CloudWatch Log Groups for Container Insights
-resource "aws_cloudwatch_log_group" "eks_cluster" {
-  name              = "/aws/eks/${var.project_name}-eks/cluster"
-  retention_in_days = 7
-  
-  tags = {
-    Name        = "${var.project_name}-eks-cluster-logs"
-    Environment = var.environment
-  }
+# Reference existing CloudWatch Log Groups created by EKS
+data "aws_cloudwatch_log_group" "eks_cluster" {
+  name = "/aws/eks/${var.project_name}-eks/cluster"
 }
 
+# Create additional log groups for Container Insights if they don't exist
 resource "aws_cloudwatch_log_group" "eks_application" {
   name              = "/aws/containerinsights/${var.project_name}-eks/application"
   retention_in_days = 7
+  
+  lifecycle {
+    ignore_changes = [name]
+    prevent_destroy = true
+  }
   
   tags = {
     Name        = "${var.project_name}-eks-application-logs"
@@ -26,6 +26,11 @@ resource "aws_cloudwatch_log_group" "eks_host" {
   name              = "/aws/containerinsights/${var.project_name}-eks/host"
   retention_in_days = 7
   
+  lifecycle {
+    ignore_changes = [name]
+    prevent_destroy = true
+  }
+  
   tags = {
     Name        = "${var.project_name}-eks-host-logs"
     Environment = var.environment
@@ -35,6 +40,11 @@ resource "aws_cloudwatch_log_group" "eks_host" {
 resource "aws_cloudwatch_log_group" "eks_dataplane" {
   name              = "/aws/containerinsights/${var.project_name}-eks/dataplane"
   retention_in_days = 7
+  
+  lifecycle {
+    ignore_changes = [name]
+    prevent_destroy = true
+  }
   
   tags = {
     Name        = "${var.project_name}-eks-dataplane-logs"

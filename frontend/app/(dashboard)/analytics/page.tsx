@@ -120,6 +120,8 @@ export default function AnalyticsPage() {
       total_saved: 0,
       breakdown: [],
     },
+    severity_distribution: [],
+    hourly_trend: [],
   };
 
   // Calculate summary metrics

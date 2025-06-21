@@ -52,9 +52,14 @@ $RECYCLE.BIN/
 
 # Project specific
 *.log
+*.pyc
 *.pid
 *.seed
 *.pid.lock
+
+#pycache
+__pycache__/
+*.pyc
 
 # GitHub MCP Server (external dependency - DO NOT COMMIT)
 github-mcp-server

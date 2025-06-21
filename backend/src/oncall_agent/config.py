@@ -20,6 +20,14 @@ class Config(BaseSettings):
     # MCP integration settings
     mcp_timeout: int = Field(30, env="MCP_TIMEOUT")  # seconds
     mcp_retry_attempts: int = Field(3, env="MCP_RETRY_ATTEMPTS")
+    mcp_max_retries: int = Field(3, env="MCP_MAX_RETRIES")
+    mcp_retry_delay: float = Field(1.0, env="MCP_RETRY_DELAY")
+    
+    # GitHub MCP settings
+    github_token: Optional[str] = Field(None, env="GITHUB_TOKEN")
+    github_mcp_server_path: Optional[str] = Field(None, env="GITHUB_MCP_SERVER_PATH")
+    github_mcp_host: str = Field("localhost", env="GITHUB_MCP_HOST")
+    github_mcp_port: int = Field(8081, env="GITHUB_MCP_PORT")
     
     # Notion MCP settings
     notion_token: Optional[str] = Field(None, env="NOTION_TOKEN")
@@ -54,6 +62,12 @@ class Config(BaseSettings):
     # Webhook settings
     webhook_rate_limit: int = Field(100, env="WEBHOOK_RATE_LIMIT")  # requests per minute
     webhook_allowed_ips: Optional[str] = Field(None, env="WEBHOOK_ALLOWED_IPS")  # comma-separated
+    
+    # Additional settings
+    debug: bool = Field(False, env="DEBUG")
+    aws_profile: Optional[str] = Field(None, env="AWS_PROFILE")
+    aws_default_region: str = Field("us-east-1", env="AWS_DEFAULT_REGION")
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
