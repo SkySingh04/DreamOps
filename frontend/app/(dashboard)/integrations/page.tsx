@@ -188,6 +188,19 @@ export default function IntegrationsPage() {
 
   const getIntegrationConfig = (id: string) => INTEGRATION_CONFIGS[id as keyof typeof INTEGRATION_CONFIGS];
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'connected':
+        return 'bg-green-100 text-green-800';
+      case 'error':
+        return 'bg-red-100 text-red-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'connected':
@@ -277,7 +290,7 @@ export default function IntegrationsPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-blue-100 rounded-lg">
-                      <Icon className="h-6 w-6 text-blue-600" />
+                      {Icon && <Icon className="h-6 w-6 text-blue-600" />}
                     </div>
                     <div>
                       <CardTitle className="text-lg">{integration.name}</CardTitle>

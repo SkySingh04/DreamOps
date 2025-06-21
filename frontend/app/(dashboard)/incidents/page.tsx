@@ -168,6 +168,34 @@ export default function IncidentsPage() {
     },
   });
 
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case 'critical':
+        return 'bg-red-100 text-red-800';
+      case 'high':
+        return 'bg-orange-100 text-orange-800';
+      case 'medium':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'low':
+        return 'bg-blue-100 text-blue-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active':
+        return 'bg-red-100 text-red-800';
+      case 'resolved':
+        return 'bg-green-100 text-green-800';
+      case 'monitoring':
+        return 'bg-yellow-100 text-yellow-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
   const filteredIncidents = incidents.filter((incident: any) => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -298,7 +326,7 @@ export default function IncidentsPage() {
           </div>
         </div>
         
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
+        <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as any)}>
           <SelectTrigger className="w-40">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
@@ -310,7 +338,7 @@ export default function IncidentsPage() {
           </SelectContent>
         </Select>
 
-        <Select value={filterSeverity} onValueChange={setFilterSeverity}>
+        <Select value={filterSeverity} onValueChange={(value) => setFilterSeverity(value as any)}>
           <SelectTrigger className="w-40">
             <SelectValue placeholder="Severity" />
           </SelectTrigger>
