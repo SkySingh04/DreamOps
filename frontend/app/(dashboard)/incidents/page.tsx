@@ -214,7 +214,7 @@ export default function IncidentsPage() {
     },
   });
 
-  const incidents = incidentsData?.data || [];
+  const incidents = incidentsData?.data?.incidents || [];
   const filteredIncidents = incidents.filter(incident => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();

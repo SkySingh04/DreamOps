@@ -11,6 +11,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.oncall_agent.api import webhooks
+from src.oncall_agent.api.routers import (
+    dashboard_router,
+    incidents_router,
+    agent_router,
+    integrations_router,
+    analytics_router,
+    security_router,
+    monitoring_router,
+    settings_router
+)
 from src.oncall_agent.config import get_config
 from src.oncall_agent.utils import get_logger
 
@@ -118,9 +128,22 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # Include routers
+# Always include core routers
+app.include_router(dashboard_router, prefix="/api/v1")
+app.include_router(incidents_router, prefix="/api/v1")
+app.include_router(agent_router, prefix="/api/v1")
+app.include_router(integrations_router, prefix="/api/v1")
+app.include_router(analytics_router, prefix="/api/v1")
+app.include_router(security_router, prefix="/api/v1")
+app.include_router(monitoring_router, prefix="/api/v1")
+app.include_router(settings_router, prefix="/api/v1")
+
+# Conditionally include webhook router
 if config.pagerduty_enabled:
     app.include_router(webhooks.router)
     logger.info("PagerDuty webhook routes registered")
+
+logger.info("All API routes registered successfully")
 
 
 def signal_handler(sig, frame):
