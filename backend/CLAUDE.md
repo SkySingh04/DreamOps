@@ -9,6 +9,7 @@ This is an oncall AI agent built with:
 - **Claude API**: For intelligent incident analysis
 - **MCP (Model Context Protocol)**: For integrating with external tools
 - **Python AsyncIO**: For concurrent operations
+- **FastAPI**: For webhook endpoints and API server
 - **uv**: For package management
 
 ## Key Architecture Decisions
@@ -102,11 +103,19 @@ When asked to test changes:
 2. Add to `.env.example` with description
 3. Document in README.md
 
+### Working with PagerDuty Integration
+1. **Webhook Handler**: `src/oncall_agent/api/webhooks.py` - FastAPI routes for PagerDuty
+2. **Context Parser**: `src/oncall_agent/api/alert_context_parser.py` - Extracts technical details
+3. **Agent Trigger**: `src/oncall_agent/api/oncall_agent_trigger.py` - Bridges webhooks to agent
+4. **API Server**: `api_server.py` - FastAPI application entry point
+5. **Testing**: `test_pagerduty_alerts.py` - Generate test webhooks
+
 ## Commands
 
 ### Development Commands
 - **Install dependencies**: `uv sync`
 - **Run the agent**: `uv run python main.py`
+- **Run API server**: `uv run python api_server.py`
 - **Add dependency**: `uv add <package>`
 - **Add dev dependency**: `uv add --dev <package>`
 - **Check environment**: `uv run python test_run.py`
@@ -114,6 +123,10 @@ When asked to test changes:
 ### Testing and Validation
 - **Run demo**: `uv run python main.py` (runs a simulated alert through the agent)
 - **Validate setup**: `uv run python test_run.py` (checks Python version, packages, env vars)
+- **Test PagerDuty webhooks**: `uv run python test_pagerduty_alerts.py --all`
+- **API health check**: `curl http://localhost:8000/health`
+- **Kind cluster setup**: `./setup-k8s-demo.sh` (deploys test K8s apps)
+- **End-to-end K8s test**: `uv run python test_k8s_pagerduty_integration.py` (monitors cluster and sends alerts)
 
 ## Dependencies and Tools
 
@@ -167,6 +180,17 @@ When making changes, keep these future directions in mind.
 3. Is this configuration that should be in `.env`?
 4. Have I added appropriate logging?
 5. Have I updated the README for user-facing changes?
+
+## Kubernetes Testing with Kind
+
+When testing Kubernetes integration:
+1. **Kind Setup**: Use `kind-config.yaml` for cluster creation with proper port mappings
+2. **Demo Apps**: Deploy `k8s-demo-apps.yaml` to create various failure scenarios
+3. **Environment**: Use `.env.kind` for Kind-specific configuration
+4. **Monitoring**: `test_k8s_pagerduty_integration.py` monitors cluster and sends alerts
+5. **Scenarios**: Test apps simulate CrashLoopBackOff, ImagePullBackOff, OOMKilled, etc.
+
+The integration flow: K8s issue → Monitor detects → PagerDuty webhook → API server → Oncall Agent → Claude analysis
 
 ## Common Pitfalls to Avoid
 

@@ -1,12 +1,11 @@
 """Main agent logic using AGNO framework for oncall incident response."""
 
-import asyncio
 import logging
 import re
-from typing import Dict, Any, List, Optional
-from pydantic import BaseModel
+from typing import Any
 
 from anthropic import AsyncAnthropic
+from pydantic import BaseModel
 
 from .config import get_config
 from .mcp_integrations.base import MCPIntegration
@@ -20,21 +19,21 @@ class PagerAlert(BaseModel):
     service_name: str
     description: str
     timestamp: str
-    metadata: Dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
 
 
 class OncallAgent:
     """AI agent for handling oncall incidents using AGNO framework."""
-    
+
     def __init__(self):
         """Initialize the oncall agent with configuration."""
         self.config = get_config()
         self.logger = logging.getLogger(__name__)
-        self.mcp_integrations: Dict[str, MCPIntegration] = {}
-        
+        self.mcp_integrations: dict[str, MCPIntegration] = {}
+
         # Initialize Anthropic client
         self.anthropic_client = AsyncAnthropic(api_key=self.config.anthropic_api_key)
-        
+
         # Define Kubernetes alert patterns
         self.k8s_alert_patterns = {
             "pod_crash": re.compile(r"(Pod|pod).*(?:CrashLoopBackOff|crash|restarting)", re.IGNORECASE),
@@ -45,17 +44,17 @@ class OncallAgent:
             "deployment_failed": re.compile(r"(Deployment|deployment).*(?:failed|failing|error)", re.IGNORECASE),
             "node_issue": re.compile(r"(Node|node).*(?:NotReady|unreachable|down)", re.IGNORECASE),
         }
-        
+
         # Initialize Kubernetes integration if enabled
         if self.config.k8s_enabled:
             self.k8s_integration = KubernetesMCPIntegration()
             self.register_mcp_integration("kubernetes", self.k8s_integration)
-    
+
     def register_mcp_integration(self, name: str, integration: MCPIntegration) -> None:
         """Register an MCP integration with the agent."""
         self.logger.info(f"Registering MCP integration: {name}")
         self.mcp_integrations[name] = integration
-    
+
     async def connect_integrations(self) -> None:
         """Connect all registered MCP integrations."""
         for name, integration in self.mcp_integrations.items():
@@ -64,22 +63,22 @@ class OncallAgent:
                 self.logger.info(f"Connected to MCP integration: {name}")
             except Exception as e:
                 self.logger.error(f"Failed to connect to {name}: {e}")
-    
-    async def handle_pager_alert(self, alert: PagerAlert) -> Dict[str, Any]:
+
+    async def handle_pager_alert(self, alert: PagerAlert) -> dict[str, Any]:
         """Handle an incoming pager alert."""
         self.logger.info(f"Handling pager alert: {alert.alert_id} for service: {alert.service_name}")
-        
+
         try:
             # Detect if this is a Kubernetes-related alert
             k8s_alert_type = self._detect_k8s_alert_type(alert.description)
             k8s_context = {}
-            
+
             if k8s_alert_type and "kubernetes" in self.mcp_integrations:
                 self.logger.info(f"Detected Kubernetes alert type: {k8s_alert_type}")
-                
+
                 # Gather Kubernetes-specific context based on alert type
                 k8s_context = await self._gather_k8s_context(alert, k8s_alert_type)
-                
+
             # Create a prompt for Claude to analyze the alert
             prompt = f"""
             Analyze this oncall alert and provide a response plan:
@@ -101,9 +100,9 @@ class OncallAgent:
             4. Potential root causes
             5. Escalation criteria
             
-            {f"For this Kubernetes issue, also suggest specific kubectl commands or automated fixes." if k8s_alert_type else ""}
+            {"For this Kubernetes issue, also suggest specific kubectl commands or automated fixes." if k8s_alert_type else ""}
             """
-            
+
             # Use Claude for analysis
             response = await self.anthropic_client.messages.create(
                 model=self.config.claude_model,
@@ -112,10 +111,10 @@ class OncallAgent:
                     {"role": "user", "content": prompt}
                 ]
             )
-            
+
             # Extract the response
             analysis = response.content[0].text if response.content else "No analysis available"
-            
+
             # Create response structure
             result = {
                 "alert_id": alert.alert_id,
@@ -126,16 +125,16 @@ class OncallAgent:
                 "k8s_alert_type": k8s_alert_type,
                 "k8s_context": k8s_context
             }
-            
+
             # If it's a Kubernetes alert and we have confidence, suggest automated actions
             if k8s_alert_type and k8s_context.get("automated_actions"):
                 result["suggested_actions"] = k8s_context["automated_actions"]
-                
+
             # Log the handling
             self.logger.info(f"Alert {alert.alert_id} analyzed successfully")
-            
+
             return result
-            
+
         except Exception as e:
             self.logger.error(f"Error handling alert {alert.alert_id}: {e}")
             return {
@@ -143,24 +142,24 @@ class OncallAgent:
                 "status": "error",
                 "error": str(e)
             }
-    
-    def _detect_k8s_alert_type(self, description: str) -> Optional[str]:
+
+    def _detect_k8s_alert_type(self, description: str) -> str | None:
         """Detect if an alert is Kubernetes-related and return the type."""
         for alert_type, pattern in self.k8s_alert_patterns.items():
             if pattern.search(description):
                 return alert_type
         return None
-        
-    async def _gather_k8s_context(self, alert: PagerAlert, alert_type: str) -> Dict[str, Any]:
+
+    async def _gather_k8s_context(self, alert: PagerAlert, alert_type: str) -> dict[str, Any]:
         """Gather Kubernetes-specific context based on alert type."""
         k8s = self.mcp_integrations.get("kubernetes")
         if not k8s:
             return {}
-            
+
         context = {"alert_type": alert_type}
         metadata = alert.metadata
         namespace = metadata.get("namespace", "default")
-        
+
         try:
             if alert_type == "pod_crash":
                 pod_name = metadata.get("pod_name")
@@ -168,15 +167,15 @@ class OncallAgent:
                     # Get pod logs
                     logs = await k8s.get_pod_logs(pod_name, namespace, tail_lines=100)
                     context["pod_logs"] = logs
-                    
+
                     # Get pod events
                     events = await k8s.get_pod_events(pod_name, namespace)
                     context["pod_events"] = events
-                    
+
                     # Get pod description
                     description = await k8s.describe_pod(pod_name, namespace)
                     context["pod_description"] = description
-                    
+
                     # Suggest automated actions
                     context["automated_actions"] = [
                         {
@@ -193,21 +192,21 @@ class OncallAgent:
                         p for p in pods.get("pods", [])
                         if p.get("status") in ["CrashLoopBackOff", "Error"]
                     ]
-                    
+
             elif alert_type == "image_pull":
                 pod_name = metadata.get("pod_name")
                 if pod_name:
                     events = await k8s.get_pod_events(pod_name, namespace)
                     context["pod_events"] = events
                     context["recommendation"] = "Check image name, registry credentials, and network connectivity"
-                    
+
             elif alert_type in ["high_memory", "high_cpu"]:
                 # Get resource usage
                 deployment_name = metadata.get("deployment_name")
                 if deployment_name:
                     deployment_status = await k8s.get_deployment_status(deployment_name, namespace)
                     context["deployment_status"] = deployment_status
-                    
+
                     # Suggest scaling
                     current_replicas = deployment_status.get("deployment", {}).get("replicas", {}).get("desired", 1)
                     context["automated_actions"] = [
@@ -222,12 +221,12 @@ class OncallAgent:
                             "reason": f"High {alert_type.split('_')[1]} usage, scaling up may help"
                         }
                     ]
-                    
+
             elif alert_type == "service_down":
                 service_name = metadata.get("service_name", alert.service_name)
                 service_status = await k8s.get_service_status(service_name, namespace)
                 context["service_status"] = service_status
-                
+
                 # Check if pods are running
                 if service_status.get("service", {}).get("endpoint_count", 0) == 0:
                     context["issue"] = "No endpoints available for service"
@@ -240,13 +239,13 @@ class OncallAgent:
                             if all(p.get("labels", {}).get(k) == v for k, v in selector.items())
                         ]
                         context["matching_pods"] = matching_pods
-                        
+
             elif alert_type == "deployment_failed":
                 deployment_name = metadata.get("deployment_name")
                 if deployment_name:
                     deployment_status = await k8s.get_deployment_status(deployment_name, namespace)
                     context["deployment_status"] = deployment_status
-                    
+
                     # Check if rollback is needed
                     if not deployment_status.get("deployment", {}).get("healthy", True):
                         context["automated_actions"] = [
@@ -260,13 +259,13 @@ class OncallAgent:
                                 "reason": "Deployment is unhealthy, rolling back to previous version"
                             }
                         ]
-                        
+
         except Exception as e:
             self.logger.error(f"Error gathering Kubernetes context: {e}")
             context["error"] = str(e)
-            
+
         return context
-    
+
     async def shutdown(self) -> None:
         """Shutdown the agent and disconnect integrations."""
         self.logger.info("Shutting down oncall agent")

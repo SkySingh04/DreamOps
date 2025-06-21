@@ -1,0 +1,51 @@
+# App 4: CPU Throttling - High CPU Usage
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cpu-intensive-app
+  namespace: test-apps
+  labels:
+    app: cpu-intensive
+    issue: cpu-throttling
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cpu-intensive
+  template:
+    metadata:
+      labels:
+        app: cpu-intensive
+    spec:
+      containers:
+      - name: cpu-burner
+        image: busybox
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - |
+            echo "Starting CPU intensive workload..."
+            while true; do
+              # Infinite loop to consume CPU
+              echo "scale=5000; 4*a(1)" | awk 'BEGIN {for(i=0;i<100000000;i++){}}' > /dev/null 2>&1
+            done
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"  # Requesting only 100m
+          limits:
+            memory: "128Mi"
+            cpu: "200m"  # But will try to use much more!
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cpu-intensive-app
+  namespace: test-apps
+spec:
+  selector:
+    app: cpu-intensive
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080

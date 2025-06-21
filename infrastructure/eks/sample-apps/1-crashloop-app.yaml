@@ -1,0 +1,60 @@
+# App 1: CrashLoopBackOff - Missing ConfigMap
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: config-missing-app
+  namespace: test-apps
+  labels:
+    app: config-missing
+    issue: missing-configmap
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: config-missing
+  template:
+    metadata:
+      labels:
+        app: config-missing
+    spec:
+      containers:
+      - name: app
+        image: busybox:latest
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - |
+            echo "Loading configuration from /config/app.conf..."
+            if [ ! -f /config/app.conf ]; then
+              echo "ERROR: Configuration file /config/app.conf not found!"
+              exit 1
+            fi
+            echo "Configuration loaded successfully"
+            while true; do sleep 30; done
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+      volumes:
+      - name: config
+        configMap:
+          name: app-config  # This ConfigMap doesn't exist!
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: config-missing-app
+  namespace: test-apps
+spec:
+  selector:
+    app: config-missing
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080

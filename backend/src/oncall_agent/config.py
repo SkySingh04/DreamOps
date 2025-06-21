@@ -1,31 +1,35 @@
 """Configuration management for the oncall agent."""
 
-import os
 from typing import Optional
-from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
+from pydantic import Field
+from pydantic_settings import BaseSettings
 
 
 class Config(BaseSettings):
     """Application configuration."""
-    
+
     # Anthropic/Claude settings
     anthropic_api_key: str = Field(..., env="ANTHROPIC_API_KEY")
     claude_model: str = Field("claude-3-5-sonnet-20241022", env="CLAUDE_MODEL")
-    
+
     # Agent settings
     agent_name: str = Field("oncall-agent", env="AGENT_NAME")
     log_level: str = Field("INFO", env="LOG_LEVEL")
-    
+
     # MCP integration settings
     mcp_timeout: int = Field(30, env="MCP_TIMEOUT")  # seconds
     mcp_retry_attempts: int = Field(3, env="MCP_RETRY_ATTEMPTS")
     
+    # Notion MCP settings
+    notion_token: Optional[str] = Field(None, env="NOTION_TOKEN")
+    notion_database_id: Optional[str] = Field(None, env="NOTION_DATABASE_ID")
+    notion_version: str = Field("2022-06-28", env="NOTION_VERSION")
+    
     # Alert handling settings
     alert_auto_acknowledge: bool = Field(False, env="ALERT_AUTO_ACKNOWLEDGE")
     alert_priority_threshold: str = Field("high", env="ALERT_PRIORITY_THRESHOLD")
-    
+
     # Kubernetes settings
     k8s_enabled: bool = Field(True, env="K8S_ENABLED")
     k8s_config_path: str = Field("~/.kube/config", env="K8S_CONFIG_PATH")
@@ -34,17 +38,32 @@ class Config(BaseSettings):
     k8s_mcp_server_url: str = Field("http://localhost:8080", env="K8S_MCP_SERVER_URL")
     k8s_enable_destructive_operations: bool = Field(False, env="K8S_ENABLE_DESTRUCTIVE_OPERATIONS")
     
+    # PagerDuty integration settings
+    pagerduty_webhook_secret: Optional[str] = Field(None, env="PAGERDUTY_WEBHOOK_SECRET")
+    pagerduty_api_key: Optional[str] = Field(None, env="PAGERDUTY_API_KEY")
+    pagerduty_enabled: bool = Field(True, env="PAGERDUTY_ENABLED")
+    
+    # API server settings
+    api_host: str = Field("0.0.0.0", env="API_HOST")
+    api_port: int = Field(8000, env="API_PORT")
+    api_reload: bool = Field(False, env="API_RELOAD")
+    api_workers: int = Field(1, env="API_WORKERS")
+    api_log_level: str = Field("info", env="API_LOG_LEVEL")
+    
+    # Webhook settings
+    webhook_rate_limit: int = Field(100, env="WEBHOOK_RATE_LIMIT")  # requests per minute
+    webhook_allowed_ips: Optional[str] = Field(None, env="WEBHOOK_ALLOWED_IPS")  # comma-separated
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
-        
+
     def get(self, key: str, default=None):
         """Get config value by key (for backward compatibility)."""
         return getattr(self, key.lower(), default)
 
 
-_config: Optional[Config] = None
+_config: Config | None = None
 
 
 def get_config() -> Config:
