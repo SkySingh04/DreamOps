@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: broken-database-app
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: broken-database
+  template:
+    metadata:
+      labels:
+        app: broken-database
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:14
+        env:
+        - name: POSTGRES_PASSWORD
+          value: ""  # Missing required password - will crash
+        ports:
+        - containerPort: 5432
