@@ -2,8 +2,8 @@
 """Test various EKS failure scenarios with the Oncall Agent."""
 
 import asyncio
-from datetime import UTC, datetime
 import sys
+from datetime import UTC, datetime
 
 from src.oncall_agent.agent import OncallAgent, PagerAlert
 from src.oncall_agent.utils import setup_logging
@@ -32,7 +32,7 @@ async def test_eks_scenario(scenario_name: str, alert: PagerAlert):
             if 'error' not in ctx:
                 print("📊 Context gathered from EKS cluster")
                 if ctx.get('automated_actions'):
-                    print(f"🔧 Suggested actions: {len(ctx['automated_actions'])}") 
+                    print(f"🔧 Suggested actions: {len(ctx['automated_actions'])}")
                     for action in ctx['automated_actions']:
                         print(f"   - {action['action']} (confidence: {action['confidence']})")
 
@@ -71,7 +71,7 @@ async def main():
         ),
 
         "oom-kill": PagerAlert(
-            alert_id="EKS-002", 
+            alert_id="EKS-002",
             severity="high",
             service_name="memory-hog-app",
             description="Pod memory-hog-app-55b6f9cfb5-h5ftt restarting due to OOMKilled in namespace test-apps",
@@ -171,5 +171,5 @@ if __name__ == "__main__":
     print("2. Deployed test apps (./infrastructure/eks/deploy-sample-apps.sh)")
     print("3. Updated .env with correct K8S_CONTEXT and K8S_NAMESPACE=test-apps")
     print("4. AWS credentials configured")
-    
+
     asyncio.run(main())

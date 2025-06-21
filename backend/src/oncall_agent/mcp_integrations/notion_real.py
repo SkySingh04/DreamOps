@@ -1,19 +1,19 @@
 """Real Notion MCP integration using MCP protocol communication."""
 
+import asyncio
 import json
 import subprocess
-import asyncio
-from typing import Dict, Any, List, Optional
-from datetime import datetime
 import uuid
+from datetime import datetime
+from typing import Any
 
 from .base import MCPIntegration
 
 
 class NotionRealMCPIntegration(MCPIntegration):
     """Notion MCP integration using real MCP protocol communication."""
-    
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+
+    def __init__(self, config: dict[str, Any] | None = None):
         """Initialize Notion MCP integration.
         
         Args:
@@ -23,14 +23,14 @@ class NotionRealMCPIntegration(MCPIntegration):
                 - notion_version: API version (default: 2022-06-28)
         """
         super().__init__("notion", config)
-        self.process: Optional[subprocess.Popen] = None
+        self.process: subprocess.Popen | None = None
         self.notion_token = self.config.get("notion_token")
         self.database_id = self.config.get("database_id")
         self.notion_version = self.config.get("notion_version", "2022-06-28")
-        
+
         if not self.notion_token:
             raise ValueError("notion_token is required in config")
-    
+
     async def connect(self) -> None:
         """Connect to the Notion MCP server."""
         try:
@@ -42,7 +42,7 @@ class NotionRealMCPIntegration(MCPIntegration):
                     "Notion-Version": self.notion_version
                 })
             }
-            
+
             # Start the Notion MCP server process
             self.process = subprocess.Popen(
                 ["npx", "-y", "@notionhq/notion-mcp-server"],
@@ -53,15 +53,15 @@ class NotionRealMCPIntegration(MCPIntegration):
                 env=env,
                 bufsize=0
             )
-            
+
             # Wait for the server to be ready
             await asyncio.sleep(3)
-            
+
             # Check if process is still running
             if self.process.poll() is not None:
                 stderr = self.process.stderr.read() if self.process.stderr else ""
                 raise ConnectionError(f"Notion MCP server failed to start: {stderr}")
-            
+
             # Send initialization request
             init_request = {
                 "jsonrpc": "2.0",
@@ -72,7 +72,7 @@ class NotionRealMCPIntegration(MCPIntegration):
                 },
                 "id": 1
             }
-            
+
             response = await self._send_request(init_request)
             if response and response.get("result"):
                 self.connected = True
@@ -80,11 +80,11 @@ class NotionRealMCPIntegration(MCPIntegration):
                 self.logger.info("Connected to Notion MCP server")
             else:
                 raise ConnectionError("Failed to initialize MCP connection")
-            
+
         except Exception as e:
             self.logger.error(f"Failed to connect to Notion MCP: {e}")
             raise ConnectionError(f"Failed to connect to Notion MCP: {e}")
-    
+
     async def disconnect(self) -> None:
         """Disconnect from the Notion MCP server."""
         if self.process:
@@ -95,36 +95,36 @@ class NotionRealMCPIntegration(MCPIntegration):
                 self.process.kill()
                 self.process.wait()
             self.process = None
-        
+
         self.connected = False
         self.connection_time = None
         self.logger.info("Disconnected from Notion MCP server")
-    
-    async def _send_request(self, request: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+
+    async def _send_request(self, request: dict[str, Any]) -> dict[str, Any] | None:
         """Send a JSON-RPC request to the MCP server."""
         if not self.process or not self.process.stdin or not self.process.stdout:
             raise ConnectionError("MCP server process not running")
-        
+
         try:
             # Send request
             request_str = json.dumps(request) + "\n"
             self.process.stdin.write(request_str)
             self.process.stdin.flush()
-            
+
             # Read response
             response_str = self.process.stdout.readline()
             if response_str:
                 return json.loads(response_str)
             return None
-            
+
         except Exception as e:
             self.logger.error(f"Error communicating with MCP server: {e}")
             return None
-    
-    async def fetch_context(self, context_type: str, **kwargs) -> Dict[str, Any]:
+
+    async def fetch_context(self, context_type: str, **kwargs) -> dict[str, Any]:
         """Fetch context information from Notion using MCP protocol."""
         self.validate_connection()
-        
+
         if context_type == "search":
             return await self._search_notion(**kwargs)
         elif context_type == "get_page":
@@ -133,11 +133,11 @@ class NotionRealMCPIntegration(MCPIntegration):
             return await self._get_database(**kwargs)
         else:
             raise ValueError(f"Unsupported context type: {context_type}")
-    
-    async def execute_action(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
+
+    async def execute_action(self, action: str, params: dict[str, Any]) -> dict[str, Any]:
         """Execute an action in Notion using MCP protocol."""
         self.validate_connection()
-        
+
         if action == "create_page":
             return await self._create_page(**params)
         elif action == "update_page":
@@ -146,8 +146,8 @@ class NotionRealMCPIntegration(MCPIntegration):
             return await self._create_database_item(**params)
         else:
             raise ValueError(f"Unsupported action: {action}")
-    
-    async def get_capabilities(self) -> Dict[str, List[str]]:
+
+    async def get_capabilities(self) -> dict[str, list[str]]:
         """Get capabilities of the Notion integration."""
         # Request tool list from MCP server
         list_tools_request = {
@@ -156,23 +156,23 @@ class NotionRealMCPIntegration(MCPIntegration):
             "params": {},
             "id": str(uuid.uuid4())
         }
-        
+
         response = await self._send_request(list_tools_request)
-        
+
         if response and response.get("result"):
             tools = response["result"].get("tools", [])
             tool_names = [tool["name"] for tool in tools]
-            
+
             # Categorize tools
             context_types = []
             actions = []
-            
+
             for name in tool_names:
                 if any(x in name for x in ["search", "retrieve", "get", "list"]):
                     context_types.append(name)
                 else:
                     actions.append(name)
-            
+
             return {
                 "context_types": context_types[:10],  # Limit for display
                 "actions": actions[:10],
@@ -183,15 +183,15 @@ class NotionRealMCPIntegration(MCPIntegration):
                     "page_operations"
                 ]
             }
-        
+
         # Fallback if MCP request fails
         return {
             "context_types": ["search", "get_page", "get_database"],
             "actions": ["create_page", "update_page", "create_database_item"],
             "features": ["incident_documentation", "real_notion_api"]
         }
-    
-    async def _search_notion(self, query: str, **kwargs) -> Dict[str, Any]:
+
+    async def _search_notion(self, query: str, **kwargs) -> dict[str, Any]:
         """Search Notion using MCP protocol."""
         request = {
             "jsonrpc": "2.0",
@@ -206,11 +206,11 @@ class NotionRealMCPIntegration(MCPIntegration):
             },
             "id": str(uuid.uuid4())
         }
-        
+
         response = await self._send_request(request)
         return response.get("result", {}) if response else {}
-    
-    async def _get_page(self, page_id: str, **kwargs) -> Dict[str, Any]:
+
+    async def _get_page(self, page_id: str, **kwargs) -> dict[str, Any]:
         """Get a Notion page using MCP protocol."""
         request = {
             "jsonrpc": "2.0",
@@ -223,11 +223,11 @@ class NotionRealMCPIntegration(MCPIntegration):
             },
             "id": str(uuid.uuid4())
         }
-        
+
         response = await self._send_request(request)
         return response.get("result", {}) if response else {}
-    
-    async def _get_database(self, database_id: str, **kwargs) -> Dict[str, Any]:
+
+    async def _get_database(self, database_id: str, **kwargs) -> dict[str, Any]:
         """Get a Notion database using MCP protocol."""
         request = {
             "jsonrpc": "2.0",
@@ -240,17 +240,17 @@ class NotionRealMCPIntegration(MCPIntegration):
             },
             "id": str(uuid.uuid4())
         }
-        
+
         response = await self._send_request(request)
         return response.get("result", {}) if response else {}
-    
-    async def _create_page(self, **params) -> Dict[str, Any]:
+
+    async def _create_page(self, **params) -> dict[str, Any]:
         """Create a Notion page using MCP protocol."""
         # Construct page creation request
         parent = params.get("parent", {})
         properties = params.get("properties", {})
         children = params.get("children", [])
-        
+
         request = {
             "jsonrpc": "2.0",
             "method": "tools/call",
@@ -264,14 +264,14 @@ class NotionRealMCPIntegration(MCPIntegration):
             },
             "id": str(uuid.uuid4())
         }
-        
+
         response = await self._send_request(request)
         return response.get("result", {}) if response else {}
-    
-    async def _update_page(self, page_id: str, **params) -> Dict[str, Any]:
+
+    async def _update_page(self, page_id: str, **params) -> dict[str, Any]:
         """Update a Notion page using MCP protocol."""
         properties = params.get("properties", {})
-        
+
         request = {
             "jsonrpc": "2.0",
             "method": "tools/call",
@@ -284,18 +284,18 @@ class NotionRealMCPIntegration(MCPIntegration):
             },
             "id": str(uuid.uuid4())
         }
-        
+
         response = await self._send_request(request)
         return response.get("result", {}) if response else {}
-    
-    async def _create_database_item(self, **params) -> Dict[str, Any]:
+
+    async def _create_database_item(self, **params) -> dict[str, Any]:
         """Create a database item using MCP protocol."""
         database_id = params.get("database_id", self.database_id)
         properties = params.get("properties", {})
-        
+
         if not database_id:
             raise ValueError("database_id is required")
-        
+
         request = {
             "jsonrpc": "2.0",
             "method": "tools/call",
@@ -308,11 +308,11 @@ class NotionRealMCPIntegration(MCPIntegration):
             },
             "id": str(uuid.uuid4())
         }
-        
+
         response = await self._send_request(request)
         return response.get("result", {}) if response else {}
-    
-    async def create_incident_documentation(self, alert_data: Dict[str, Any]) -> Dict[str, Any]:
+
+    async def create_incident_documentation(self, alert_data: dict[str, Any]) -> dict[str, Any]:
         """Create incident documentation in Notion using real API."""
         try:
             # Create properties for the incident page
@@ -325,7 +325,7 @@ class NotionRealMCPIntegration(MCPIntegration):
                     }]
                 }
             }
-            
+
             # Create children blocks for the page content
             children = [
                 {
@@ -375,7 +375,7 @@ class NotionRealMCPIntegration(MCPIntegration):
                     }
                 }
             ]
-            
+
             # Determine parent (database or page)
             parent = {}
             if self.database_id:
@@ -383,14 +383,14 @@ class NotionRealMCPIntegration(MCPIntegration):
             else:
                 # If no database_id, create as a standalone page
                 parent = {"page_id": "root"}  # This would need to be a real page ID
-            
+
             # Create the page
             result = await self._create_page(
                 parent=parent,
                 properties=properties,
                 children=children
             )
-            
+
             if result:
                 self.logger.info(f"Created incident page with ID: {result.get('id')}")
                 return {
@@ -404,7 +404,7 @@ class NotionRealMCPIntegration(MCPIntegration):
                     "success": False,
                     "error": "Failed to create page"
                 }
-            
+
         except Exception as e:
             self.logger.error(f"Failed to create incident documentation: {e}")
             return {

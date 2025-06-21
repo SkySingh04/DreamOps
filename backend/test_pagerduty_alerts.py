@@ -5,12 +5,12 @@ import asyncio
 import json
 import random
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
+
 from src.oncall_agent.config import get_config
 from src.oncall_agent.utils import get_logger
-
 
 logger = get_logger(__name__)
 config = get_config()
@@ -18,11 +18,11 @@ config = get_config()
 
 class MockPagerDutyAlertGenerator:
     """Generate realistic PagerDuty webhook payloads for testing."""
-    
-    def __init__(self, webhook_url: Optional[str] = None):
+
+    def __init__(self, webhook_url: str | None = None):
         self.webhook_url = webhook_url or f"http://localhost:{config.api_port}/webhook/pagerduty"
         self.incident_counter = 1000
-        
+
         # Alert templates
         self.alert_templates = {
             "database": [
@@ -150,17 +150,17 @@ class MockPagerDutyAlertGenerator:
                 }
             ]
         }
-    
-    def generate_incident(self, alert_type: Optional[str] = None, urgency: str = "high") -> Dict[str, Any]:
+
+    def generate_incident(self, alert_type: str | None = None, urgency: str = "high") -> dict[str, Any]:
         """Generate a single PagerDuty incident."""
         if not alert_type:
             alert_type = random.choice(list(self.alert_templates.keys()))
-        
+
         template = random.choice(self.alert_templates[alert_type])
         self.incident_counter += 1
-        
+
         incident_id = f"Q{self.incident_counter}ABCD"
-        
+
         return {
             "id": incident_id,
             "incident_number": self.incident_counter,
@@ -172,7 +172,7 @@ class MockPagerDutyAlertGenerator:
             "service": {
                 "id": f"P{random.randint(100000, 999999)}",
                 "name": f"{alert_type}-service",
-                "html_url": f"https://example.pagerduty.com/services/P123456",
+                "html_url": "https://example.pagerduty.com/services/P123456",
                 "summary": f"Service handling {alert_type} operations"
             },
             "urgency": urgency,
@@ -184,12 +184,12 @@ class MockPagerDutyAlertGenerator:
             "custom_details": template["custom_details"],
             "html_url": f"https://example.pagerduty.com/incidents/{incident_id}"
         }
-    
-    def generate_webhook_payload(self, incidents: List[Dict[str, Any]], 
-                               event: str = "incident.triggered") -> Dict[str, Any]:
+
+    def generate_webhook_payload(self, incidents: list[dict[str, Any]],
+                               event: str = "incident.triggered") -> dict[str, Any]:
         """Generate a complete PagerDuty webhook payload."""
         messages = []
-        
+
         for incident in incidents:
             messages.append({
                 "id": f"msg-{incident['id']}",
@@ -204,13 +204,13 @@ class MockPagerDutyAlertGenerator:
                     }
                 ]
             })
-        
+
         return {
             "messages": messages,
             "event": event
         }
-    
-    async def send_webhook(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+
+    async def send_webhook(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Send webhook to the API server."""
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:
@@ -226,7 +226,7 @@ class MockPagerDutyAlertGenerator:
                         hashlib.sha256
                     ).hexdigest()
                     headers["X-PagerDuty-Signature"] = signature
-                
+
                 response = await client.post(
                     self.webhook_url,
                     json=payload,
@@ -237,22 +237,22 @@ class MockPagerDutyAlertGenerator:
             except Exception as e:
                 logger.error(f"Error sending webhook: {e}")
                 return {"error": str(e)}
-    
-    async def test_single_alert(self, alert_type: Optional[str] = None, urgency: str = "high"):
+
+    async def test_single_alert(self, alert_type: str | None = None, urgency: str = "high"):
         """Test with a single alert."""
         incident = self.generate_incident(alert_type, urgency)
         payload = self.generate_webhook_payload([incident])
-        
+
         logger.info(f"Sending test alert: {incident['title']}")
         result = await self.send_webhook(payload)
-        
+
         if "error" not in result:
             logger.info(f"✓ Alert sent successfully: {result}")
         else:
             logger.error(f"✗ Failed to send alert: {result}")
-        
+
         return result
-    
+
     async def test_batch_alerts(self, count: int = 5):
         """Test with multiple alerts."""
         incidents = []
@@ -260,23 +260,23 @@ class MockPagerDutyAlertGenerator:
             alert_type = random.choice(list(self.alert_templates.keys()))
             urgency = random.choice(["high", "medium", "low"])
             incidents.append(self.generate_incident(alert_type, urgency))
-        
+
         payload = self.generate_webhook_payload(incidents)
-        
+
         logger.info(f"Sending batch of {count} alerts")
         result = await self.send_webhook(payload)
-        
+
         if "error" not in result:
             logger.info(f"✓ Batch sent successfully: {result}")
         else:
             logger.error(f"✗ Failed to send batch: {result}")
-        
+
         return result
-    
+
     async def test_all_types(self):
         """Test one alert of each type."""
         results = []
-        
+
         for alert_type in self.alert_templates.keys():
             logger.info(f"\nTesting {alert_type} alert...")
             result = await self.test_single_alert(alert_type)
@@ -286,22 +286,22 @@ class MockPagerDutyAlertGenerator:
                 "result": result
             })
             await asyncio.sleep(1)  # Small delay between alerts
-        
+
         # Summary
         success_count = sum(1 for r in results if r["success"])
         logger.info(f"\n{'='*50}")
         logger.info(f"Test Summary: {success_count}/{len(results)} alerts processed successfully")
-        
+
         return results
-    
+
     async def stress_test(self, duration_seconds: int = 30, alerts_per_second: float = 1.0):
         """Stress test the webhook endpoint."""
         logger.info(f"Starting stress test: {alerts_per_second} alerts/sec for {duration_seconds}s")
-        
+
         start_time = asyncio.get_event_loop().time()
         alerts_sent = 0
         errors = 0
-        
+
         while asyncio.get_event_loop().time() - start_time < duration_seconds:
             try:
                 await self.test_single_alert()
@@ -309,11 +309,11 @@ class MockPagerDutyAlertGenerator:
             except Exception as e:
                 logger.error(f"Error during stress test: {e}")
                 errors += 1
-            
+
             await asyncio.sleep(1.0 / alerts_per_second)
-        
+
         elapsed = asyncio.get_event_loop().time() - start_time
-        logger.info(f"\nStress Test Results:")
+        logger.info("\nStress Test Results:")
         logger.info(f"  Duration: {elapsed:.1f}s")
         logger.info(f"  Alerts sent: {alerts_sent}")
         logger.info(f"  Errors: {errors}")
@@ -325,7 +325,7 @@ async def main():
     """Main test runner."""
     parser = argparse.ArgumentParser(description="Test PagerDuty webhook integration")
     parser.add_argument("--url", default=None, help="Webhook URL (default: http://localhost:8000/webhook/pagerduty)")
-    parser.add_argument("--type", choices=["database", "server", "security", "network", "kubernetes"], 
+    parser.add_argument("--type", choices=["database", "server", "security", "network", "kubernetes"],
                        help="Alert type to test")
     parser.add_argument("--urgency", choices=["high", "medium", "low"], default="high",
                        help="Alert urgency")
@@ -333,12 +333,12 @@ async def main():
     parser.add_argument("--all", action="store_true", help="Test all alert types")
     parser.add_argument("--stress", type=int, help="Run stress test for N seconds")
     parser.add_argument("--rate", type=float, default=1.0, help="Alerts per second for stress test")
-    
+
     args = parser.parse_args()
-    
+
     # Initialize generator
     generator = MockPagerDutyAlertGenerator(args.url)
-    
+
     # Check API health first
     async with httpx.AsyncClient() as client:
         try:
@@ -350,7 +350,7 @@ async def main():
             logger.error(f"API not reachable: {e}")
             logger.error("Make sure the API server is running: uv run python api_server.py")
             return
-    
+
     # Run tests
     if args.all:
         await generator.test_all_types()

@@ -1,14 +1,15 @@
 """Dashboard API endpoints."""
 
-from datetime import datetime, timedelta, UTC
-from typing import Dict, List, Any
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from src.oncall_agent.api.schemas import (
-    DashboardStats, DashboardMetric, MetricValue,
-    Severity, IncidentStatus
+    DashboardMetric,
+    DashboardStats,
+    MetricValue,
 )
 from src.oncall_agent.utils import get_logger
 
@@ -17,7 +18,7 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
 # Mock data for now - replace with actual database queries
-def get_mock_incidents_data() -> Dict[str, Any]:
+def get_mock_incidents_data() -> dict[str, Any]:
     """Get mock incident data for dashboard."""
     return {
         "total": 156,
@@ -39,7 +40,7 @@ async def get_dashboard_stats() -> DashboardStats:
     try:
         # Mock data - replace with actual queries
         incidents = get_mock_incidents_data()
-        
+
         return DashboardStats(
             incidents_total=incidents["total"],
             incidents_active=incidents["active"],
@@ -72,7 +73,7 @@ async def get_incident_metrics(
         else:  # 30d
             start_time = now - timedelta(days=30)
             points = 30
-        
+
         # Generate mock trend data
         trend_data = []
         for i in range(points):
@@ -82,7 +83,7 @@ async def get_incident_metrics(
                 value=value,
                 timestamp=timestamp
             ))
-        
+
         return DashboardMetric(
             name="incident_count",
             current_value=3,
@@ -105,7 +106,7 @@ async def get_resolution_time_metrics(
         current_mttr = 45.5
         previous_mttr = 52.3
         change_pct = ((current_mttr - previous_mttr) / previous_mttr) * 100
-        
+
         # Generate trend
         now = datetime.now(UTC)
         trend_data = []
@@ -116,7 +117,7 @@ async def get_resolution_time_metrics(
                 value=value,
                 timestamp=timestamp
             ))
-        
+
         return DashboardMetric(
             name="mttr",
             current_value=current_mttr,
@@ -163,18 +164,18 @@ async def get_activity_feed(
         # Mock activity data
         activities = []
         now = datetime.now(UTC)
-        
+
         activity_types = [
             {"type": "incident_created", "message": "New incident: {title}"},
             {"type": "incident_resolved", "message": "Incident resolved: {title}"},
             {"type": "action_executed", "message": "Automated action: {action} on {service}"},
             {"type": "integration_alert", "message": "Integration alert: {integration} - {message}"},
         ]
-        
+
         for i in range(limit):
             activity_type = activity_types[i % len(activity_types)]
             timestamp = now - timedelta(minutes=i*5)
-            
+
             activity = {
                 "id": f"activity-{i}",
                 "timestamp": timestamp.isoformat(),
@@ -190,7 +191,7 @@ async def get_activity_feed(
                 "user": "system" if i % 2 == 0 else f"user{i % 3}@example.com"
             }
             activities.append(activity)
-        
+
         return JSONResponse(content={
             "activities": activities,
             "total": len(activities)
@@ -214,7 +215,7 @@ async def get_top_affected_services(
             {"name": "notification-service", "incidents": 12, "trend": "up"},
             {"name": "search-service", "incidents": 8, "trend": "down"},
         ]
-        
+
         return JSONResponse(content={
             "services": services[:limit],
             "period": "last_30_days"
@@ -230,17 +231,17 @@ async def get_severity_distribution() -> JSONResponse:
     try:
         # Mock severity data
         incidents_data = get_mock_incidents_data()
-        
+
         total = sum(incidents_data["by_severity"].values())
         distribution = []
-        
+
         for severity, count in incidents_data["by_severity"].items():
             distribution.append({
                 "severity": severity,
                 "count": count,
                 "percentage": round((count / total) * 100, 1) if total > 0 else 0
             })
-        
+
         return JSONResponse(content={
             "distribution": distribution,
             "total": total

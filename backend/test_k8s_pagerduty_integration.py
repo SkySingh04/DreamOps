@@ -9,25 +9,23 @@ This script tests the complete flow:
 4. Verifies the agent's response
 """
 
+import argparse
 import asyncio
 import json
 import subprocess
-import sys
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
-import argparse
+from datetime import UTC, datetime
 
 import httpx
 
 
 class K8sMonitor:
     """Monitor Kubernetes cluster for issues."""
-    
+
     def __init__(self, namespace: str = "demo-apps"):
         self.namespace = namespace
         self.known_issues = {}
-        
-    def run_kubectl(self, *args) -> Dict:
+
+    def run_kubectl(self, *args) -> dict:
         """Run kubectl command and return parsed JSON output."""
         cmd = ["kubectl", "-n", self.namespace] + list(args) + ["-o", "json"]
         try:
@@ -38,16 +36,16 @@ class K8sMonitor:
             return {}
         except json.JSONDecodeError:
             return {}
-    
-    def check_pods(self) -> List[Dict]:
+
+    def check_pods(self) -> list[dict]:
         """Check for pod issues and return alerts."""
         alerts = []
         pods_data = self.run_kubectl("get", "pods")
-        
+
         for pod in pods_data.get("items", []):
             pod_name = pod["metadata"]["name"]
             status = pod["status"]
-            
+
             # Check for CrashLoopBackOff
             for container_status in status.get("containerStatuses", []):
                 if container_status.get("state", {}).get("waiting", {}).get("reason") == "CrashLoopBackOff":
@@ -60,7 +58,7 @@ class K8sMonitor:
                         "namespace": self.namespace,
                         "restart_count": container_status.get('restartCount', 0)
                     })
-                
+
                 # Check for ImagePullBackOff
                 elif container_status.get("state", {}).get("waiting", {}).get("reason") == "ImagePullBackOff":
                     alerts.append({
@@ -72,7 +70,7 @@ class K8sMonitor:
                         "namespace": self.namespace,
                         "image": container_status.get('image', 'unknown')
                     })
-                
+
                 # Check for OOMKilled
                 elif container_status.get("lastState", {}).get("terminated", {}).get("reason") == "OOMKilled":
                     alerts.append({
@@ -84,22 +82,22 @@ class K8sMonitor:
                         "namespace": self.namespace,
                         "memory_limit": pod["spec"]["containers"][0].get("resources", {}).get("limits", {}).get("memory", "unknown")
                     })
-        
+
         return alerts
-    
-    def check_deployments(self) -> List[Dict]:
+
+    def check_deployments(self) -> list[dict]:
         """Check for deployment issues."""
         alerts = []
         deployments = self.run_kubectl("get", "deployments")
-        
+
         for deployment in deployments.get("items", []):
             name = deployment["metadata"]["name"]
             spec = deployment["spec"]
             status = deployment["status"]
-            
+
             desired = spec.get("replicas", 0)
             available = status.get("availableReplicas", 0)
-            
+
             # Check for zero replicas or unavailable replicas
             if desired == 0:
                 alerts.append({
@@ -122,23 +120,23 @@ class K8sMonitor:
                     "desired_replicas": desired,
                     "available_replicas": available
                 })
-        
+
         return alerts
-    
-    def check_services(self) -> List[Dict]:
+
+    def check_services(self) -> list[dict]:
         """Check for service issues."""
         alerts = []
-        
+
         # Get all services
         services = self.run_kubectl("get", "services")
-        
+
         # Get all endpoints
         endpoints = self.run_kubectl("get", "endpoints")
         endpoint_map = {ep["metadata"]["name"]: ep for ep in endpoints.get("items", [])}
-        
+
         for service in services.get("items", []):
             name = service["metadata"]["name"]
-            
+
             # Check if service has endpoints
             ep = endpoint_map.get(name, {})
             if not ep.get("subsets", []):
@@ -150,14 +148,14 @@ class K8sMonitor:
                     "service_name": name,
                     "namespace": self.namespace
                 })
-        
+
         return alerts
 
 
-def create_pagerduty_webhook(alert: Dict) -> Dict:
+def create_pagerduty_webhook(alert: dict) -> dict:
     """Convert K8s alert to PagerDuty webhook format."""
     incident_id = f"k8s-{alert.get('service', 'unknown')}-{datetime.now().timestamp():.0f}"
-    
+
     return {
         "event": {
             "id": incident_id,
@@ -167,7 +165,7 @@ def create_pagerduty_webhook(alert: Dict) -> Dict:
                 "incident_number": int(datetime.now().timestamp() % 10000),
                 "title": alert["title"],
                 "description": alert["details"],
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
                 "status": "triggered",
                 "incident_key": incident_id,
                 "service": {
@@ -179,7 +177,7 @@ def create_pagerduty_webhook(alert: Dict) -> Dict:
                 "body": {
                     "type": "incident_body",
                     "details": json.dumps({
-                        k: v for k, v in alert.items() 
+                        k: v for k, v in alert.items()
                         if k not in ["severity", "service", "title", "details"]
                     })
                 }
@@ -188,7 +186,7 @@ def create_pagerduty_webhook(alert: Dict) -> Dict:
     }
 
 
-async def send_alert_to_api(webhook_data: Dict, api_url: str = "http://localhost:8000"):
+async def send_alert_to_api(webhook_data: dict, api_url: str = "http://localhost:8000"):
     """Send PagerDuty webhook to the API."""
     async with httpx.AsyncClient() as client:
         try:
@@ -211,12 +209,12 @@ async def main():
     parser.add_argument("--namespace", default="demo-apps", help="Kubernetes namespace to monitor")
     parser.add_argument("--once", action="store_true", help="Run once instead of continuous monitoring")
     args = parser.parse_args()
-    
+
     print("🔍 Kubernetes PagerDuty Integration Test")
     print(f"📡 API URL: {args.api_url}")
     print(f"📦 Namespace: {args.namespace}")
     print("")
-    
+
     # Check API health
     async with httpx.AsyncClient() as client:
         try:
@@ -229,53 +227,53 @@ async def main():
             print("❌ Cannot connect to API server. Please ensure it's running:")
             print("   uv run python api_server.py")
             return
-    
+
     monitor = K8sMonitor(namespace=args.namespace)
     processed_alerts = set()
-    
+
     while True:
         print(f"\n🔍 Checking cluster at {datetime.now().strftime('%H:%M:%S')}...")
-        
+
         # Collect all alerts
         all_alerts = []
         all_alerts.extend(monitor.check_pods())
         all_alerts.extend(monitor.check_deployments())
         all_alerts.extend(monitor.check_services())
-        
+
         # Process new alerts
         for alert in all_alerts:
             alert_key = f"{alert['service']}-{alert['title']}"
-            
+
             if alert_key not in processed_alerts:
                 processed_alerts.add(alert_key)
-                
+
                 print(f"\n🚨 New Alert: {alert['title']}")
                 print(f"   Service: {alert['service']}")
                 print(f"   Severity: {alert['severity']}")
                 print(f"   Details: {alert['details']}")
-                
+
                 # Convert to PagerDuty format
                 webhook = create_pagerduty_webhook(alert)
-                
+
                 # Send to API
                 print("   📤 Sending to Oncall Agent...")
                 status, response = await send_alert_to_api(webhook, args.api_url)
-                
+
                 if status == 200:
                     print("   ✅ Alert processed successfully")
                     if "processing_id" in response:
                         print(f"   📋 Processing ID: {response['processing_id']}")
                 else:
                     print(f"   ❌ Failed to send alert: {response.get('error', 'Unknown error')}")
-        
+
         if not all_alerts:
             print("✅ No issues found in cluster")
         else:
             print(f"\n📊 Total active issues: {len(all_alerts)}")
-        
+
         if args.once:
             break
-            
+
         # Wait before next check
         print("\n⏳ Waiting 30 seconds before next check...")
         await asyncio.sleep(30)

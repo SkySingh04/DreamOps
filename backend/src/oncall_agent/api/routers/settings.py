@@ -1,14 +1,18 @@
 """Settings management API endpoints."""
 
-from datetime import datetime, timedelta, UTC
-from typing import Dict, Any, Optional
+from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import JSONResponse
 
 from src.oncall_agent.api.schemas import (
-    GlobalSettings, NotificationSettings, AutomationSettings,
-    IntegrationConfig, SuccessResponse, Severity, ActionType
+    ActionType,
+    AutomationSettings,
+    GlobalSettings,
+    IntegrationConfig,
+    NotificationSettings,
+    Severity,
+    SuccessResponse,
 )
 from src.oncall_agent.utils import get_logger
 
@@ -75,11 +79,11 @@ async def update_settings(
     try:
         global GLOBAL_SETTINGS
         GLOBAL_SETTINGS = settings
-        
+
         logger.info("Global settings updated")
-        
+
         # Log audit trail
-        from src.oncall_agent.api.routers.security import create_audit_log, AuditAction
+        from src.oncall_agent.api.routers.security import AuditAction, create_audit_log
         create_audit_log(
             action=AuditAction.SETTINGS_CHANGED,
             user="admin@example.com",  # In real app, get from auth
@@ -87,7 +91,7 @@ async def update_settings(
             resource_id="global",
             details={"settings": settings.dict()}
         )
-        
+
         return SuccessResponse(
             success=True,
             message="Settings updated successfully"
@@ -114,9 +118,9 @@ async def update_notification_settings(
     """Update notification settings."""
     try:
         GLOBAL_SETTINGS.notifications = settings
-        
+
         logger.info("Notification settings updated")
-        
+
         return SuccessResponse(
             success=True,
             message="Notification settings updated successfully"
@@ -143,9 +147,9 @@ async def update_automation_settings(
     """Update automation settings."""
     try:
         GLOBAL_SETTINGS.automation = settings
-        
+
         logger.info("Automation settings updated")
-        
+
         return SuccessResponse(
             success=True,
             message="Automation settings updated successfully"
@@ -207,7 +211,7 @@ async def get_escalation_policies() -> JSONResponse:
                 "active": True
             }
         ]
-        
+
         return JSONResponse(content={
             "policies": policies,
             "total": len(policies)
@@ -251,7 +255,7 @@ async def get_oncall_schedules() -> JSONResponse:
                 ]
             }
         ]
-        
+
         return JSONResponse(content={
             "schedules": schedules,
             "total": len(schedules)
@@ -315,7 +319,7 @@ async def get_templates() -> JSONResponse:
                 "estimated_duration_minutes": 120
             }
         ]
-        
+
         return JSONResponse(content={
             "templates": templates,
             "total": len(templates)
@@ -363,7 +367,7 @@ async def get_knowledge_base_settings() -> JSONResponse:
                 "max_suggestions": 5
             }
         }
-        
+
         return JSONResponse(content=kb_settings)
     except Exception as e:
         logger.error(f"Error fetching knowledge base settings: {e}")
@@ -375,7 +379,7 @@ async def create_settings_backup() -> SuccessResponse:
     """Create a backup of all settings."""
     try:
         backup_id = f"backup-{datetime.now().timestamp()}"
-        
+
         # In real implementation, save to persistent storage
         backup_data = {
             "id": backup_id,
@@ -383,9 +387,9 @@ async def create_settings_backup() -> SuccessResponse:
             "settings": GLOBAL_SETTINGS.dict(),
             "version": "1.0.0"
         }
-        
+
         logger.info(f"Created settings backup: {backup_id}")
-        
+
         return SuccessResponse(
             success=True,
             message="Settings backup created successfully",
@@ -405,7 +409,7 @@ async def restore_settings_backup(backup_id: str) -> SuccessResponse:
     try:
         # In real implementation, load from persistent storage
         logger.info(f"Restored settings from backup: {backup_id}")
-        
+
         return SuccessResponse(
             success=True,
             message=f"Settings restored from backup {backup_id}"

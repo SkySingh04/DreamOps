@@ -2,24 +2,28 @@
 
 import asyncio
 import uuid
-from datetime import datetime, UTC, timedelta
-from typing import Dict, List, Optional, Any
+from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from src.oncall_agent.api.schemas import (
-    AgentTriggerRequest, AgentResponse, AgentStatus,
-    AIAnalysis, IncidentAction, ActionType, SuccessResponse
-)
 from src.oncall_agent.agent import OncallAgent
+from src.oncall_agent.api.schemas import (
+    ActionType,
+    AgentResponse,
+    AgentStatus,
+    AgentTriggerRequest,
+    AIAnalysis,
+    IncidentAction,
+    SuccessResponse,
+)
 from src.oncall_agent.utils import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/agent", tags=["ai-agent"])
 
 # Global agent instance (shared with main API)
-agent_instance: Optional[OncallAgent] = None
+agent_instance: OncallAgent | None = None
 
 # Agent metrics storage
 AGENT_METRICS = {
@@ -45,20 +49,20 @@ async def get_agent_status() -> AgentStatus:
     """Get AI agent system status."""
     try:
         agent = await get_agent()
-        
+
         # Calculate metrics
         uptime = (datetime.now(UTC) - AGENT_METRICS["start_time"]).total_seconds()
         avg_response_time = (
             AGENT_METRICS["total_response_time_ms"] / AGENT_METRICS["incidents_processed"]
             if AGENT_METRICS["incidents_processed"] > 0 else 0
         )
-        
+
         # Get active integrations
         active_integrations = []
         for name, integration in agent.mcp_integrations.items():
             if await integration.health_check():
                 active_integrations.append(name)
-        
+
         return AgentStatus(
             status="healthy" if not AGENT_METRICS["errors"] else "degraded",
             version="1.0.0",
@@ -82,7 +86,7 @@ async def trigger_analysis(
     """Manually trigger AI analysis for an incident."""
     try:
         start_time = datetime.now(UTC)
-        
+
         # Mock analysis for now
         analysis = AIAnalysis(
             summary="Service experiencing intermittent connectivity issues with database",
@@ -112,15 +116,15 @@ async def trigger_analysis(
             related_incidents=["inc-789", "inc-790"],
             knowledge_base_references=["kb-net-001", "kb-timeout-002"]
         )
-        
+
         # Calculate execution time
         execution_time = (datetime.now(UTC) - start_time).total_seconds() * 1000
-        
+
         # Update metrics
         AGENT_METRICS["incidents_processed"] += 1
         AGENT_METRICS["total_response_time_ms"] += execution_time
         AGENT_METRICS["last_analysis"] = datetime.now(UTC)
-        
+
         # Mock automated actions
         automated_actions = []
         if request.context.get("auto_remediate", False):
@@ -130,7 +134,7 @@ async def trigger_analysis(
                 automated=True,
                 result={"status": "success", "message": "Pod restarted successfully"}
             ))
-        
+
         response = AgentResponse(
             incident_id=request.incident_id,
             analysis=analysis,
@@ -138,7 +142,7 @@ async def trigger_analysis(
             execution_time_ms=execution_time,
             tokens_used=1250  # Mock token count
         )
-        
+
         # Trigger any automated actions in background
         if automated_actions:
             background_tasks.add_task(
@@ -146,16 +150,16 @@ async def trigger_analysis(
                 request.incident_id,
                 automated_actions
             )
-        
+
         return response
-        
+
     except Exception as e:
         logger.error(f"Error during analysis: {e}")
         AGENT_METRICS["errors"].append(str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
-async def execute_automated_actions(incident_id: str, actions: List[IncidentAction]):
+async def execute_automated_actions(incident_id: str, actions: list[IncidentAction]):
     """Execute automated actions (mock implementation)."""
     for action in actions:
         logger.info(f"Executing automated action {action.action_type} for incident {incident_id}")
@@ -167,7 +171,7 @@ async def get_agent_capabilities() -> JSONResponse:
     """Get AI agent capabilities and supported actions."""
     try:
         agent = await get_agent()
-        
+
         capabilities = {
             "analysis": {
                 "root_cause_analysis": True,
@@ -206,16 +210,16 @@ async def get_agent_capabilities() -> JSONResponse:
             ],
             "integrations": {}
         }
-        
+
         # Add integration capabilities
         for name, integration in agent.mcp_integrations.items():
             capabilities["integrations"][name] = {
                 "connected": await integration.health_check(),
                 "capabilities": integration.get_capabilities()
             }
-        
+
         return JSONResponse(content=capabilities)
-        
+
     except Exception as e:
         logger.error(f"Error getting capabilities: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -230,7 +234,7 @@ async def search_knowledge_base(
     try:
         # Mock knowledge base search
         results = []
-        
+
         # Simulate different types of knowledge base entries
         kb_entries = [
             {
@@ -258,22 +262,22 @@ async def search_knowledge_base(
                 "relevance_score": 0.75
             }
         ]
-        
+
         # Filter based on query (mock relevance)
         for entry in kb_entries[:limit]:
             if query.lower() in entry["title"].lower():
                 entry["relevance_score"] = min(1.0, entry["relevance_score"] + 0.1)
             results.append(entry)
-        
+
         # Sort by relevance
         results.sort(key=lambda x: x["relevance_score"], reverse=True)
-        
+
         return JSONResponse(content={
             "query": query,
             "results": results[:limit],
             "total_results": len(results)
         })
-        
+
     except Exception as e:
         logger.error(f"Error searching knowledge base: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -304,9 +308,9 @@ async def get_learning_metrics() -> JSONResponse:
                 for i in range(7, -1, -1)
             ]
         }
-        
+
         return JSONResponse(content=metrics)
-        
+
     except Exception as e:
         logger.error(f"Error getting learning metrics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -317,7 +321,7 @@ async def submit_feedback(
     incident_id: str = Query(..., description="Incident ID"),
     helpful: bool = Query(..., description="Was the analysis helpful?"),
     accuracy: int = Query(..., ge=1, le=5, description="Accuracy rating (1-5)"),
-    comments: Optional[str] = Query(None, description="Additional comments")
+    comments: str | None = Query(None, description="Additional comments")
 ) -> SuccessResponse:
     """Submit feedback on AI analysis."""
     try:
@@ -329,15 +333,15 @@ async def submit_feedback(
             "comments": comments,
             "timestamp": datetime.now(UTC).isoformat()
         }
-        
+
         logger.info(f"Received feedback for incident {incident_id}: {feedback_data}")
-        
+
         return SuccessResponse(
             success=True,
             message="Feedback submitted successfully",
             data={"feedback_id": str(uuid.uuid4())}
         )
-        
+
     except Exception as e:
         logger.error(f"Error submitting feedback: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -365,9 +369,9 @@ async def get_agent_prompts() -> JSONResponse:
                 "example": "Identify any patterns in the following incident history..."
             }
         }
-        
+
         return JSONResponse(content={"prompts": prompts})
-        
+
     except Exception as e:
         logger.error(f"Error getting prompts: {e}")
         raise HTTPException(status_code=500, detail=str(e))

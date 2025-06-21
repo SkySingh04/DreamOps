@@ -1,16 +1,21 @@
 """Incident management API endpoints."""
 
 import uuid
-from datetime import datetime, UTC
-from typing import Dict, List, Optional, Any
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, Query, Path, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, Query
 from fastapi.responses import JSONResponse
 
 from src.oncall_agent.api.schemas import (
-    Incident, IncidentCreate, IncidentUpdate, IncidentList,
-    IncidentAction, IncidentStatus, Severity, ActionType,
-    AIAnalysis, SuccessResponse
+    AIAnalysis,
+    Incident,
+    IncidentAction,
+    IncidentCreate,
+    IncidentList,
+    IncidentStatus,
+    IncidentUpdate,
+    Severity,
+    SuccessResponse,
 )
 from src.oncall_agent.utils import get_logger
 
@@ -18,14 +23,14 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/incidents", tags=["incidents"])
 
 # In-memory storage for demo - replace with database
-INCIDENTS_DB: Dict[str, Incident] = {}
+INCIDENTS_DB: dict[str, Incident] = {}
 
 
 def create_mock_incident(data: IncidentCreate) -> Incident:
     """Create a mock incident."""
     incident_id = str(uuid.uuid4())
     now = datetime.now(UTC)
-    
+
     incident = Incident(
         id=incident_id,
         title=data.title,
@@ -42,7 +47,7 @@ def create_mock_incident(data: IncidentCreate) -> Incident:
             "description": f"Incident created from {data.alert_source}"
         }]
     )
-    
+
     # Add mock AI analysis for high/critical incidents
     if data.severity in [Severity.HIGH, Severity.CRITICAL]:
         incident.ai_analysis = AIAnalysis(
@@ -65,7 +70,7 @@ def create_mock_incident(data: IncidentCreate) -> Incident:
             related_incidents=["inc-123", "inc-456"],
             knowledge_base_references=["kb-001", "kb-002"]
         )
-    
+
     return incident
 
 
@@ -79,16 +84,16 @@ async def create_incident(
         # Create incident
         incident = create_mock_incident(incident_data)
         INCIDENTS_DB[incident.id] = incident
-        
+
         logger.info(f"Created incident {incident.id}: {incident.title}")
-        
+
         # Trigger AI analysis in background for high/critical incidents
         if incident.severity in [Severity.HIGH, Severity.CRITICAL]:
             background_tasks.add_task(
                 trigger_ai_analysis,
                 incident.id
             )
-        
+
         return incident
     except Exception as e:
         logger.error(f"Error creating incident: {e}")
@@ -105,9 +110,9 @@ async def trigger_ai_analysis(incident_id: str):
 async def list_incidents(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    status: Optional[IncidentStatus] = None,
-    severity: Optional[Severity] = None,
-    service: Optional[str] = None,
+    status: IncidentStatus | None = None,
+    severity: Severity | None = None,
+    service: str | None = None,
     sort_by: str = Query("created_at", regex="^(created_at|updated_at|severity)$"),
     sort_order: str = Query("desc", regex="^(asc|desc)$")
 ) -> IncidentList:
@@ -115,14 +120,14 @@ async def list_incidents(
     try:
         # Filter incidents
         filtered_incidents = list(INCIDENTS_DB.values())
-        
+
         if status:
             filtered_incidents = [i for i in filtered_incidents if i.status == status]
         if severity:
             filtered_incidents = [i for i in filtered_incidents if i.severity == severity]
         if service:
             filtered_incidents = [i for i in filtered_incidents if i.service_name == service]
-        
+
         # Sort incidents
         reverse = sort_order == "desc"
         if sort_by == "created_at":
@@ -139,15 +144,15 @@ async def list_incidents(
                 key=lambda x: severity_order[x.severity],
                 reverse=not reverse  # Reverse logic for severity
             )
-        
+
         # Paginate
         total = len(filtered_incidents)
         start_idx = (page - 1) * page_size
         end_idx = start_idx + page_size
-        
+
         incidents = filtered_incidents[start_idx:end_idx]
         has_next = end_idx < total
-        
+
         return IncidentList(
             incidents=incidents,
             total=total,
@@ -167,7 +172,7 @@ async def get_incident(
     """Get incident details."""
     if incident_id not in INCIDENTS_DB:
         raise HTTPException(status_code=404, detail="Incident not found")
-    
+
     return INCIDENTS_DB[incident_id]
 
 
@@ -179,10 +184,10 @@ async def update_incident(
     """Update incident details."""
     if incident_id not in INCIDENTS_DB:
         raise HTTPException(status_code=404, detail="Incident not found")
-    
+
     incident = INCIDENTS_DB[incident_id]
     now = datetime.now(UTC)
-    
+
     # Update fields
     if update_data.status is not None:
         old_status = incident.status
@@ -193,10 +198,10 @@ async def update_incident(
             "description": f"Status changed from {old_status} to {update_data.status}",
             "user": update_data.assignee or "system"
         })
-        
+
         if update_data.status == IncidentStatus.RESOLVED:
             incident.resolved_at = now
-    
+
     if update_data.assignee is not None:
         incident.assignee = update_data.assignee
         incident.timeline.append({
@@ -204,7 +209,7 @@ async def update_incident(
             "event": "assigned",
             "description": f"Incident assigned to {update_data.assignee}"
         })
-    
+
     if update_data.notes is not None:
         incident.timeline.append({
             "timestamp": now.isoformat(),
@@ -212,12 +217,12 @@ async def update_incident(
             "description": update_data.notes,
             "user": update_data.assignee or "system"
         })
-    
+
     if update_data.resolution is not None:
         incident.resolution = update_data.resolution
-    
+
     incident.updated_at = now
-    
+
     logger.info(f"Updated incident {incident_id}")
     return incident
 
@@ -231,9 +236,9 @@ async def execute_action(
     """Execute an action on an incident."""
     if incident_id not in INCIDENTS_DB:
         raise HTTPException(status_code=404, detail="Incident not found")
-    
+
     incident = INCIDENTS_DB[incident_id]
-    
+
     # Add action to incident
     incident.actions_taken.append(action)
     incident.timeline.append({
@@ -243,16 +248,16 @@ async def execute_action(
         "automated": action.automated,
         "user": action.user or "system"
     })
-    
+
     # Mock action execution
     background_tasks.add_task(
         execute_action_async,
         incident_id,
         action
     )
-    
+
     logger.info(f"Executing action {action.action_type} on incident {incident_id}")
-    
+
     return SuccessResponse(
         success=True,
         message=f"Action {action.action_type.value} queued for execution",
@@ -273,9 +278,9 @@ async def get_incident_timeline(
     """Get incident timeline."""
     if incident_id not in INCIDENTS_DB:
         raise HTTPException(status_code=404, detail="Incident not found")
-    
+
     incident = INCIDENTS_DB[incident_id]
-    
+
     return JSONResponse(content={
         "incident_id": incident_id,
         "timeline": incident.timeline
@@ -290,9 +295,9 @@ async def get_related_incidents(
     """Get related incidents."""
     if incident_id not in INCIDENTS_DB:
         raise HTTPException(status_code=404, detail="Incident not found")
-    
+
     incident = INCIDENTS_DB[incident_id]
-    
+
     # Mock related incidents
     related = []
     for i, inc in enumerate(INCIDENTS_DB.values()):
@@ -307,7 +312,7 @@ async def get_related_incidents(
             })
             if len(related) >= limit:
                 break
-    
+
     return JSONResponse(content={
         "incident_id": incident_id,
         "related_incidents": related
@@ -322,15 +327,15 @@ async def acknowledge_incident(
     """Acknowledge an incident."""
     if incident_id not in INCIDENTS_DB:
         raise HTTPException(status_code=404, detail="Incident not found")
-    
+
     incident = INCIDENTS_DB[incident_id]
-    
+
     if incident.status != IncidentStatus.TRIGGERED:
         raise HTTPException(
             status_code=400,
             detail=f"Cannot acknowledge incident in {incident.status} status"
         )
-    
+
     incident.status = IncidentStatus.ACKNOWLEDGED
     incident.assignee = user
     incident.timeline.append({
@@ -339,9 +344,9 @@ async def acknowledge_incident(
         "description": f"Incident acknowledged by {user}",
         "user": user
     })
-    
+
     logger.info(f"Incident {incident_id} acknowledged by {user}")
-    
+
     return SuccessResponse(
         success=True,
         message="Incident acknowledged successfully"
@@ -357,15 +362,15 @@ async def resolve_incident(
     """Resolve an incident."""
     if incident_id not in INCIDENTS_DB:
         raise HTTPException(status_code=404, detail="Incident not found")
-    
+
     incident = INCIDENTS_DB[incident_id]
-    
+
     if incident.status == IncidentStatus.RESOLVED:
         raise HTTPException(
             status_code=400,
             detail="Incident is already resolved"
         )
-    
+
     now = datetime.now(UTC)
     incident.status = IncidentStatus.RESOLVED
     incident.resolution = resolution
@@ -376,9 +381,9 @@ async def resolve_incident(
         "description": f"Incident resolved: {resolution}",
         "user": user
     })
-    
+
     logger.info(f"Incident {incident_id} resolved by {user}")
-    
+
     return SuccessResponse(
         success=True,
         message="Incident resolved successfully"
@@ -411,7 +416,7 @@ def init_mock_data():
             alert_source="nagios"
         ),
     ]
-    
+
     for incident_data in mock_incidents:
         incident = create_mock_incident(incident_data)
         INCIDENTS_DB[incident.id] = incident
