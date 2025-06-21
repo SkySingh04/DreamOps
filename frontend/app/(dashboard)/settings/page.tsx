@@ -24,7 +24,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Save, Key, Bell, Brain, Shield, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
+import { Save, Key, Bell, Brain, Shield, CheckCircle, XCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient, queryKeys } from '@/lib/api-client';
 
@@ -59,10 +59,6 @@ interface APIKeySettings {
   webhook_secret: string;
 }
 
-interface IntegrationConfig {
-  enabled: boolean;
-  config: Record<string, any>;
-}
 
 interface GlobalSettings {
   organization_name: string;
@@ -72,7 +68,6 @@ interface GlobalSettings {
   alerts: AlertSettings;
   security: SecuritySettings;
   api_keys: APIKeySettings;
-  integrations: Record<string, IntegrationConfig>;
 }
 
 // Utility function to safely handle number values for inputs
@@ -98,13 +93,6 @@ export default function SettingsPage() {
 
   const settings = settingsData?.data as GlobalSettings | undefined;
 
-  // Fetch integrations
-  const { data: integrationsData, isLoading: integrationsLoading } = useQuery({
-    queryKey: queryKeys.integrations,
-    queryFn: () => apiClient.getIntegrations(),
-  });
-
-  const integrations = integrationsData?.data || [];
 
   // Update mutations
   const updateAIMutation = useMutation({
@@ -195,24 +183,6 @@ export default function SettingsPage() {
   };
 
 
-  const getIntegrationStatus = (name: string) => {
-    const integration = integrations.find((i: any) => i.name === name);
-    if (!integration) return 'unknown';
-    return integration.status || 'unknown';
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'connected':
-        return 'text-green-600 bg-green-50 border-green-200';
-      case 'disconnected':
-        return 'text-red-600 bg-red-50 border-red-200';
-      case 'error':
-        return 'text-orange-600 bg-orange-50 border-orange-200';
-      default:
-        return 'text-gray-600 bg-gray-50 border-gray-200';
-    }
-  };
 
   if (settingsLoading) {
     return (
@@ -593,45 +563,6 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Integrations */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
-              <CardTitle>Integrations</CardTitle>
-            </div>
-            <CardDescription>
-              Manage connections to external services
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {settings.integrations && Object.entries(settings.integrations).map(([name, config]) => (
-              <div key={name} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="capitalize font-medium">{name}</div>
-                  <Badge className={getStatusColor(getIntegrationStatus(name))}>
-                    {getIntegrationStatus(name) === 'connected' ? (
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                    ) : (
-                      <XCircle className="h-3 w-3 mr-1" />
-                    )}
-                    {getIntegrationStatus(name)}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch checked={config.enabled} disabled />
-                </div>
-              </div>
-            ))}
-            {integrationsLoading && (
-              <div className="space-y-2">
-                {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-16 w-full" />
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
         {/* Security */}
         <Card>
