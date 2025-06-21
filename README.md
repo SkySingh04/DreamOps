@@ -243,7 +243,7 @@ uv run pytest tests/ --cov=src --cov-report=html
 
 ### Testing with Kubernetes Issues
 
-The project includes `fuck_kubernetes.sh` - a testing script that simulates various Kubernetes failures to verify PagerDuty alerting:
+The project includes `fuck_kubernetes.sh` - a comprehensive testing script that simulates various Kubernetes failures to verify the complete alerting pipeline:
 
 ```bash
 # From project root directory
@@ -258,15 +258,39 @@ The project includes `fuck_kubernetes.sh` - a testing script that simulates vari
 # all       - Run all simulations sequentially
 # random    - Run a random simulation (default)
 # clean     - Clean up all test resources
+# trigger   - Force CloudWatch alarms to fire immediately
+# loop      - Continuous testing loop with auto-triggering
 
 # Examples:
 ./fuck_kubernetes.sh          # Random issue
 ./fuck_kubernetes.sh 1        # Pod crash
 ./fuck_kubernetes.sh all      # All issues
 ./fuck_kubernetes.sh clean    # Cleanup
+
+# Advanced Testing:
+./fuck_kubernetes.sh trigger  # Force alarms to send alerts NOW
+./fuck_kubernetes.sh loop     # Continuous testing (Ctrl+C to stop)
 ```
 
-This script creates issues in a dedicated `fuck-kubernetes-test` namespace and should trigger CloudWatch alarms → SNS → PagerDuty → Slack alerts.
+#### Quick Testing Workflow
+
+1. **Single Test with Immediate Alert**:
+   ```bash
+   ./fuck_kubernetes.sh 1        # Create pod crash
+   ./fuck_kubernetes.sh trigger  # Force PagerDuty alert
+   ```
+
+2. **Continuous Testing Mode**:
+   ```bash
+   ./fuck_kubernetes.sh loop
+   # This will:
+   # - Create random K8s issues every 3 minutes
+   # - Force CloudWatch alarms to trigger
+   # - Send alerts to PagerDuty continuously
+   # - Show pod status after each iteration
+   ```
+
+The script creates issues in a dedicated `fuck-kubernetes-test` namespace and triggers the complete flow: CloudWatch → SNS → PagerDuty → Slack → AI Agent.
 
 ## 🔌 MCP Integrations
 
