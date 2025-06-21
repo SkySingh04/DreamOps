@@ -37,6 +37,7 @@ oncall-agent/
 │   ├── terraform/           # ECS/CloudFront infrastructure
 │   └── eks/                # EKS cluster for testing
 ├── .github/workflows/       # CI/CD pipelines
+├── fuck_kubernetes.sh       # Testing script for simulating K8s issues
 └── docker-compose.yml
 ```
 
@@ -214,6 +215,33 @@ uv run pytest tests/test_kubernetes_integration.py
 # Run with coverage
 uv run pytest tests/ --cov=src --cov-report=html
 ```
+
+### Testing with Kubernetes Issues
+
+The project includes `fuck_kubernetes.sh` - a testing script that simulates various Kubernetes failures to verify PagerDuty alerting:
+
+```bash
+# From project root directory
+./fuck_kubernetes.sh [option]
+
+# Options:
+# 1         - Simulate pod crash (CrashLoopBackOff)
+# 2         - Simulate image pull error (ImagePullBackOff)
+# 3         - Simulate OOM kill
+# 4         - Simulate deployment failure
+# 5         - Simulate service unavailable
+# all       - Run all simulations sequentially
+# random    - Run a random simulation (default)
+# clean     - Clean up all test resources
+
+# Examples:
+./fuck_kubernetes.sh          # Random issue
+./fuck_kubernetes.sh 1        # Pod crash
+./fuck_kubernetes.sh all      # All issues
+./fuck_kubernetes.sh clean    # Cleanup
+```
+
+This script creates issues in a dedicated `fuck-kubernetes-test` namespace and should trigger CloudWatch alarms → SNS → PagerDuty → Slack alerts.
 
 ## 🔌 MCP Integrations
 

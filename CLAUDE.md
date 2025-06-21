@@ -159,6 +159,27 @@ When asked to test changes:
 2. Add to `.env.example` with description
 3. Document in README.md
 
+### Testing Kubernetes Alerting
+The project includes `fuck_kubernetes.sh` for simulating Kubernetes failures:
+
+```bash
+# Usage from project root
+./fuck_kubernetes.sh [1-5|all|random|clean]
+
+# Simulates:
+# 1 - Pod crashes (CrashLoopBackOff)
+# 2 - Image pull errors (ImagePullBackOff)  
+# 3 - OOM kills
+# 4 - Deployment failures
+# 5 - Service unavailability
+
+# The script:
+# - Creates issues in 'fuck-kubernetes-test' namespace
+# - Triggers CloudWatch alarms within 60 seconds
+# - Sends alerts through SNS → PagerDuty → Slack
+# - Helps verify the entire alerting pipeline
+```
+
 ## API Development
 
 The project includes a FastAPI REST API in `src/oncall_agent/api.py`:
