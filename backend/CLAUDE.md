@@ -8,6 +8,7 @@ This is an oncall AI agent built with:
 - **AGNO Framework**: For building AI agents
 - **Claude API**: For intelligent incident analysis
 - **MCP (Model Context Protocol)**: For integrating with external tools
+- **GitHub MCP Server**: For GitHub API integration via MCP
 - **Python AsyncIO**: For concurrent operations
 - **uv**: For package management
 
@@ -121,6 +122,35 @@ When asked to test changes:
 - **AGNO**: Agent framework (check their docs for advanced features)
 - **Anthropic**: Claude API client
 - **Pydantic**: Data validation and settings
+- **aiohttp**: HTTP client for MCP server communication
+
+## GitHub MCP Integration
+
+The GitHub MCP integration (`src/oncall_agent/mcp_integrations/github_mcp.py`) provides:
+
+### Features
+- **Context Gathering**: Fetches recent commits, open issues, PR status, and GitHub Actions runs
+- **Issue Management**: Automatically creates incident issues for high-severity alerts
+- **Repository Mapping**: Maps service names to GitHub repositories
+- **GitHub Actions Integration**: Monitors workflow status and can trigger deployments
+
+### Configuration
+Required environment variables:
+- `GITHUB_TOKEN`: GitHub Personal Access Token with appropriate permissions
+- `GITHUB_MCP_SERVER_PATH`: Path to the GitHub MCP server binary (default: ../github-mcp-server/github-mcp-server)
+- `GITHUB_MCP_HOST`: Host for MCP server (default: localhost)  
+- `GITHUB_MCP_PORT`: Port for MCP server (default: 8080)
+
+### Usage
+The integration is automatically registered when `GITHUB_TOKEN` is configured. It:
+1. Starts the GitHub MCP server process
+2. Connects via HTTP client
+3. Fetches context for alerts based on service-to-repository mapping
+4. Creates incident issues for high-severity alerts
+5. Provides GitHub context to Claude for analysis
+
+### Testing
+Run `python test_github_integration.py` to test the integration.
 
 ## Debugging Tips
 
