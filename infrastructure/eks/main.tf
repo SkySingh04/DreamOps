@@ -84,7 +84,7 @@ module "vpc" {
   name = "${var.project_name}-vpc"
   cidr = var.vpc_cidr
 
-  azs             = data.aws_availability_zones.available.names
+  azs             = local.availability_zones
   private_subnets = [for i in range(3) : cidrsubnet(var.vpc_cidr, 8, i)]
   public_subnets  = [for i in range(3) : cidrsubnet(var.vpc_cidr, 8, i + 100)]
 
@@ -109,11 +109,9 @@ module "vpc" {
   }
 }
 
-data "aws_availability_zones" "available" {
-  filter {
-    name   = "opt-in-status"
-    values = ["opt-in-not-required"]
-  }
+# Hardcoded AZs for ap-south-1 to avoid permission issues
+locals {
+  availability_zones = ["ap-south-1a", "ap-south-1b", "ap-south-1c"]
 }
 
 # Configure kubectl
