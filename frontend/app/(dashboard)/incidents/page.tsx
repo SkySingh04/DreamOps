@@ -46,8 +46,13 @@ import {
 import { toast } from 'sonner';
 import { apiClient, queryKeys } from '@/lib/api-client';
 import { useWebSocket } from '@/lib/hooks/use-websocket';
+import { useAgentLogs } from '@/lib/hooks/use-agent-logs';
 import { Incident, AIAction, TimelineEvent, Severity, IncidentStatus } from '@/lib/types';
 import { format, formatDistanceToNow } from 'date-fns';
+import { AgentLogs } from '@/components/incidents/agent-logs';
+import { AgentStatusPanel } from '@/components/incidents/agent-status-panel';
+import { AIAnalysisDisplay } from '@/components/incidents/ai-analysis-display';
+import { IncidentAIAnalysis } from '@/components/incidents/incident-ai-analysis';
 
 const MOCK_INCIDENT_TYPES = [
   { value: 'server_down', label: 'Server Down', severity: 'critical' },
@@ -66,63 +71,35 @@ export default function IncidentsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showMockDialog, setShowMockDialog] = useState(false);
   const [expandedIncident, setExpandedIncident] = useState<string | null>(null);
+  const [showAgentLogs, setShowAgentLogs] = useState(true);
   const queryClient = useQueryClient();
+  
+  // Agent logs hook for real-time monitoring
+  const { logs, isConnected, activeIncidents, currentStage, currentProgress } = useAgentLogs();
 
-  // Using mock data for now
-  const incidents = [
-    {
-      id: 'INC-001',
-      title: 'API Gateway High Error Rate',
-      service: { name: 'api-gateway' },
-      severity: 'critical',
-      status: 'active',
-      created_at: '2024-06-21T10:30:00Z',
-      assignee: 'John Doe',
-      ai_analysis: {
-        summary: 'Claude identified potential database connection issues',
-        confidence_score: 0.92,
-        recommendations: [
-          'Check database connection pool',
-          'Review recent deployments',
-          'Monitor API response times'
-        ]
-      }
-    },
-    {
-      id: 'INC-002',
-      title: 'Database Connection Pool Exhausted',
-      service: { name: 'user-service' },
-      severity: 'high',
-      status: 'resolved',
-      created_at: '2024-06-21T08:15:00Z',
-      resolved_at: '2024-06-21T09:45:00Z',
-      assignee: 'Jane Smith',
-      ai_analysis: {
-        summary: 'Claude recommended connection pool size increase',
-        confidence_score: 0.88,
-        recommendations: [
-          'Increase connection pool size',
-          'Add connection pooling metrics',
-          'Set up alerting for pool exhaustion'
-        ]
-      }
-    }
-  ];
-
-  // WebSocket for real-time updates
-  useWebSocket({
-    onMessage: (message) => {
-      if (message.type === 'incident_update') {
-        queryClient.invalidateQueries({ queryKey: queryKeys.incidents() });
-        toast.info('Incident updated', {
-          description: `${message.data.title} status changed to ${message.data.status}`,
-        });
-      }
-      if (message.type === 'ai_action') {
-        queryClient.invalidateQueries({ queryKey: queryKeys.incident(message.data.incident_id) });
-      }
-    },
+  // Fetch real incidents from API
+  const { data: incidentsData, isLoading } = useQuery({
+    queryKey: queryKeys.incidents(),
+    queryFn: () => apiClient.getIncidents(),
+    refetchInterval: 30000, // Refetch every 30 seconds
   });
+  
+  const incidents = incidentsData?.data?.incidents || [];
+
+  // WebSocket for real-time updates - DISABLED
+  // useWebSocket({
+  //   onMessage: (message) => {
+  //     if (message.type === 'incident_update') {
+  //       queryClient.invalidateQueries({ queryKey: queryKeys.incidents() });
+  //       toast.info('Incident updated', {
+  //         description: `${message.data.title} status changed to ${message.data.status}`,
+  //       });
+  //     }
+  //     if (message.type === 'ai_action') {
+  //       queryClient.invalidateQueries({ queryKey: queryKeys.incident(message.data.incident_id) });
+  //     }
+  //   },
+  // });
 
   // Mutations
   const acknowledgeMutation = useMutation({
@@ -196,12 +173,12 @@ export default function IncidentsPage() {
     }
   };
 
-  const filteredIncidents = incidents.filter((incident: any) => {
+  const filteredIncidents = incidents.filter((incident: Incident) => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
         incident.title.toLowerCase().includes(query) ||
-        incident.service.name.toLowerCase().includes(query) ||
+        incident.service?.name?.toLowerCase().includes(query) ||
         incident.id.toLowerCase().includes(query)
       );
     }
@@ -297,8 +274,6 @@ export default function IncidentsPage() {
     }
   };
 
-  const isLoading = false; // Mock data, no loading needed
-
   return (
     <section className="flex-1 p-4 lg:p-8 space-y-6">
       <div className="flex items-center justify-between">
@@ -306,11 +281,40 @@ export default function IncidentsPage() {
           <h1 className="text-2xl font-bold">Incident Management</h1>
           <p className="text-gray-600 mt-1">Monitor and resolve incidents with AI assistance</p>
         </div>
-        <Button onClick={() => setShowMockDialog(true)}>
-          <Zap className="h-4 w-4 mr-2" />
-          Trigger Test Incident
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAgentLogs(!showAgentLogs)}
+          >
+            <Terminal className="h-4 w-4 mr-2" />
+            {showAgentLogs ? 'Hide' : 'Show'} AI Logs
+          </Button>
+          <Button onClick={() => setShowMockDialog(true)}>
+            <Zap className="h-4 w-4 mr-2" />
+            Trigger Test Incident
+          </Button>
+        </div>
       </div>
+      
+      {/* AI Agent Status Panel */}
+      <AgentStatusPanel
+        activeIncidents={activeIncidents}
+        currentStage={currentStage}
+        currentProgress={currentProgress}
+      />
+
+      {/* Two column layout for AI logs and incidents */}
+      <div className={showAgentLogs ? "grid grid-cols-1 lg:grid-cols-2 gap-6" : ""}>
+        {/* AI Agent Logs Section */}
+        {showAgentLogs && (
+          <div className="lg:col-span-1">
+            <AgentLogs incidentId={selectedIncident?.id} />
+          </div>
+        )}
+        
+        {/* Main incidents section */}
+        <div className={showAgentLogs ? "lg:col-span-1" : ""}>
 
       {/* Search and Filter Bar */}
       <div className="flex gap-4 flex-wrap">
@@ -363,7 +367,7 @@ export default function IncidentsPage() {
             </CardContent>
           </Card>
         ) : (
-          filteredIncidents.map((incident) => (
+          filteredIncidents.map((incident: Incident) => (
             <Card key={incident.id} className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -395,7 +399,7 @@ export default function IncidentsPage() {
                 <div className="flex items-center gap-4 text-sm text-gray-500">
                   <span>ID: {incident.id}</span>
                   <span>•</span>
-                  <span>Service: {incident.service.name}</span>
+                  <span>Service: {incident.service?.name || 'Unknown'}</span>
                   <span>•</span>
                   <span>Assignee: {incident.assignee}</span>
                   <span>•</span>
@@ -406,37 +410,13 @@ export default function IncidentsPage() {
               {expandedIncident === incident.id && (
                 <CardContent className="pt-0">
                   <div className="border-t pt-4">
+                    {/* Full AI Analysis Display */}
+                    <IncidentAIAnalysis 
+                      incidentId={incident.id}
+                      className="mb-6"
+                    />
+                    
                     <div className="grid gap-6 md:grid-cols-2">
-                      {/* AI Analysis */}
-                      <div>
-                        <h4 className="font-medium mb-3 flex items-center gap-2">
-                          <Bot className="h-4 w-4" />
-                          AI Analysis
-                        </h4>
-                        <div className="space-y-3">
-                          <div className="p-3 bg-blue-50 rounded-lg">
-                            <p className="text-sm">{incident.ai_analysis?.summary}</p>
-                            <div className="flex items-center gap-2 mt-2">
-                              <Shield className="h-3 w-3" />
-                              <span className="text-xs">
-                                Confidence: {Math.round((incident.ai_analysis?.confidence_score || 0) * 100)}%
-                              </span>
-                            </div>
-                          </div>
-                          
-                          <div>
-                            <h5 className="text-sm font-medium mb-2">Recommendations:</h5>
-                            <ul className="space-y-1">
-                              {incident.ai_analysis?.recommendations?.map((rec, index) => (
-                                <li key={index} className="text-sm text-gray-600 flex items-start gap-2">
-                                  <span className="text-blue-500">•</span>
-                                  {rec}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        </div>
-                      </div>
 
                       {/* Actions */}
                       <div>
@@ -447,9 +427,17 @@ export default function IncidentsPage() {
                         <div className="space-y-2">
                           {incident.status === 'active' && (
                             <>
-                              <Button variant="outline" size="sm" className="w-full justify-start">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="w-full justify-start"
+                                onClick={() => {
+                                  setSelectedIncident(incident);
+                                  setShowAgentLogs(true);
+                                }}
+                              >
                                 <Eye className="h-4 w-4 mr-2" />
-                                View Logs
+                                View AI Agent Logs
                               </Button>
                               <Button variant="outline" size="sm" className="w-full justify-start">
                                 <Terminal className="h-4 w-4 mr-2" />
@@ -459,7 +447,11 @@ export default function IncidentsPage() {
                                 <RotateCcw className="h-4 w-4 mr-2" />
                                 Restart Service
                               </Button>
-                              <Button size="sm" className="w-full">
+                              <Button 
+                                size="sm" 
+                                className="w-full"
+                                onClick={() => resolveMutation.mutate(incident.id)}
+                              >
                                 <CheckCircle className="h-4 w-4 mr-2" />
                                 Mark as Resolved
                               </Button>
@@ -488,6 +480,9 @@ export default function IncidentsPage() {
         )}
       </div>
 
+        </div>
+      </div>
+
       {/* Mock Incident Dialog */}
       <Dialog open={showMockDialog} onOpenChange={setShowMockDialog}>
         <DialogContent>
@@ -499,15 +494,15 @@ export default function IncidentsPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid gap-3">
-              <Button variant="outline" onClick={() => toast.success('Mock critical incident triggered')}>
+              <Button variant="outline" onClick={() => triggerMockMutation.mutate('critical server_down')}>
                 <AlertCircle className="h-4 w-4 mr-2" />
                 Critical: Server Down
               </Button>
-              <Button variant="outline" onClick={() => toast.success('Mock high incident triggered')}>
+              <Button variant="outline" onClick={() => triggerMockMutation.mutate('high database_error')}>
                 <AlertTriangle className="h-4 w-4 mr-2" />
                 High: Database Error
               </Button>
-              <Button variant="outline" onClick={() => toast.success('Mock medium incident triggered')}>
+              <Button variant="outline" onClick={() => triggerMockMutation.mutate('medium memory_usage')}>
                 <Info className="h-4 w-4 mr-2" />
                 Medium: High Memory Usage
               </Button>

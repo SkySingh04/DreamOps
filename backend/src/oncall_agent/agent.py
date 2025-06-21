@@ -8,6 +8,10 @@ from anthropic import AsyncAnthropic
 from pydantic import BaseModel
 
 from .config import get_config
+from .frontend_integration import (
+    send_ai_action_to_dashboard,
+    send_incident_to_dashboard,
+)
 from .mcp_integrations.base import MCPIntegration
 from .mcp_integrations.github_mcp import GitHubMCPIntegration
 from .mcp_integrations.grafana_mcp import GrafanaMCPIntegration
@@ -103,51 +107,191 @@ class OncallAgent:
         """Handle an incoming pager alert."""
         self.logger.info(f"Handling pager alert: {alert.alert_id} for service: {alert.service_name}")
 
+        import time
+        start_time = time.time()
+
+        # Import here to avoid circular dependency
         try:
+            from .api.log_streaming import log_stream_manager
+            has_log_streaming = True
+        except ImportError:
+            has_log_streaming = False
+
+        self.logger.info("=" * 80)
+        self.logger.info("🚨 ONCALL AGENT TRIGGERED 🚨")
+        self.logger.info("=" * 80)
+        self.logger.info(f"Alert ID: {alert.alert_id}")
+        self.logger.info(f"Service: {alert.service_name}")
+        self.logger.info(f"Severity: {alert.severity}")
+        self.logger.info(f"Description: {alert.description[:200]}...")
+
+        try:
+            # STEP 0: Send incident to frontend dashboard
+            self.logger.info("📊 Sending incident to dashboard...")
+            try:
+                alert_data = {
+                    "alert_name": alert.service_name,
+                    "description": alert.description,
+                    "alert_type": self._detect_k8s_alert_type(alert.description) or "general",
+                    "resource_id": alert.alert_id,
+                    "severity": alert.severity,
+                    "metadata": alert.metadata
+                }
+                dashboard_incident = await send_incident_to_dashboard(alert_data)
+                incident_id = dashboard_incident.get("id") if dashboard_incident else None
+                self.logger.info(f"✅ Incident sent to dashboard with ID: {incident_id}")
+            except Exception as e:
+                self.logger.error(f"❌ Failed to send incident to dashboard: {e}")
+                incident_id = None
+
+            # STEP 1: Gather context from ALL available MCP integrations
+            self.logger.info("🔍 Gathering context from MCP integrations...")
+
+            # Emit structured log if available
+            if has_log_streaming:
+                await log_stream_manager.log_info(
+                    "🔍 Gathering context from MCP integrations",
+                    incident_id=alert.alert_id,
+                    stage="gathering_context",
+                    progress=0.3
+                )
+            all_context = {}
+
+            # Send context gathering action to dashboard
+            try:
+                await send_ai_action_to_dashboard(
+                    action="context_gathering_started",
+                    description=f"Started gathering context from {len(self.mcp_integrations)} MCP integrations",
+                    incident_id=incident_id
+                )
+            except Exception as e:
+                self.logger.error(f"❌ Failed to send context gathering action to dashboard: {e}")
+
             # Detect if this is a Kubernetes-related alert
             k8s_alert_type = self._detect_k8s_alert_type(alert.description)
             k8s_context = {}
-
-            if k8s_alert_type and "kubernetes" in self.mcp_integrations:
-                self.logger.info(f"Detected Kubernetes alert type: {k8s_alert_type}")
-
-                # Gather Kubernetes-specific context based on alert type
-                k8s_context = await self._gather_k8s_context(alert, k8s_alert_type)
 
             # Gather GitHub context if available
             github_context = {}
             if "github" in self.mcp_integrations:
                 github_context = await self._gather_github_context(alert)
 
-            # Create a prompt for Claude to analyze the alert
+            # Gather Kubernetes context if available
+            if "kubernetes" in self.mcp_integrations:
+                self.logger.info("📊 Fetching Kubernetes context...")
+                if has_log_streaming:
+                    await log_stream_manager.log_info(
+                        "🔍 Gathering context from Kubernetes integration",
+                        incident_id=alert.alert_id,
+                        integration="kubernetes",
+                        stage="gathering_context",
+                        progress=0.35
+                    )
+                try:
+                    if k8s_alert_type:
+                        k8s_context = await self._gather_k8s_context(alert, k8s_alert_type)
+                        all_context["kubernetes"] = k8s_context
+                    else:
+                        # Even for non-K8s specific alerts, get general cluster status
+                        k8s = self.mcp_integrations["kubernetes"]
+                        namespace = alert.metadata.get("namespace", "default")
+                        pods = await k8s.list_pods(namespace)
+                        all_context["kubernetes"] = {
+                            "cluster_status": "connected",
+                            "namespace": namespace,
+                            "pod_count": len(pods.get("pods", [])),
+                            "unhealthy_pods": [p for p in pods.get("pods", [])
+                                             if p.get("status") not in ["Running", "Completed"]]
+                        }
+                except Exception as e:
+                    self.logger.error(f"Error fetching Kubernetes context: {e}")
+                    all_context["kubernetes"] = {"error": str(e)}
+
+            # Gather Grafana context if available
+            if "grafana" in self.mcp_integrations:
+                self.logger.info("📈 Fetching Grafana metrics...")
+                if has_log_streaming:
+                    await log_stream_manager.log_info(
+                        "🔍 Gathering context from Grafana integration",
+                        incident_id=alert.alert_id,
+                        integration="grafana",
+                        stage="gathering_context",
+                        progress=0.4
+                    )
+                try:
+                    grafana = self.mcp_integrations["grafana"]
+                    # Try to find relevant dashboards based on service name
+                    dashboards = await grafana.fetch_context({"action": "search_dashboards", "query": alert.service_name})
+                    all_context["grafana"] = {
+                        "dashboards": dashboards,
+                        "service": alert.service_name
+                    }
+                except Exception as e:
+                    self.logger.error(f"Error fetching Grafana context: {e}")
+                    all_context["grafana"] = {"error": str(e)}
+
+            # Gather Notion context if available (for runbooks, etc.)
+            if "notion" in self.mcp_integrations:
+                self.logger.info("📚 Fetching Notion documentation...")
+                try:
+                    notion = self.mcp_integrations["notion"]
+                    # Search for relevant runbooks or documentation
+                    docs = await notion.fetch_context({
+                        "action": "search",
+                        "query": f"{alert.service_name} {alert.description[:50]}"
+                    })
+                    all_context["notion"] = docs
+                except Exception as e:
+                    self.logger.error(f"Error fetching Notion context: {e}")
+                    all_context["notion"] = {"error": str(e)}
+
+            # STEP 2: Create a comprehensive prompt for Claude
             prompt = f"""
-            Analyze this oncall alert and provide a response plan:
+            You are an expert SRE/DevOps engineer helping to resolve an oncall incident. 
+            Analyze this alert and the context from various monitoring tools to provide actionable recommendations.
             
-            Alert ID: {alert.alert_id}
-            Service: {alert.service_name}
-            Severity: {alert.severity}
-            Description: {alert.description}
-            Timestamp: {alert.timestamp}
-            Metadata: {alert.metadata}
+            🚨 ALERT DETAILS:
+            - Alert ID: {alert.alert_id}
+            - Service: {alert.service_name}
+            - Severity: {alert.severity}
+            - Description: {alert.description}
+            - Timestamp: {alert.timestamp}
+            - Metadata: {alert.metadata}
             
             {f"Kubernetes Alert Type: {k8s_alert_type}" if k8s_alert_type else ""}
             {f"Kubernetes Context: {k8s_context}" if k8s_context else ""}
             {f"GitHub Context: {github_context}" if github_context else ""}
+            📊 CONTEXT FROM MONITORING TOOLS:
+            {self._format_context_for_prompt(all_context)}
             
-            Please provide:
-            1. Initial assessment of the issue
-            2. Recommended immediate actions
-            3. Data to collect from monitoring systems
-            4. Potential root causes
-            5. Escalation criteria
+            Based on the alert and the context gathered from our monitoring tools, please provide:
+            
+            1. 🎯 IMMEDIATE ACTIONS (What to do RIGHT NOW - be specific with commands)
+            2. 🔍 ROOT CAUSE ANALYSIS (What likely caused this based on the context)
+            3. 💥 IMPACT ASSESSMENT (Who/what is affected and how severely)
+            4. 🛠️ REMEDIATION STEPS (Step-by-step guide to fix the issue)
+            5. 📊 MONITORING (What metrics/logs to watch during resolution)
+            6. 🚀 AUTOMATION OPPORTUNITIES (Can this be auto-remediated? How?)
+            7. 📝 FOLLOW-UP ACTIONS (What to do after the incident is resolved)
+            
+            Be specific and actionable. Include exact commands, dashboard links, and clear steps.
+            If you see patterns in the monitoring data that suggest a specific issue, highlight them.
             
             {"For this Kubernetes issue, also suggest specific kubectl commands or automated fixes." if k8s_alert_type else ""}
             """
 
-            # Use Claude for analysis
+            # STEP 3: Call Claude for analysis
+            self.logger.info("🤖 Calling Claude for comprehensive analysis...")
+            if has_log_streaming:
+                await log_stream_manager.log_info(
+                    "🤖 Starting Claude analysis...",
+                    incident_id=alert.alert_id,
+                    stage="claude_analysis",
+                    progress=0.5
+                )
             response = await self.anthropic_client.messages.create(
                 model=self.config.claude_model,
-                max_tokens=1500,
+                max_tokens=2000,
                 messages=[
                     {"role": "user", "content": prompt}
                 ]
@@ -157,11 +301,67 @@ class OncallAgent:
             analysis = response.content[0].text if response.content else "No analysis available"
 
             # Create response structure
+            if has_log_streaming:
+                await log_stream_manager.log_info(
+                    "📊 Claude is analyzing the incident context",
+                    incident_id=alert.alert_id,
+                    stage="claude_analysis",
+                    progress=0.7
+                )
+
+            # Parse the analysis into structured sections
+            parsed_analysis = self._parse_claude_analysis(analysis)
+
+            # Stream the complete analysis to the frontend
+            if has_log_streaming:
+                await log_stream_manager.log_success(
+                    "✅ AI ANALYSIS COMPLETE",
+                    incident_id=alert.alert_id,
+                    stage="complete",
+                    progress=1.0,
+                    metadata={
+                        "analysis": analysis,  # Full markdown analysis
+                        "parsed_analysis": parsed_analysis,
+                        "confidence_score": parsed_analysis.get("confidence_score", 0.85),
+                        "risk_level": parsed_analysis.get("risk_level", "medium"),
+                        "response_time": f"{time.time() - start_time:.2f}s"
+                    }
+                )
+
+            # STEP 4: Send AI analysis action to dashboard
+            try:
+                await send_ai_action_to_dashboard(
+                    action="analysis_complete",
+                    description=f"AI analysis completed for {alert.service_name} incident",
+                    incident_id=incident_id
+                )
+                self.logger.info("✅ AI analysis action sent to dashboard")
+            except Exception as e:
+                self.logger.error(f"❌ Failed to send AI action to dashboard: {e}")
+
+            # STEP 5: Log the analysis to console for visibility
+            self.logger.info("\n" + "="*80)
+            self.logger.info("🤖 CLAUDE'S ANALYSIS:")
+            self.logger.info("="*80)
+            for line in analysis.split('\n'):
+                if line.strip():
+                    self.logger.info(line)
+            self.logger.info("="*80 + "\n")
+
+            # STEP 6: Create comprehensive response
             result = {
                 "alert_id": alert.alert_id,
                 "status": "analyzed",
                 "analysis": analysis,
+                "parsed_analysis": parsed_analysis,
                 "timestamp": alert.timestamp,
+                "severity": alert.severity,
+                "service": alert.service_name,
+                "context_gathered": {
+                    integration: bool(context) and "error" not in context
+                    for integration, context in all_context.items()
+                },
+                "full_context": all_context,
                 "available_integrations": list(self.mcp_integrations.keys()),
                 "k8s_alert_type": k8s_alert_type,
                 "k8s_context": k8s_context,
@@ -172,8 +372,26 @@ class OncallAgent:
             if k8s_alert_type and k8s_context.get("automated_actions"):
                 result["suggested_actions"] = k8s_context["automated_actions"]
 
-            # Log the handling
-            self.logger.info(f"Alert {alert.alert_id} analyzed successfully")
+            # Add automated actions if available
+            if k8s_alert_type and all_context.get("kubernetes", {}).get("automated_actions"):
+                result["automated_actions"] = all_context["kubernetes"]["automated_actions"]
+                self.logger.info("🤖 Automated actions available:")
+                for action in result["automated_actions"]:
+                    self.logger.info(f"  - {action['action']}: {action['reason']} (confidence: {action['confidence']})")
+
+                    # Send each automated action suggestion to dashboard
+                    try:
+                        await send_ai_action_to_dashboard(
+                            action=f"automated_suggestion_{action['action']}",
+                            description=f"Suggested automated action: {action['action']} - {action['reason']} (confidence: {action['confidence']})",
+                            incident_id=incident_id
+                        )
+                    except Exception as e:
+                        self.logger.error(f"❌ Failed to send automated action to dashboard: {e}")
+
+            # Log summary
+            self.logger.info(f"✅ Alert {alert.alert_id} analyzed successfully")
+            self.logger.info(f"📊 Context gathered from: {', '.join(k for k, v in all_context.items() if v and 'error' not in v)}")
 
             return result
 
@@ -184,6 +402,39 @@ class OncallAgent:
                 "status": "error",
                 "error": str(e)
             }
+
+    def _format_context_for_prompt(self, context: dict[str, Any]) -> str:
+        """Format the context from various integrations for the Claude prompt."""
+        formatted = []
+
+        for integration, data in context.items():
+            if not data or "error" in data:
+                continue
+
+            formatted.append(f"\n📌 {integration.upper()} CONTEXT:")
+
+            if integration == "kubernetes":
+                if "alert_type" in data:
+                    formatted.append(f"  - Alert Type: {data.get('alert_type')}")
+                if "pod_logs" in data:
+                    formatted.append(f"  - Recent Pod Logs: {data.get('pod_logs', '')[:500]}...")
+                if "pod_events" in data:
+                    formatted.append(f"  - Pod Events: {data.get('pod_events', '')[:300]}...")
+                if "problematic_pods" in data:
+                    formatted.append(f"  - Problematic Pods: {len(data.get('problematic_pods', []))}")
+                if "unhealthy_pods" in data:
+                    formatted.append(f"  - Unhealthy Pods: {data.get('unhealthy_pods', [])}")
+                if "deployment_status" in data:
+                    formatted.append(f"  - Deployment Status: {data.get('deployment_status', {})}")
+
+            elif integration == "grafana":
+                if "dashboards" in data:
+                    formatted.append(f"  - Related Dashboards: {data.get('dashboards', [])}")
+
+            elif integration == "notion":
+                formatted.append(f"  - Documentation/Runbooks: {data}")
+
+        return "\n".join(formatted) if formatted else "No additional context available from integrations."
 
     def _detect_k8s_alert_type(self, description: str) -> str | None:
         """Detect if an alert is Kubernetes-related and return the type."""
@@ -217,6 +468,19 @@ class OncallAgent:
                     # Get pod description
                     description = await k8s.describe_pod(pod_name, namespace)
                     context["pod_description"] = description
+                    logs_result = await k8s.get_pod_logs(pod_name, namespace, tail_lines=100)
+                    if logs_result.get("success"):
+                        context["pod_logs"] = logs_result.get("logs", "")
+
+                    # Get pod events
+                    events_result = await k8s.get_pod_events(pod_name, namespace)
+                    if events_result.get("success"):
+                        context["pod_events"] = events_result.get("events", [])
+
+                    # Get pod description
+                    desc_result = await k8s.describe_pod(pod_name, namespace)
+                    if desc_result.get("success"):
+                        context["pod_description"] = desc_result.get("description", "")
 
                     # Suggest automated actions
                     context["automated_actions"] = [
@@ -366,3 +630,73 @@ class OncallAgent:
                 self.logger.info(f"Disconnected from {name}")
             except Exception as e:
                 self.logger.error(f"Error disconnecting from {name}: {e}")
+
+    def _parse_claude_analysis(self, analysis: str) -> dict[str, Any]:
+        """Parse Claude's analysis into structured sections."""
+        import re
+
+        sections = {
+            "immediate_actions": [],
+            "root_cause": [],
+            "impact": [],
+            "remediation": [],
+            "monitoring": [],
+            "automation": [],
+            "follow_up": [],
+            "confidence_score": 0.85,
+            "risk_level": "medium",
+            "commands": []
+        }
+
+        # Section patterns
+        section_patterns = {
+            "immediate_actions": r"(?:IMMEDIATE ACTIONS?|🎯.*IMMEDIATE.*?)[\s:]*\n(.*?)(?=\n\d+\.|🔍|💥|🛠️|📊|🚀|📝|$)",
+            "root_cause": r"(?:ROOT CAUSE.*?|🔍.*ROOT CAUSE.*?)[\s:]*\n(.*?)(?=\n\d+\.|🎯|💥|🛠️|📊|🚀|📝|$)",
+            "impact": r"(?:IMPACT.*?|💥.*IMPACT.*?)[\s:]*\n(.*?)(?=\n\d+\.|🎯|🔍|🛠️|📊|🚀|📝|$)",
+            "remediation": r"(?:REMEDIATION.*?|🛠️.*REMEDIATION.*?)[\s:]*\n(.*?)(?=\n\d+\.|🎯|🔍|💥|📊|🚀|📝|$)",
+            "monitoring": r"(?:MONITORING.*?|📊.*MONITORING.*?)[\s:]*\n(.*?)(?=\n\d+\.|🎯|🔍|💥|🛠️|🚀|📝|$)",
+            "automation": r"(?:AUTOMATION.*?|🚀.*AUTOMATION.*?)[\s:]*\n(.*?)(?=\n\d+\.|🎯|🔍|💥|🛠️|📊|📝|$)",
+            "follow_up": r"(?:FOLLOW-?UP.*?|📝.*FOLLOW.*?)[\s:]*\n(.*?)(?=\n\d+\.|🎯|🔍|💥|🛠️|📊|🚀|$)"
+        }
+
+        # Extract sections
+        for section, pattern in section_patterns.items():
+            match = re.search(pattern, analysis, re.DOTALL | re.IGNORECASE)
+            if match:
+                content = match.group(1).strip()
+                # Split by newlines and clean up
+                items = [line.strip() for line in content.split('\n') if line.strip()]
+                # Remove numbering and clean up
+                cleaned_items = []
+                for item in items:
+                    # Remove leading numbers, bullets, etc.
+                    cleaned = re.sub(r'^[\d\-\*\•]+\.\s*', '', item)
+                    if cleaned and not cleaned.startswith(('🎯', '🔍', '💥', '🛠️', '📊', '🚀', '📝')):
+                        cleaned_items.append(cleaned)
+                sections[section] = cleaned_items
+
+        # Extract all commands (bash/kubectl commands)
+        command_pattern = r'(?:```(?:bash|sh)?\n(.*?)```|`([^`]+)`)'
+        commands = []
+        for match in re.finditer(command_pattern, analysis, re.DOTALL):
+            if match.group(1):  # Multi-line code block
+                cmds = [cmd.strip() for cmd in match.group(1).split('\n') if cmd.strip()]
+                commands.extend(cmds)
+            elif match.group(2):  # Inline code
+                commands.append(match.group(2).strip())
+
+        sections["commands"] = commands
+
+        # Extract confidence score if mentioned
+        confidence_match = re.search(r'(?:confidence|confident)[\s:]*(\d+)%', analysis, re.IGNORECASE)
+        if confidence_match:
+            sections["confidence_score"] = int(confidence_match.group(1)) / 100.0
+
+        # Extract risk level if mentioned
+        risk_match = re.search(r'(?:risk|severity)[\s:]*(?:is\s+)?(\w+)', analysis, re.IGNORECASE)
+        if risk_match:
+            risk = risk_match.group(1).lower()
+            if risk in ["low", "medium", "high", "critical"]:
+                sections["risk_level"] = risk
+
+        return sections

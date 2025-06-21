@@ -7,12 +7,12 @@ export function Terminal() {
   const [terminalStep, setTerminalStep] = useState(0);
   const [copied, setCopied] = useState(false);
   const terminalSteps = [
-    'git clone https://github.com/nextjs/saas-starter',
-    'pnpm install',
-    'pnpm db:setup',
-    'pnpm db:migrate',
-    'pnpm db:seed',
-    'pnpm dev 🎉',
+    'git clone https://github.com/SkySingh04/oncall-agent',
+    'cd oncall-agent/backend',
+    'uv sync',
+    'cp .env.example .env',
+    'uv run python main.py',
+    '🤖 AI Agent analyzing incidents... Ready! 🎉',
   ];
 
   useEffect(() => {

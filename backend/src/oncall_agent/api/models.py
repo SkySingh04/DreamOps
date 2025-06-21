@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class PagerDutyService(BaseModel):
@@ -46,7 +46,22 @@ class PagerDutyMessage(BaseModel):
     log_entries: list[PagerDutyLogEntry] | None = None
 
 
+# V3 Webhook Models
+class PagerDutyV3Event(BaseModel):
+    """PagerDuty V3 webhook event."""
+    id: str
+    event_type: str
+    occurred_at: datetime
+    data: dict[str, Any]
+
+
+class PagerDutyV3WebhookPayload(BaseModel):
+    """PagerDuty V3 webhook payload."""
+    event: PagerDutyV3Event
+
+
+# Legacy V2 format for backward compatibility
 class PagerDutyWebhookPayload(BaseModel):
-    """PagerDuty webhook payload."""
-    messages: list[PagerDutyMessage]
-    event: str | None = Field(None, description="Event type like 'incident.triggered'")
+    """PagerDuty webhook payload (supports both V2 and V3)."""
+    messages: list[PagerDutyMessage] | None = None
+    event: PagerDutyV3Event | str | None = None

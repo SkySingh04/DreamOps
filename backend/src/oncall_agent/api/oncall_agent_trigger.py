@@ -7,6 +7,7 @@ from typing import Any
 
 from src.oncall_agent.agent import OncallAgent, PagerAlert
 from src.oncall_agent.api.alert_context_parser import ContextExtractor
+from src.oncall_agent.api.log_streaming import log_stream_manager
 from src.oncall_agent.api.models import PagerDutyIncidentData
 from src.oncall_agent.config import get_config
 from src.oncall_agent.utils import get_logger
@@ -101,6 +102,19 @@ Please provide brief analysis and recommendations."""
             # Mark as processing
             self.processing_alerts[pager_alert.alert_id] = datetime.now()
 
+            # Emit structured log for AI agent activation
+            await log_stream_manager.log_alert(
+                f"🚨 AI AGENT ACTIVATED - Processing {pager_alert.description}",
+                incident_id=pager_alert.alert_id,
+                stage="activation",
+                progress=0.0,
+                metadata={
+                    "severity": pager_alert.severity,
+                    "source": pager_alert.service_name,
+                    "service": extracted_context.get("service", "unknown")
+                }
+            )
+
             # Add custom prompt based on severity
             if extracted_context.get("suggested_prompt"):
                 prompt_template = self.prompt_templates.get(
@@ -116,6 +130,14 @@ Please provide brief analysis and recommendations."""
             # Trigger the agent
             self.logger.info(f"Triggering oncall agent for alert {pager_alert.alert_id}")
 
+            # Emit structured log for agent trigger
+            await log_stream_manager.log_info(
+                "🤖 ONCALL AGENT TRIGGERED",
+                incident_id=pager_alert.alert_id,
+                stage="agent_triggered",
+                progress=0.2
+            )
+
             # Run in background if queue is getting full
             if self.alert_queue.qsize() > 10:
                 asyncio.create_task(self._process_alert_async(pager_alert))
@@ -130,10 +152,37 @@ Please provide brief analysis and recommendations."""
             if not self.agent:
                 await self.initialize()
             assert self.agent is not None
+            self.logger.info("📨 Sending alert to Oncall Agent...")
+
+            # Track processing time
+            start_time = datetime.now()
             result = await self.agent.handle_pager_alert(pager_alert)
+            processing_time = (datetime.now() - start_time).total_seconds()
+
+            self.logger.info("✅ Agent processing complete")
+            self.logger.info(f"📋 Agent Response Summary: {result.get('status', 'unknown')}")
+
+            # Emit structured log for completion with full analysis
+            await log_stream_manager.log_success(
+                f"✅ AI ANALYSIS COMPLETE - {processing_time:.2f}s response time",
+                incident_id=pager_alert.alert_id,
+                stage="complete",
+                progress=1.0,
+                metadata={
+                    "response_time": f"{processing_time:.2f}s",
+                    "status": result.get("status", "unknown"),
+                    "severity": result.get("severity", pager_alert.severity),
+                    "actions_recommended": len(result.get("recommended_actions", [])) if isinstance(result.get("recommended_actions"), list) else 0,
+                    "analysis": result.get("analysis", ""),
+                    "parsed_analysis": result.get("parsed_analysis", {}),
+                    "confidence_score": result.get("confidence_score", 0.85),
+                    "risk_level": result.get("risk_level", "medium")
+                }
+            )
 
             # Clean up
-            del self.processing_alerts[pager_alert.alert_id]
+            if pager_alert.alert_id in self.processing_alerts:
+                del self.processing_alerts[pager_alert.alert_id]
 
             return {
                 "status": "success",

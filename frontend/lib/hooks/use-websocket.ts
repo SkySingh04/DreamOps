@@ -1,13 +1,25 @@
-// WebSocket hook for real-time updates
+'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import io, { Socket } from 'socket.io-client';
-import { WebSocketMessage } from '../types';
+import { io, Socket } from 'socket.io-client';
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:8000';
+export interface WebSocketMessage {
+  type: string;
+  data: any;
+  timestamp: string;
+}
+
+export interface DashboardUpdate {
+  type: 'metrics' | 'incident' | 'ai_action';
+  data: any;
+  teamId: number;
+}
 
 interface UseWebSocketOptions {
-  onMessage?: (message: WebSocketMessage) => void;
+  teamId?: number;
+  onMetricsUpdate?: (metrics: any) => void;
+  onIncidentUpdate?: (incident: any) => void;
+  onAiActionUpdate?: (action: any) => void;
   onConnect?: () => void;
   onDisconnect?: () => void;
   onError?: (error: Error) => void;
@@ -16,7 +28,10 @@ interface UseWebSocketOptions {
 
 export function useWebSocket(options: UseWebSocketOptions = {}) {
   const {
-    onMessage,
+    teamId,
+    onMetricsUpdate,
+    onIncidentUpdate,
+    onAiActionUpdate,
     onConnect,
     onDisconnect,
     onError,
@@ -28,18 +43,35 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   const socketRef = useRef<Socket | null>(null);
 
   const connect = useCallback(() => {
-    if (socketRef.current?.connected) return;
+    // Temporarily disable WebSocket to avoid connection errors
+    return;
+    
+    if (socketRef.current?.connected || !teamId) return;
 
     try {
-      socketRef.current = io(WS_URL, {
+      const socketURL = process.env.NODE_ENV === 'production' 
+        ? window.location.origin 
+        : 'http://localhost:3000';
+
+      socketRef.current = io(socketURL, {
+        path: '/api/socketio',
+        addTrailingSlash: false,
         transports: ['websocket'],
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
+        reconnection: true,
+        reconnectionAttempts: 3,
+        reconnectionDelay: 5000,
+        reconnectionDelayMax: 10000,
+        timeout: 20000,
       });
 
       socketRef.current.on('connect', () => {
         setIsConnected(true);
         onConnect?.();
+        
+        // Join team room
+        if (teamId) {
+          socketRef.current?.emit('join-team', teamId);
+        }
       });
 
       socketRef.current.on('disconnect', () => {
@@ -47,67 +79,43 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
         onDisconnect?.();
       });
 
-      socketRef.current.on('message', (data: WebSocketMessage) => {
-        setLastMessage(data);
-        onMessage?.(data);
-      });
-
-      socketRef.current.on('error', (error: Error) => {
+      socketRef.current.on('connect_error', (error: Error) => {
         onError?.(error);
+        setIsConnected(false);
       });
 
-      // Subscribe to specific event types
-      socketRef.current.on('incident_update', (data: any) => {
-        const message: WebSocketMessage = {
-          type: 'incident_update',
-          data,
-          timestamp: new Date().toISOString(),
-        };
-        setLastMessage(message);
-        onMessage?.(message);
+      // Dashboard update handler
+      socketRef.current.on('dashboard-update', (update: DashboardUpdate) => {
+        console.log('Received dashboard update:', update);
+        
+        switch (update.type) {
+          case 'metrics':
+            onMetricsUpdate?.(update.data);
+            break;
+          case 'incident':
+            onIncidentUpdate?.(update.data);
+            break;
+          case 'ai_action':
+            onAiActionUpdate?.(update.data);
+            break;
+        }
       });
 
-      socketRef.current.on('integration_status', (data: any) => {
-        const message: WebSocketMessage = {
-          type: 'integration_status',
-          data,
-          timestamp: new Date().toISOString(),
-        };
-        setLastMessage(message);
-        onMessage?.(message);
-      });
-
-      socketRef.current.on('ai_action', (data: any) => {
-        const message: WebSocketMessage = {
-          type: 'ai_action',
-          data,
-          timestamp: new Date().toISOString(),
-        };
-        setLastMessage(message);
-        onMessage?.(message);
-      });
-
-      socketRef.current.on('metric_update', (data: any) => {
-        const message: WebSocketMessage = {
-          type: 'metric_update',
-          data,
-          timestamp: new Date().toISOString(),
-        };
-        setLastMessage(message);
-        onMessage?.(message);
-      });
     } catch (error) {
       onError?.(error as Error);
     }
-  }, [onConnect, onDisconnect, onError, onMessage]);
+  }, [teamId, onConnect, onDisconnect, onError, onMetricsUpdate, onIncidentUpdate, onAiActionUpdate]);
 
   const disconnect = useCallback(() => {
     if (socketRef.current) {
+      if (teamId) {
+        socketRef.current.emit('leave-team', teamId);
+      }
       socketRef.current.disconnect();
       socketRef.current = null;
       setIsConnected(false);
     }
-  }, []);
+  }, [teamId]);
 
   const sendMessage = useCallback((event: string, data: any) => {
     if (socketRef.current?.connected) {

@@ -85,7 +85,7 @@ class Config(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
-        extra = "allow"  # Allow extra fields from .env
+        extra = "ignore"  # Allow extra fields from environment
 
     def get(self, key: str, default=None):
         """Get config value by key (for backward compatibility)."""
