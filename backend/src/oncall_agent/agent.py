@@ -12,6 +12,7 @@ from .mcp_integrations.base import MCPIntegration
 from .mcp_integrations.grafana_mcp import GrafanaMCPIntegration
 from .mcp_integrations.kubernetes import KubernetesMCPIntegration
 from .mcp_integrations.notion import NotionMCPIntegration
+from .frontend_integration import send_incident_to_dashboard, send_ai_action_to_dashboard
 
 
 class PagerAlert(BaseModel):
@@ -99,9 +100,37 @@ class OncallAgent:
         self.logger.info(f"Description: {alert.description[:200]}...")
 
         try:
+            # STEP 0: Send incident to frontend dashboard
+            self.logger.info("📊 Sending incident to dashboard...")
+            try:
+                alert_data = {
+                    "alert_name": alert.service_name,
+                    "description": alert.description,
+                    "alert_type": self._detect_k8s_alert_type(alert.description) or "general",
+                    "resource_id": alert.alert_id,
+                    "severity": alert.severity,
+                    "metadata": alert.metadata
+                }
+                dashboard_incident = await send_incident_to_dashboard(alert_data)
+                incident_id = dashboard_incident.get("id") if dashboard_incident else None
+                self.logger.info(f"✅ Incident sent to dashboard with ID: {incident_id}")
+            except Exception as e:
+                self.logger.error(f"❌ Failed to send incident to dashboard: {e}")
+                incident_id = None
+
             # STEP 1: Gather context from ALL available MCP integrations
             self.logger.info("🔍 Gathering context from MCP integrations...")
             all_context = {}
+            
+            # Send context gathering action to dashboard
+            try:
+                await send_ai_action_to_dashboard(
+                    action="context_gathering_started",
+                    description=f"Started gathering context from {len(self.mcp_integrations)} MCP integrations",
+                    incident_id=incident_id
+                )
+            except Exception as e:
+                self.logger.error(f"❌ Failed to send context gathering action to dashboard: {e}")
 
             # Detect if this is a Kubernetes-related alert
             k8s_alert_type = self._detect_k8s_alert_type(alert.description)
@@ -202,7 +231,18 @@ class OncallAgent:
             # Extract the response
             analysis = response.content[0].text if response.content else "No analysis available"
 
-            # STEP 4: Log the analysis to console for visibility
+            # STEP 4: Send AI analysis action to dashboard
+            try:
+                await send_ai_action_to_dashboard(
+                    action="analysis_complete",
+                    description=f"AI analysis completed for {alert.service_name} incident",
+                    incident_id=incident_id
+                )
+                self.logger.info("✅ AI analysis action sent to dashboard")
+            except Exception as e:
+                self.logger.error(f"❌ Failed to send AI action to dashboard: {e}")
+
+            # STEP 5: Log the analysis to console for visibility
             self.logger.info("\n" + "="*80)
             self.logger.info("🤖 CLAUDE'S ANALYSIS:")
             self.logger.info("="*80)
@@ -211,7 +251,7 @@ class OncallAgent:
                     self.logger.info(line)
             self.logger.info("="*80 + "\n")
 
-            # STEP 5: Create comprehensive response
+            # STEP 6: Create comprehensive response
             result = {
                 "alert_id": alert.alert_id,
                 "status": "analyzed",
@@ -233,6 +273,16 @@ class OncallAgent:
                 self.logger.info("🤖 Automated actions available:")
                 for action in result["automated_actions"]:
                     self.logger.info(f"  - {action['action']}: {action['reason']} (confidence: {action['confidence']})")
+                    
+                    # Send each automated action suggestion to dashboard
+                    try:
+                        await send_ai_action_to_dashboard(
+                            action=f"automated_suggestion_{action['action']}",
+                            description=f"Suggested automated action: {action['action']} - {action['reason']} (confidence: {action['confidence']})",
+                            incident_id=incident_id
+                        )
+                    except Exception as e:
+                        self.logger.error(f"❌ Failed to send automated action to dashboard: {e}")
 
             # Log summary
             self.logger.info(f"✅ Alert {alert.alert_id} analyzed successfully")

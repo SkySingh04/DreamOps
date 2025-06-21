@@ -43,9 +43,6 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   const socketRef = useRef<Socket | null>(null);
 
   const connect = useCallback(() => {
-    // TEMPORARILY DISABLED - WebSocket connection disabled to prevent spam
-    return;
-    
     if (socketRef.current?.connected || !teamId) return;
 
     try {
@@ -124,14 +121,13 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   }, []);
 
   useEffect(() => {
-    // DISABLED - WebSocket connection disabled
-    // if (autoConnect) {
-    //   connect();
-    // }
+    if (autoConnect) {
+      connect();
+    }
 
-    // return () => {
-    //   disconnect();
-    // };
+    return () => {
+      disconnect();
+    };
   }, [autoConnect, connect, disconnect]);
 
   return {

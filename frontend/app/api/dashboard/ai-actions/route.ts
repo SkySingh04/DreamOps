@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await recordAiAction(userWithTeam.teamId, {
+    const aiAction = await recordAiAction(userWithTeam.teamId, {
       action,
       description,
       incidentId,
@@ -60,7 +60,14 @@ export async function POST(request: NextRequest) {
       metadata: metadata ? JSON.stringify(metadata) : undefined,
     });
 
-    return NextResponse.json({ success: true }, { status: 201 });
+    if (!aiAction) {
+      return NextResponse.json(
+        { error: 'Failed to record AI action' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(aiAction, { status: 201 });
   } catch (error) {
     console.error('Error recording AI action:', error);
     return NextResponse.json(

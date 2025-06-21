@@ -228,17 +228,20 @@ export async function recordAiAction(teamId: number, actionData: {
   incidentId?: number;
   status?: string;
   metadata?: string;
-}): Promise<void> {
+}): Promise<AiAction | null> {
   try {
-    await db.insert(aiActions).values({
+    const [newAction] = await db.insert(aiActions).values({
       teamId,
       action: actionData.action,
       description: actionData.description,
       incidentId: actionData.incidentId,
       status: actionData.status || 'completed',
       metadata: actionData.metadata,
-    });
+    }).returning();
+    
+    return newAction;
   } catch (error) {
     console.error('Error recording AI action:', error);
+    return null;
   }
 }
