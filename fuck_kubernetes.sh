@@ -287,6 +287,11 @@ run_all() {
     echo -e "\n${GREEN}✓ All simulations deployed! Your Kubernetes is properly fucked!${NC}"
     echo -e "${YELLOW}Run 'kubectl get all -n $NAMESPACE' to see the chaos${NC}"
     echo -e "${YELLOW}Run '$0 clean' to clean up when done${NC}"
+    
+    # Auto-trigger CloudWatch alarms
+    echo -e "\n${YELLOW}⚡ Auto-triggering CloudWatch alarms...${NC}"
+    sleep 5  # Give a few seconds for metrics to propagate
+    trigger_alarms
 }
 
 # Function to force CloudWatch alarms to trigger
@@ -400,18 +405,33 @@ test_loop() {
 case "${1:-random}" in
     1)
         fuck_pod_crash
+        echo -e "\n${YELLOW}⚡ Auto-triggering CloudWatch alarms...${NC}"
+        sleep 5
+        trigger_alarms
         ;;
     2)
         fuck_image_pull
+        echo -e "\n${YELLOW}⚡ Auto-triggering CloudWatch alarms...${NC}"
+        sleep 5
+        trigger_alarms
         ;;
     3)
         fuck_oom_kill
+        echo -e "\n${YELLOW}⚡ Auto-triggering CloudWatch alarms...${NC}"
+        sleep 5
+        trigger_alarms
         ;;
     4)
         fuck_deployment
+        echo -e "\n${YELLOW}⚡ Auto-triggering CloudWatch alarms...${NC}"
+        sleep 5
+        trigger_alarms
         ;;
     5)
         fuck_service
+        echo -e "\n${YELLOW}⚡ Auto-triggering CloudWatch alarms...${NC}"
+        sleep 5
+        trigger_alarms
         ;;
     all)
         run_all
@@ -439,6 +459,10 @@ case "${1:-random}" in
             4) fuck_deployment ;;
             5) fuck_service ;;
         esac
+        
+        echo -e "\n${YELLOW}⚡ Auto-triggering CloudWatch alarms...${NC}"
+        sleep 5
+        trigger_alarms
         ;;
     *)
         usage
@@ -447,8 +471,7 @@ esac
 
 # Only show these messages if not running trigger or loop
 if [[ "$1" != "trigger" && "$1" != "loop" && "$1" != "clean" ]]; then
-    echo -e "\n${YELLOW}📊 PagerDuty should detect and alert on these issues soon!${NC}"
+    echo -e "\n${YELLOW}📊 CloudWatch alarms have been automatically triggered!${NC}"
     echo -e "${YELLOW}Check your Slack for alerts from PagerDuty${NC}"
-    echo -e "\n${YELLOW}💡 TIP: Run '$0 trigger' to force CloudWatch alarms to fire immediately${NC}"
-    echo -e "${YELLOW}💡 TIP: Run '$0 loop' for continuous testing with auto-triggering${NC}"
+    echo -e "\n${YELLOW}💡 TIP: Run '$0 loop' for continuous testing with auto-triggering${NC}"
 fi

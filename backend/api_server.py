@@ -8,6 +8,7 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+import json
 
 from src.oncall_agent.api import webhooks
 from src.oncall_agent.api.routers import (
@@ -34,6 +35,8 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Oncall Agent API Server")
     logger.info(f"API Server running on {config.api_host}:{config.api_port}")
     logger.info(f"PagerDuty integration: {'enabled' if config.pagerduty_enabled else 'disabled'}")
+    logger.info(f"PagerDuty webhook secret configured: {bool(config.pagerduty_webhook_secret)}")
+    logger.info(f"Log level: {config.log_level}")
 
     # Initialize webhook handler
     if config.pagerduty_enabled:
@@ -67,6 +70,36 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Add request logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log all incoming requests for debugging."""
+    # Log request details
+    logger.info(f"Incoming request: {request.method} {request.url.path}")
+    
+    # Log webhook requests in detail
+    if request.url.path == "/webhook/pagerduty":
+        body = await request.body()
+        logger.info(f"PagerDuty webhook headers: {dict(request.headers)}")
+        try:
+            payload = json.loads(body) if body else {}
+            logger.info(f"PagerDuty webhook payload: {json.dumps(payload, indent=2)}")
+        except:
+            logger.info(f"PagerDuty webhook raw body: {body}")
+        
+        # Important: Create a new request with the body we read
+        from starlette.datastructures import Headers
+        from starlette.requests import Request as StarletteRequest
+        
+        request = StarletteRequest(
+            scope=request.scope,
+            receive=lambda: {"type": "http.request", "body": body}
+        )
+    
+    response = await call_next(request)
+    return response
 
 
 @app.get("/")

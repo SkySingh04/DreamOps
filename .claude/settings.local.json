@@ -25,7 +25,8 @@
       "Bash(pkill:*)",
       "Bash(aws sns subscribe:*)",
       "Bash(aws cloudwatch set-alarm-state:*)",
-      "Bash(timeout 30s kubectl get pods -n stress-test -w)"
+      "Bash(timeout 30s kubectl get pods -n stress-test -w)",
+      "Bash(./fuck_kubernetes.sh:*)"
     ],
     "deny": []
   }
