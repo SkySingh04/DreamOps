@@ -2,10 +2,7 @@ name: Security Scan
 
 on:
   push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
-    branches: [main]
+    branches: [main, develop]
   pull_request:
     branches: [main]
   schedule:
@@ -15,7 +12,6 @@ jobs:
   backend-security:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
     - uses: actions/checkout@v4
     
     - name: Run Trivy vulnerability scanner
@@ -27,7 +23,6 @@ jobs:
         output: 'backend-trivy-results.sarif'
     
     - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v2
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: 'backend-trivy-results.sarif'
@@ -38,44 +33,58 @@ jobs:
         bandit -r backend/src -f json -o backend-bandit-results.json || true
     
     - name: Upload Bandit results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: security-scan-results
+        name: backend-security-scan-results
         path: backend-bandit-results.json
 
   frontend-security:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
     - uses: actions/checkout@v4
     
-    - name: Run npm audit
+    - name: Install pnpm
+      uses: pnpm/action-setup@v3
+      with:
+        version: 8
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'pnpm'
+        cache-dependency-path: frontend/pnpm-lock.yaml
+    
+    - name: Install dependencies
+      working-directory: ./frontend
+      run: pnpm install --frozen-lockfile
+    
+    - name: Run pnpm audit
       working-directory: ./frontend
       run: |
-        npm audit --json > npm-audit-results.json || true
+        pnpm audit --json > pnpm-audit-results.json || true
     
-    - name: Upload npm audit results
-      uses: actions/upload-artifact@v3
+    - name: Upload pnpm audit results
+      uses: actions/upload-artifact@v4
       with:
-        name: security-scan-results
-        path: frontend/npm-audit-results.json
+        name: frontend-security-scan-results
+        path: frontend/pnpm-audit-results.json
     
     - name: Run ESLint security plugin
       working-directory: ./frontend
       run: |
-        npm install --save-dev eslint-plugin-security
-        npx eslint . --ext .js,.jsx,.ts,.tsx --format json --output-file eslint-security-results.json || true
+        pnpm add --save-dev eslint-plugin-security
+        pnpm exec eslint . --ext .js,.jsx,.ts,.tsx --format json --output-file eslint-security-results.json || true
     
     - name: Upload ESLint results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: security-scan-results
+        name: frontend-eslint-security-results
         path: frontend/eslint-security-results.json
 
   docker-security:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
     - uses: actions/checkout@v4
     
     - name: Build backend Docker image
@@ -89,7 +98,6 @@ jobs:
         output: 'docker-trivy-results.sarif'
     
     - name: Upload Docker scan results
-      uses: github/codeql-action/upload-sarif@v2
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: 'docker-trivy-results.sarif'
@@ -97,7 +105,6 @@ jobs:
   secrets-scan:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
     - uses: actions/checkout@v4
     
     - name: Run GitLeaks

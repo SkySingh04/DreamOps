@@ -5,18 +5,14 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "test": "echo \"No tests configured yet\"",
     "db:setup": "npx tsx lib/db/setup.ts",
     "db:seed": "npx tsx lib/db/seed.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio"
-  },
-  "dependencies": {
-    "@tailwindcss/postcss": "4.1.7",
-    "db:studio": "drizzle-kit studio",
-    "lint": "next lint",
-    "type-check": "tsc --noEmit",
-    "test": "echo \"No tests configured yet\""
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.14",
@@ -50,7 +46,6 @@
     "radix-ui": "^1.4.2",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "server-only": "^0.0.1",
     "recharts": "^2.15.4",
     "server-only": "^0.0.1",
     "socket.io-client": "^4.8.1",
