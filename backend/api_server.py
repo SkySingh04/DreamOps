@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from src.oncall_agent.api import webhooks
 from src.oncall_agent.api.routers import (
+    agent_logs,
     agent_router,
     analytics_router,
     dashboard_router,
@@ -166,6 +167,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(incidents_router, prefix="/api/v1")
 app.include_router(agent_router, prefix="/api/v1")
+app.include_router(agent_logs.router, prefix="/api/v1")
 app.include_router(integrations_router, prefix="/api/v1")
 app.include_router(analytics_router, prefix="/api/v1")
 app.include_router(security_router, prefix="/api/v1")

@@ -90,6 +90,13 @@ class OncallAgent:
 
     async def handle_pager_alert(self, alert: PagerAlert) -> dict[str, Any]:
         """Handle an incoming pager alert."""
+        # Import here to avoid circular dependency
+        try:
+            from .api.log_streaming import log_stream_manager
+            has_log_streaming = True
+        except ImportError:
+            has_log_streaming = False
+
         self.logger.info("=" * 80)
         self.logger.info("🚨 ONCALL AGENT TRIGGERED 🚨")
         self.logger.info("=" * 80)
@@ -101,6 +108,15 @@ class OncallAgent:
         try:
             # STEP 1: Gather context from ALL available MCP integrations
             self.logger.info("🔍 Gathering context from MCP integrations...")
+
+            # Emit structured log if available
+            if has_log_streaming:
+                await log_stream_manager.log_info(
+                    "🔍 Gathering context from MCP integrations",
+                    incident_id=alert.alert_id,
+                    stage="gathering_context",
+                    progress=0.3
+                )
             all_context = {}
 
             # Detect if this is a Kubernetes-related alert
@@ -109,6 +125,14 @@ class OncallAgent:
             # Gather Kubernetes context if available
             if "kubernetes" in self.mcp_integrations:
                 self.logger.info("📊 Fetching Kubernetes context...")
+                if has_log_streaming:
+                    await log_stream_manager.log_info(
+                        "🔍 Gathering context from Kubernetes integration",
+                        incident_id=alert.alert_id,
+                        integration="kubernetes",
+                        stage="gathering_context",
+                        progress=0.35
+                    )
                 try:
                     if k8s_alert_type:
                         k8s_context = await self._gather_k8s_context(alert, k8s_alert_type)
@@ -132,6 +156,14 @@ class OncallAgent:
             # Gather Grafana context if available
             if "grafana" in self.mcp_integrations:
                 self.logger.info("📈 Fetching Grafana metrics...")
+                if has_log_streaming:
+                    await log_stream_manager.log_info(
+                        "🔍 Gathering context from Grafana integration",
+                        incident_id=alert.alert_id,
+                        integration="grafana",
+                        stage="gathering_context",
+                        progress=0.4
+                    )
                 try:
                     grafana = self.mcp_integrations["grafana"]
                     # Try to find relevant dashboards based on service name
@@ -191,6 +223,13 @@ class OncallAgent:
 
             # STEP 3: Call Claude for analysis
             self.logger.info("🤖 Calling Claude for comprehensive analysis...")
+            if has_log_streaming:
+                await log_stream_manager.log_info(
+                    "🤖 Starting Claude analysis...",
+                    incident_id=alert.alert_id,
+                    stage="claude_analysis",
+                    progress=0.5
+                )
             response = await self.anthropic_client.messages.create(
                 model=self.config.claude_model,
                 max_tokens=2000,
@@ -201,6 +240,14 @@ class OncallAgent:
 
             # Extract the response
             analysis = response.content[0].text if response.content else "No analysis available"
+
+            if has_log_streaming:
+                await log_stream_manager.log_info(
+                    "📊 Claude is analyzing the incident context",
+                    incident_id=alert.alert_id,
+                    stage="claude_analysis",
+                    progress=0.7
+                )
 
             # STEP 4: Log the analysis to console for visibility
             self.logger.info("\n" + "="*80)

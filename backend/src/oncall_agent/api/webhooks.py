@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from src.oncall_agent.api.log_streaming import log_stream_manager
 from src.oncall_agent.api.models import (
     PagerDutyIncidentData,
     PagerDutyService,
@@ -131,6 +132,20 @@ async def pagerduty_webhook(
                 logger.info(
                     f"Processing V3 incident {incident.incident_number}: {incident.title} "
                     f"(severity: {incident.urgency}, service: {incident.service.name if incident.service else 'unknown'})"
+                )
+
+                # Emit structured log for webhook received
+                await log_stream_manager.log_info(
+                    "📨 PAGERDUTY WEBHOOK RECEIVED!",
+                    incident_id=incident.id,
+                    stage="webhook_received",
+                    progress=0.1,
+                    metadata={
+                        "webhook_type": v3_payload.event.event_type,
+                        "service": incident.service.name if incident.service else "unknown",
+                        "urgency": incident.urgency,
+                        "title": incident.title
+                    }
                 )
 
                 # Process immediately
