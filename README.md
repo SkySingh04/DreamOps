@@ -220,8 +220,52 @@ uv run pytest tests/ --cov=src --cov-report=html
 ### Available Integrations
 
 1. **Kubernetes** - Debugs pod crashes, OOM issues, and config problems
-2. **GitHub** - Fetches context from repositories and creates incident issues
+2. **GitHub** - Fetches context from repositories and creates incident issues (🚀 **Auto-starts MCP server**)
 3. **Notion** - Creates incident documentation (if configured)
+
+### 🤖 GitHub MCP Integration - Automatic Startup
+
+The GitHub MCP integration features **automatic server management** - no manual setup required!
+
+**How it works:**
+1. When you enable GitHub integration (`--github-integration`), the agent automatically:
+   - 🚀 Starts the GitHub MCP server as a subprocess
+   - 🔗 Establishes MCP protocol connection via JSON-RPC 2.0
+   - 🏓 Performs health checks to ensure connectivity
+   - 🧹 Automatically cleans up the server process on shutdown
+
+**Configuration:**
+```bash
+# Required in .env file
+GITHUB_TOKEN=your_github_personal_access_token
+GITHUB_MCP_SERVER_PATH=../github-mcp-server/github-mcp-server
+
+# Optional settings
+GITHUB_MCP_HOST=localhost
+GITHUB_MCP_PORT=8081
+```
+
+**Usage:**
+```bash
+# GitHub MCP server starts automatically with this command
+uv run python simulate_pagerduty_alert.py pod_crash --github-integration
+
+# Or with the main demo
+uv run python main.py  # If GitHub token is configured
+```
+
+**Capabilities:**
+- 📊 Fetch recent commits and repository context
+- 🔍 Search code for error patterns and related issues
+- 📝 Create GitHub issues for incident tracking
+- ⚡ Check GitHub Actions workflow status
+- 📁 Access repository files and documentation
+
+**Benefits:**
+- ✅ Zero manual server management
+- ✅ Automatic process lifecycle handling  
+- ✅ Full GitHub API access via MCP protocol
+- ✅ Clean resource cleanup and error handling
 
 ### Adding New Integrations
 

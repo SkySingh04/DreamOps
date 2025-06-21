@@ -249,18 +249,66 @@ terraform apply
 
 The GitHub MCP integration (`src/oncall_agent/mcp_integrations/github_mcp.py`) provides:
 
+### 🚀 Automatic Server Management
+
+**IMPORTANT**: The GitHub MCP server starts automatically - no manual setup required!
+
+The integration features complete automatic server lifecycle management:
+
+1. **Auto-Start**: When `GitHubMCPIntegration.connect()` is called:
+   ```python
+   # This happens automatically:
+   await self._start_mcp_server()  # Starts subprocess
+   await self._initialize_mcp_client()  # Creates HTTP client  
+   await self._test_connection()  # Verifies connectivity
+   ```
+
+2. **Process Management**: 
+   - Starts `github-mcp-server stdio` as subprocess
+   - Passes `GITHUB_PERSONAL_ACCESS_TOKEN` via environment
+   - Waits 2 seconds for server initialization
+   - Performs health checks via MCP protocol
+
+3. **Auto-Cleanup**: On shutdown:
+   - Gracefully terminates server process
+   - Kills process if needed
+   - Cleans up all resources
+
 ### Features
 - Context gathering: Fetches recent commits, issues, PRs, and GitHub Actions runs
 - Issue management: Creates incident issues for high-severity alerts
 - Repository mapping: Maps service names to GitHub repositories
 - Workflow monitoring: Checks GitHub Actions status
+- **Zero manual server management**: Fully automated startup and cleanup
 
 ### Configuration
 Required environment variables:
 - `GITHUB_TOKEN`: GitHub Personal Access Token
-- `GITHUB_MCP_SERVER_PATH`: Path to GitHub MCP server binary
+- `GITHUB_MCP_SERVER_PATH`: Path to GitHub MCP server binary (default: `../github-mcp-server/github-mcp-server`)
 - `GITHUB_MCP_HOST`: Host for MCP server (default: localhost)
 - `GITHUB_MCP_PORT`: Port for MCP server (default: 8081)
+
+### Testing the Auto-Startup
+```bash
+# Test the automatic startup
+uv run python test_mcp_integration.py
+
+# Use in real alert simulation
+uv run python simulate_pagerduty_alert.py pod_crash --github-integration
+
+# The agent automatically:
+# 1. Starts github-mcp-server subprocess
+# 2. Establishes MCP connection  
+# 3. Fetches GitHub context for alerts
+# 4. Cleans up server on exit
+```
+
+### MCP Communication Flow
+1. **Subprocess Start**: `subprocess.Popen([github-mcp-server, stdio])`
+2. **MCP Handshake**: JSON-RPC 2.0 initialization via stdin/stdout
+3. **Tool Calls**: `list_commits`, `get_repository`, `create_issue`, etc.
+4. **Resource Access**: Repository contents, file browsing
+5. **Cleanup**: Process termination and resource cleanup
 
 ## Debugging Tips
 
