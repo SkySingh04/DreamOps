@@ -280,7 +280,7 @@ export default function SecurityPage() {
   };
 
   return (
-    <section className="flex-1 p-4 lg:p-8 space-y-6">
+    <div className="flex-1 p-4 lg:p-8 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Security & Audit Trail</h1>
@@ -698,8 +698,8 @@ export default function SecurityPage() {
               Revoke Key
             </Button>
           </DialogFooter>
-        </Dialog>
+        </DialogContent>
       </Dialog>
-    </section>
+    </div>
   );
 }

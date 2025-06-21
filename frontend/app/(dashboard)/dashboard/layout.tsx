@@ -9,7 +9,6 @@ import {
   AlertTriangle, 
   Plug, 
   Settings, 
-  Menu 
   Menu,
   Bot,
   BarChart3,
@@ -30,7 +29,6 @@ export default function DashboardLayout({
     { href: '/incidents', icon: AlertTriangle, label: 'Incidents' },
     { href: '/integrations', icon: Plug, label: 'Integrations' },
     { href: '/ai-control', icon: Bot, label: 'AI Control' },
-    { href: '/integrations', icon: Plug, label: 'Integrations' },
     { href: '/analytics', icon: BarChart3, label: 'Analytics' },
     { href: '/monitoring', icon: Activity, label: 'Monitoring' },
     { href: '/security', icon: Shield, label: 'Security' },
