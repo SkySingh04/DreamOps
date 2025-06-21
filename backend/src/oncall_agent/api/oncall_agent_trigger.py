@@ -136,7 +136,8 @@ Please provide brief analysis and recommendations."""
             self.logger.info(f"📋 Agent Response Summary: {result.get('status', 'unknown')}")
 
             # Clean up
-            del self.processing_alerts[pager_alert.alert_id]
+            if pager_alert.alert_id in self.processing_alerts:
+                del self.processing_alerts[pager_alert.alert_id]
 
             return {
                 "status": "success",

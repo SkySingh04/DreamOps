@@ -24,10 +24,13 @@ from src.oncall_agent.api.routers import (
 )
 from src.oncall_agent.api.socketio_server import socket_app
 from src.oncall_agent.config import get_config
-from src.oncall_agent.utils import get_logger
+from src.oncall_agent.utils import get_logger, setup_logging
+
+# Setup logging FIRST before creating any loggers
+config = get_config()
+setup_logging(level=config.log_level)
 
 logger = get_logger(__name__)
-config = get_config()
 
 
 @asynccontextmanager
