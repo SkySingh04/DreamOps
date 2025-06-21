@@ -356,7 +356,7 @@ export default function IntegrationsPage() {
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-gray-100 rounded-lg">
-                      <Icon className="h-6 w-6" />
+                      {Icon && <Icon size={24} />}
                     </div>
                     <div>
                       <CardTitle className="text-lg">{integration.name}</CardTitle>
@@ -480,7 +480,7 @@ export default function IntegrationsPage() {
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
                         <div className={`p-2 bg-${config?.color || 'gray'}-100 rounded-lg`}>
-                          <Icon className={`h-6 w-6 text-${config?.color || 'gray'}-600`} />
+                          {Icon && <Icon size={24} />}
                         </div>
                         <div>
                           <CardTitle className="text-lg">{integration.name}</CardTitle>
