@@ -1,5 +1,7 @@
 """FastAPI server for webhook endpoints and API."""
 
+import json
+import logging
 import signal
 import sys
 from contextlib import asynccontextmanager
@@ -21,10 +23,13 @@ from src.oncall_agent.api.routers import (
     settings_router,
 )
 from src.oncall_agent.config import get_config
-from src.oncall_agent.utils import get_logger
+from src.oncall_agent.utils import get_logger, setup_logging
+
+# Setup logging FIRST before creating any loggers
+config = get_config()
+setup_logging(level=config.log_level)
 
 logger = get_logger(__name__)
-config = get_config()
 
 
 @asynccontextmanager
@@ -34,6 +39,8 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Oncall Agent API Server")
     logger.info(f"API Server running on {config.api_host}:{config.api_port}")
     logger.info(f"PagerDuty integration: {'enabled' if config.pagerduty_enabled else 'disabled'}")
+    logger.info(f"PagerDuty webhook secret configured: {bool(config.pagerduty_webhook_secret)}")
+    logger.info(f"Log level: {config.log_level}")
 
     # Initialize webhook handler
     if config.pagerduty_enabled:
@@ -67,6 +74,35 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Add request logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log all incoming requests for debugging."""
+    # Log request details
+    logger.info(f"Incoming request: {request.method} {request.url.path}")
+
+    # Log webhook requests in detail
+    if request.url.path == "/webhook/pagerduty":
+        body = await request.body()
+        logger.info(f"PagerDuty webhook headers: {dict(request.headers)}")
+        try:
+            payload = json.loads(body) if body else {}
+            logger.info(f"PagerDuty webhook payload: {json.dumps(payload, indent=2)}")
+        except:
+            logger.info(f"PagerDuty webhook raw body: {body}")
+
+        # Important: Create a new request with the body we read
+        from starlette.requests import Request as StarletteRequest
+
+        request = StarletteRequest(
+            scope=request.scope,
+            receive=lambda: {"type": "http.request", "body": body}
+        )
+
+    response = await call_next(request)
+    return response
 
 
 @app.get("/")
@@ -143,6 +179,10 @@ if config.pagerduty_enabled:
 
 logger.info("All API routes registered successfully")
 
+# Mount Socket.IO application - TEMPORARILY DISABLED
+# app.mount("/socket.io", socket_app)
+# logger.info("Socket.IO server mounted at /socket.io")
+
 
 def signal_handler(sig, frame):
     """Handle shutdown signals gracefully."""
@@ -155,6 +195,20 @@ def main():
     # Setup signal handlers
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
+
+    # Filter out ONLY WebSocket connection logs
+    class WebSocketFilter(logging.Filter):
+        def filter(self, record):
+            # Filter out WebSocket connection messages ONLY
+            msg = record.getMessage()
+            if "/socket.io/" in msg and ("WebSocket" in msg or "connection" in msg):
+                return False
+            # Allow all other logs including PagerDuty webhooks
+            return True
+
+    # Apply filter to uvicorn access logger
+    uvicorn_access = logging.getLogger("uvicorn.access")
+    uvicorn_access.addFilter(WebSocketFilter())
 
     # Run server
     uvicorn.run(

@@ -130,10 +130,14 @@ Please provide brief analysis and recommendations."""
             if not self.agent:
                 await self.initialize()
             assert self.agent is not None
+            self.logger.info("📨 Sending alert to Oncall Agent...")
             result = await self.agent.handle_pager_alert(pager_alert)
+            self.logger.info("✅ Agent processing complete")
+            self.logger.info(f"📋 Agent Response Summary: {result.get('status', 'unknown')}")
 
             # Clean up
-            del self.processing_alerts[pager_alert.alert_id]
+            if pager_alert.alert_id in self.processing_alerts:
+                del self.processing_alerts[pager_alert.alert_id]
 
             return {
                 "status": "success",
