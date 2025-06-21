@@ -9,7 +9,6 @@ import {
   AlertTriangle, 
   Plug, 
   Settings, 
-  Menu 
   Menu,
   Bot,
   BarChart3,
