@@ -84,7 +84,7 @@ export default function IncidentsPage() {
     refetchInterval: 30000, // Refetch every 30 seconds
   });
   
-  const incidents = incidentsData?.incidents || [];
+  const incidents = incidentsData?.data?.incidents || [];
 
   // WebSocket for real-time updates - DISABLED
   // useWebSocket({
@@ -173,12 +173,12 @@ export default function IncidentsPage() {
     }
   };
 
-  const filteredIncidents = incidents.filter((incident: any) => {
+  const filteredIncidents = incidents.filter((incident: Incident) => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
         incident.title.toLowerCase().includes(query) ||
-        incident.service.name.toLowerCase().includes(query) ||
+        incident.service?.name?.toLowerCase().includes(query) ||
         incident.id.toLowerCase().includes(query)
       );
     }
@@ -274,8 +274,6 @@ export default function IncidentsPage() {
     }
   };
 
-  const isLoading = false; // Mock data, no loading needed
-
   return (
     <section className="flex-1 p-4 lg:p-8 space-y-6">
       <div className="flex items-center justify-between">
@@ -369,7 +367,7 @@ export default function IncidentsPage() {
             </CardContent>
           </Card>
         ) : (
-          filteredIncidents.map((incident) => (
+          filteredIncidents.map((incident: Incident) => (
             <Card key={incident.id} className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -401,7 +399,7 @@ export default function IncidentsPage() {
                 <div className="flex items-center gap-4 text-sm text-gray-500">
                   <span>ID: {incident.id}</span>
                   <span>•</span>
-                  <span>Service: {incident.service.name}</span>
+                  <span>Service: {incident.service?.name || 'Unknown'}</span>
                   <span>•</span>
                   <span>Assignee: {incident.assignee}</span>
                   <span>•</span>

@@ -2,6 +2,7 @@
 
 import hashlib
 import hmac
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
@@ -14,11 +15,10 @@ from src.oncall_agent.api.models import (
     PagerDutyWebhookPayload,
 )
 from src.oncall_agent.api.oncall_agent_trigger import OncallAgentTrigger
-from src.oncall_agent.api.routers.incidents import INCIDENTS_DB, ANALYSIS_DB
-from src.oncall_agent.api.schemas import Incident, IncidentStatus, Severity, AIAnalysis
+from src.oncall_agent.api.routers.incidents import ANALYSIS_DB, INCIDENTS_DB
+from src.oncall_agent.api.schemas import AIAnalysis, Incident, IncidentStatus, Severity
 from src.oncall_agent.config import get_config
 from src.oncall_agent.utils import get_logger
-from datetime import datetime, UTC
 
 router = APIRouter(prefix="/webhook", tags=["webhooks"])
 logger = get_logger(__name__)
@@ -154,11 +154,11 @@ async def pagerduty_webhook(
                 # Store incident in our database
                 severity_map = {
                     "low": Severity.LOW,
-                    "medium": Severity.MEDIUM, 
+                    "medium": Severity.MEDIUM,
                     "high": Severity.HIGH,
                     "critical": Severity.CRITICAL
                 }
-                
+
                 # Create incident record
                 inc_record = Incident(
                     id=incident.id,
@@ -177,12 +177,12 @@ async def pagerduty_webhook(
                     timeline=[{
                         "timestamp": datetime.now(UTC).isoformat(),
                         "event": "incident_created",
-                        "description": f"Incident triggered via PagerDuty webhook"
+                        "description": "Incident triggered via PagerDuty webhook"
                     }]
                 )
-                
+
                 INCIDENTS_DB[incident.id] = inc_record
-                
+
                 # Process immediately
                 result = await trigger.trigger_oncall_agent(
                     incident,
@@ -192,7 +192,7 @@ async def pagerduty_webhook(
                 # Store the analysis result
                 if result.get("status") == "success" and result.get("agent_response"):
                     agent_response = result["agent_response"]
-                    
+
                     # Store full analysis data
                     ANALYSIS_DB[incident.id] = {
                         "incident_id": incident.id,
@@ -206,7 +206,7 @@ async def pagerduty_webhook(
                         "timestamp": datetime.now(UTC).isoformat(),
                         "processing_time": result.get("processing_time", 0)
                     }
-                    
+
                     # Update incident with AI analysis
                     inc_record.ai_analysis = AIAnalysis(
                         summary=agent_response.get("parsed_analysis", {}).get("root_cause", ["Analysis processing"])[0] if agent_response.get("parsed_analysis", {}).get("root_cause") else "AI analysis completed",
@@ -224,7 +224,7 @@ async def pagerduty_webhook(
                         related_incidents=[],
                         knowledge_base_references=[]
                     )
-                    
+
                     # Add to timeline
                     inc_record.timeline.append({
                         "timestamp": datetime.now(UTC).isoformat(),
@@ -232,7 +232,7 @@ async def pagerduty_webhook(
                         "description": f"AI analysis completed with {agent_response.get('confidence_score', 0.85)*100:.0f}% confidence",
                         "automated": True
                     })
-                    
+
                     logger.info("\n" + "="*80)
                     logger.info("🤖 AGENT ANALYSIS COMPLETE:")
                     logger.info("="*80)

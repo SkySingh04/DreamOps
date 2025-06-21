@@ -2,19 +2,17 @@
 """Test the complete dashboard integration flow."""
 
 import asyncio
-import json
 from datetime import datetime
-from typing import Dict, Any
 
 import aiohttp
+
 from src.oncall_agent.agent import OncallAgent, PagerAlert
-from src.oncall_agent.frontend_integration import send_incident_to_dashboard, send_ai_action_to_dashboard
 
 
 async def test_manual_incident_creation():
     """Test creating an incident directly via the dashboard API."""
     print("\n=== Testing Manual Incident Creation ===")
-    
+
     async with aiohttp.ClientSession() as session:
         incident_data = {
             "title": "Test K8s Alert: Pod CrashLoopBackOff",
@@ -29,7 +27,7 @@ async def test_manual_incident_creation():
                 "restarts": 5
             }
         }
-        
+
         try:
             async with session.post(
                 "http://localhost:3000/api/dashboard/incidents",
@@ -51,7 +49,7 @@ async def test_manual_incident_creation():
 async def test_ai_action_creation(incident_id: int = None):
     """Test creating an AI action via the dashboard API."""
     print("\n=== Testing AI Action Creation ===")
-    
+
     async with aiohttp.ClientSession() as session:
         action_data = {
             "action": "automated_restart",
@@ -64,7 +62,7 @@ async def test_ai_action_creation(incident_id: int = None):
                 "confidence": 0.8
             }
         }
-        
+
         try:
             async with session.post(
                 "http://localhost:3000/api/dashboard/ai-actions",
@@ -83,11 +81,11 @@ async def test_ai_action_creation(incident_id: int = None):
 async def test_agent_integration():
     """Test the full agent integration with dashboard."""
     print("\n=== Testing Agent Integration with Dashboard ===")
-    
+
     # Create and initialize the agent
     agent = OncallAgent()
     await agent.connect_integrations()
-    
+
     # Create a test alert
     alert = PagerAlert(
         alert_id=f"test-alert-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
@@ -103,16 +101,16 @@ async def test_agent_integration():
             "alert_type": "pod_crash"
         }
     )
-    
+
     print(f"\n📨 Sending alert to agent: {alert.alert_id}")
-    
+
     # Process the alert
     result = await agent.handle_pager_alert(alert)
-    
-    print(f"\n✅ Agent processing complete")
+
+    print("\n✅ Agent processing complete")
     print(f"Status: {result.get('status')}")
     print(f"Context gathered from: {result.get('context_gathered')}")
-    
+
     # Shutdown agent
     await agent.shutdown()
 
@@ -120,13 +118,13 @@ async def test_agent_integration():
 async def test_dashboard_metrics():
     """Test fetching dashboard metrics."""
     print("\n=== Testing Dashboard Metrics API ===")
-    
+
     async with aiohttp.ClientSession() as session:
         try:
             async with session.get("http://localhost:3000/api/dashboard/metrics") as response:
                 if response.status == 200:
                     metrics = await response.json()
-                    print(f"✅ Dashboard metrics retrieved:")
+                    print("✅ Dashboard metrics retrieved:")
                     print(f"  - Active incidents: {metrics.get('activeIncidents', 0)}")
                     print(f"  - Resolved today: {metrics.get('resolvedToday', 0)}")
                     print(f"  - Avg response time: {metrics.get('avgResponseTime', 0)}ms")
@@ -142,20 +140,20 @@ async def main():
     """Run all integration tests."""
     print("🚀 Starting Dashboard Integration Tests")
     print("=" * 60)
-    
+
     # Test 1: Create incident manually
     incident_id = await test_manual_incident_creation()
-    
+
     # Test 2: Create AI action
     if incident_id:
         await test_ai_action_creation(incident_id)
-    
+
     # Test 3: Test agent integration
     await test_agent_integration()
-    
+
     # Test 4: Fetch dashboard metrics
     await test_dashboard_metrics()
-    
+
     print("\n" + "=" * 60)
     print("✅ Integration tests complete!")
     print("\n👉 Now check your dashboard at http://localhost:3000/dashboard")
