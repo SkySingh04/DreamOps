@@ -45,6 +45,22 @@ class ActionType(str, Enum):
     CUSTOM = "custom"
 
 
+
+
+class AIMode(str, Enum):
+    """AI operation modes."""
+    YOLO = "yolo"
+    PLAN = "plan" 
+    APPROVAL = "approval"
+
+
+class RiskLevel(str, Enum):
+    """Risk levels for actions."""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
 # Base Models
 class TimestampMixin(BaseModel):
     """Mixin for timestamp fields."""
@@ -175,6 +191,108 @@ class AgentStatus(BaseModel):
     queue_size: int
     active_integrations: list[str]
     last_error: str | None = None
+
+
+class NotificationPreferences(BaseModel):
+    """Notification preferences for AI agent."""
+    slack_enabled: bool = True
+    email_enabled: bool = False
+    channels: list[str] = []
+
+
+class AIAgentConfig(BaseModel):
+    """AI Agent configuration."""
+    mode: AIMode = AIMode.APPROVAL
+    confidence_threshold: int = Field(70, ge=0, le=100)
+    risk_matrix: dict[str, list[str]] = {}
+    auto_execute_enabled: bool = True
+    approval_required_for: list[RiskLevel] = [RiskLevel.MEDIUM, RiskLevel.HIGH]
+    notification_preferences: NotificationPreferences = NotificationPreferences()
+
+
+class AIAgentConfigUpdate(BaseModel):
+    """AI Agent configuration update request."""
+    mode: AIMode | None = None
+    confidence_threshold: int | None = Field(None, ge=0, le=100)
+    risk_matrix: dict[str, list[str]] | None = None
+    auto_execute_enabled: bool | None = None
+    approval_required_for: list[RiskLevel] | None = None
+    notification_preferences: NotificationPreferences | None = None
+
+
+# Safety and Risk Management Models
+class ConfidenceFactors(BaseModel):
+    """Breakdown of confidence scoring factors."""
+    pattern_recognition: float = Field(ge=0, le=1)
+    historical_success: float = Field(ge=0, le=1)
+    context_quality: float = Field(ge=0, le=1)
+    resource_availability: float = Field(ge=0, le=1)
+    time_sensitivity: float = Field(ge=0, le=1)
+
+
+class ConfidenceScore(BaseModel):
+    """Confidence scoring result."""
+    overall_confidence: float = Field(ge=0, le=1)
+    factor_breakdown: ConfidenceFactors
+    recommendation: str
+    threshold_met: bool
+
+
+class ActionRiskAssessment(BaseModel):
+    """Risk assessment for a specific action."""
+    action_type: str
+    risk_level: RiskLevel
+    risk_factors: list[str]
+    auto_execute_allowed: bool
+    requires_approval: bool
+
+
+class DryRunResult(BaseModel):
+    """Result of a dry run execution."""
+    action_id: str
+    action_type: str
+    would_execute: bool
+    expected_outcome: str
+    potential_risks: list[str]
+    rollback_plan: str
+    estimated_duration: int  # seconds
+    resource_impact: dict[str, Any]
+
+
+class ApprovalRequest(BaseModel):
+    """Human approval request."""
+    id: str
+    incident_id: str
+    action_plan: list[dict[str, Any]]
+    confidence_score: ConfidenceScore
+    risk_assessments: list[ActionRiskAssessment]
+    requested_at: datetime
+    timeout_at: datetime
+    status: str = "PENDING"  # PENDING, APPROVED, REJECTED, EXPIRED
+    comments: str = ""
+
+
+class ActionHistory(BaseModel):
+    """Historical record of executed actions."""
+    id: str
+    incident_id: str
+    action_type: str
+    action_details: dict[str, Any]
+    executed_at: datetime
+    original_state: dict[str, Any]
+    rollback_available: bool
+    rollback_executed: bool = False
+    rollback_at: datetime | None = None
+
+
+class SafetyConfig(BaseModel):
+    """Safety configuration settings."""
+    dry_run_mode: bool = False
+    confidence_threshold: float = Field(0.8, ge=0, le=1)
+    risk_tolerance: RiskLevel = RiskLevel.MEDIUM
+    auto_execute_permissions: dict[str, bool] = {}
+    mandatory_approval_actions: list[str] = []
+    emergency_stop_active: bool = False
 
 
 # Integration Models

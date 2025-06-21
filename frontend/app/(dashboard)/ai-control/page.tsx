@@ -108,6 +108,31 @@ export default function AIControlPage() {
     queryFn: () => apiClient.getAIConfig(),
   });
 
+  // Fetch safety config
+  const { data: safetyConfigData } = useQuery({
+    queryKey: queryKeys.safetyConfig,
+    queryFn: () => apiClient.getSafetyConfig(),
+  });
+
+  // Fetch pending approvals
+  const { data: pendingApprovalsData } = useQuery({
+    queryKey: queryKeys.pendingApprovals,
+    queryFn: () => apiClient.getPendingApprovals(),
+    refetchInterval: 5000, // Refresh every 5 seconds
+  });
+
+  // Fetch action history
+  const { data: actionHistoryData } = useQuery({
+    queryKey: queryKeys.actionHistory,
+    queryFn: () => apiClient.getActionHistory(),
+  });
+
+  // Fetch confidence history
+  const { data: confidenceHistoryData } = useQuery({
+    queryKey: queryKeys.confidenceHistory,
+    queryFn: () => apiClient.getConfidenceHistory(),
+  });
+
   const config = configData?.data || {
     mode: 'approval' as AIMode,
     confidence_threshold: 70,
@@ -130,6 +155,14 @@ export default function AIControlPage() {
     },
   });
 
+  const updateSafetyConfigMutation = useMutation({
+    mutationFn: (updates: any) => apiClient.updateSafetyConfig(updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.safetyConfig });
+      toast.success('Safety configuration updated');
+    },
+  });
+
   const emergencyStopMutation = useMutation({
     mutationFn: () => apiClient.emergencyStop(),
     onSuccess: () => {
@@ -137,6 +170,34 @@ export default function AIControlPage() {
       toast.error('Emergency stop activated', {
         description: 'All AI actions have been halted',
       });
+    },
+  });
+
+  const dryRunMutation = useMutation({
+    mutationFn: (actionPlan: any[]) => apiClient.executeDryRun(actionPlan),
+    onSuccess: (result) => {
+      toast.success('Dry run completed', {
+        description: `Simulated ${result.data?.length || 0} actions`,
+      });
+    },
+  });
+
+  const rollbackMutation = useMutation({
+    mutationFn: (actionId: string) => apiClient.rollbackAction(actionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.actionHistory });
+      toast.success('Action rolled back successfully');
+    },
+  });
+
+  const approvalMutation = useMutation({
+    mutationFn: ({ approvalId, action, comments }: { approvalId: string; action: 'approve' | 'reject'; comments?: string }) => 
+      action === 'approve' 
+        ? apiClient.approveAction(approvalId, comments)
+        : apiClient.rejectAction(approvalId, comments),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.pendingApprovals });
+      toast.success('Approval processed');
     },
   });
 
@@ -180,6 +241,40 @@ export default function AIControlPage() {
         [`${type}_enabled`]: enabled,
       },
     });
+  };
+
+  // Safety configuration data
+  const safetyConfig = safetyConfigData?.data || {
+    dry_run_mode: false,
+    confidence_threshold: 0.8,
+    risk_tolerance: 'medium',
+    auto_execute_permissions: {},
+    emergency_stop_active: false,
+  };
+
+  const pendingApprovals = pendingApprovalsData?.data || [];
+  const actionHistory = actionHistoryData?.data || [];
+  const confidenceHistory = confidenceHistoryData?.data || [];
+
+  // Safety handlers
+  const handleSafetyConfigChange = (updates: any) => {
+    updateSafetyConfigMutation.mutate(updates);
+  };
+
+  const handleDryRunTest = () => {
+    const testActions = [
+      { type: 'restart_pod', target: 'test-service' },
+      { type: 'scale_deployment', replicas: 3 }
+    ];
+    dryRunMutation.mutate(testActions);
+  };
+
+  const handleApproval = (approvalId: string, action: 'approve' | 'reject', comments?: string) => {
+    approvalMutation.mutate({ approvalId, action, comments });
+  };
+
+  const handleRollback = (actionId: string) => {
+    rollbackMutation.mutate(actionId);
   };
 
   const getRiskLevelStats = () => {
@@ -462,21 +557,66 @@ export default function AIControlPage() {
 
       {/* Advanced Settings */}
       <Tabs defaultValue="automation" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="automation">Automation</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="automation">Safety & Automation</TabsTrigger>
           <TabsTrigger value="risk-config">Risk Configuration</TabsTrigger>
+          <TabsTrigger value="approvals">Approvals & History</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
         </TabsList>
 
         <TabsContent value="automation">
           <Card>
             <CardHeader>
-              <CardTitle>Automation Settings</CardTitle>
+              <CardTitle>Safety & Automation Settings</CardTitle>
               <CardDescription>
-                Configure automatic execution and behavior settings
+                Configure safety controls, confidence thresholds, and execution behavior
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Dry Run Mode */}
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <Label htmlFor="dry-run-mode" className="text-base">
+                    Dry Run Mode
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Simulate all actions without executing them
+                  </p>
+                </div>
+                <Switch
+                  id="dry-run-mode"
+                  checked={safetyConfig.dry_run_mode}
+                  onCheckedChange={(checked) => handleSafetyConfigChange({ dry_run_mode: checked })}
+                />
+              </div>
+
+              <Separator />
+
+              {/* Confidence Threshold */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base">Safety Confidence Threshold</Label>
+                  <Badge variant={safetyConfig.confidence_threshold >= 0.8 ? 'default' : 'destructive'}>
+                    {Math.round(safetyConfig.confidence_threshold * 100)}%
+                  </Badge>
+                </div>
+                <Slider
+                  value={[safetyConfig.confidence_threshold * 100]}
+                  onValueChange={(value) => handleSafetyConfigChange({ confidence_threshold: value[0] / 100 })}
+                  max={100}
+                  min={0}
+                  step={5}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>0% (Execute all)</span>
+                  <span>100% (Only high confidence)</span>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Auto-execute Settings */}
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <Label htmlFor="auto-execute" className="text-base">
@@ -495,6 +635,38 @@ export default function AIControlPage() {
 
               <Separator />
 
+              {/* Safety Testing */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium">Safety Testing</h4>
+                <div className="space-y-3">
+                  <Button
+                    variant="outline"
+                    onClick={handleDryRunTest}
+                    disabled={dryRunMutation.isPending}
+                    className="w-full"
+                  >
+                    <Terminal className="h-4 w-4 mr-2" />
+                    Test Dry Run Simulation
+                  </Button>
+                  
+                  {/* Show confidence score if available */}
+                  {confidenceHistory.length > 0 && (
+                    <div className="p-3 bg-blue-50 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Brain className="h-4 w-4 text-blue-600" />
+                        <span className="text-sm font-medium">Latest Confidence Score</span>
+                      </div>
+                      <div className="text-2xl font-bold text-blue-600">
+                        {Math.round(confidenceHistory[confidenceHistory.length - 1]?.confidence * 100 || 0)}%
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Execution Preferences */}
               <div className="space-y-4">
                 <h4 className="text-sm font-medium">Execution Preferences</h4>
                 <div className="space-y-3">
@@ -509,12 +681,6 @@ export default function AIControlPage() {
                       Allow parallel execution
                     </Label>
                     <Switch id="parallel-exec" defaultChecked />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="dry-run" className="text-sm">
-                      Enable dry-run for high-risk actions
-                    </Label>
-                    <Switch id="dry-run" defaultChecked />
                   </div>
                 </div>
               </div>
@@ -653,6 +819,134 @@ export default function AIControlPage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="approvals">
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Pending Approvals */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bell className="h-5 w-5" />
+                  Pending Approvals
+                  {pendingApprovals.length > 0 && (
+                    <Badge variant="destructive">{pendingApprovals.length}</Badge>
+                  )}
+                </CardTitle>
+                <CardDescription>
+                  Actions awaiting human approval
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {pendingApprovals.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-600" />
+                    <p>No pending approvals</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {pendingApprovals.slice(0, 3).map((approval: any) => (
+                      <div key={approval.id} className="border rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <Badge variant="outline">{approval.incident_id}</Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(approval.requested_at).toLocaleTimeString()}
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">
+                            Confidence: {Math.round(approval.confidence_score?.overall_confidence * 100 || 0)}%
+                          </p>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleApproval(approval.id, 'approve')}
+                              disabled={approvalMutation.isPending}
+                            >
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleApproval(approval.id, 'reject')}
+                              disabled={approvalMutation.isPending}
+                            >
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Reject
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Action History & Rollbacks */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <RefreshCw className="h-5 w-5" />
+                  Action History
+                </CardTitle>
+                <CardDescription>
+                  Recent AI actions with rollback capability
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {actionHistory.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Activity className="h-12 w-12 mx-auto mb-4" />
+                    <p>No actions executed yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {actionHistory.slice(0, 5).map((action: any) => (
+                      <div key={action.id} className="border rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary">{action.action_type}</Badge>
+                            {action.rollback_executed && (
+                              <Badge variant="outline">Rolled Back</Badge>
+                            )}
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(action.executed_at).toLocaleTimeString()}
+                          </span>
+                        </div>
+                        {action.rollback_available && !action.rollback_executed && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleRollback(action.id)}
+                            disabled={rollbackMutation.isPending}
+                          >
+                            <RefreshCw className="h-3 w-3 mr-1" />
+                            Rollback
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    
+                    {/* Rollback Last Action Button */}
+                    <div className="pt-4 border-t">
+                      <Button
+                        variant="destructive"
+                        onClick={() => rollbackMutation.mutate('last')}
+                        disabled={rollbackMutation.isPending || actionHistory.filter((a: any) => a.rollback_available && !a.rollback_executed).length === 0}
+                        className="w-full"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Emergency Rollback Last Action
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
 
