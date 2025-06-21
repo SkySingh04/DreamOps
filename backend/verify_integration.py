@@ -32,10 +32,11 @@ def check_dashboard_api():
     """Check if dashboard API endpoints are working."""
     print("\n3. Checking Dashboard API Endpoints...")
     
+    # Test public endpoints (no auth required)
     endpoints = [
-        ("/api/dashboard/metrics", "Metrics"),
-        ("/api/dashboard/incidents", "Incidents"),
-        ("/api/dashboard/ai-actions", "AI Actions")
+        ("/api/public/dashboard/metrics", "Public Metrics"),
+        ("/api/public/dashboard/incidents", "Public Incidents"),
+        ("/api/public/dashboard/ai-actions", "Public AI Actions")
     ]
     
     working = True
@@ -121,19 +122,18 @@ def check_database_connection():
     print("\n6. Checking Database Connection...")
     
     try:
-        # Note: Regular API requires auth, so we expect 401
-        response = requests.get("http://localhost:3000/api/dashboard/metrics", timeout=5)
-        if response.status_code == 401:
-            print(f"   ✅ Database endpoint exists (auth required)")
-            return True
-        elif response.status_code == 200:
+        # Test public API endpoint
+        response = requests.get("http://localhost:3000/api/public/dashboard/metrics", timeout=5)
+        if response.status_code == 200:
             data = response.json()
             print(f"   ✅ Database queries working")
             print(f"   - Active incidents: {data.get('activeIncidents', 0)}")
             print(f"   - Resolved today: {data.get('resolvedToday', 0)}")
+            print(f"   - Health score: {data.get('healthScore', 0)}%")
             return True
         else:
             print(f"   ❌ Database query failed: {response.status_code}")
+            print(f"   Response: {response.text}")
             return False
     except Exception as e:
         print(f"   ❌ Error checking database: {e}")

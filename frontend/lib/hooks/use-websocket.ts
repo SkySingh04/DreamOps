@@ -43,6 +43,9 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   const socketRef = useRef<Socket | null>(null);
 
   const connect = useCallback(() => {
+    // Temporarily disable WebSocket to avoid connection errors
+    return;
+    
     if (socketRef.current?.connected || !teamId) return;
 
     try {

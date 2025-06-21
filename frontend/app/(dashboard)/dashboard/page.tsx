@@ -10,9 +10,8 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Activity, AlertCircle, CheckCircle, Clock, TrendingUp, Shield, Server, Plus } from 'lucide-react';
+import { Activity, AlertCircle, CheckCircle, Clock, TrendingUp, Shield, Server } from 'lucide-react';
 import { useWebSocket } from '@/lib/hooks/use-websocket';
-import { Button } from '@/components/ui/button';
 
 interface DashboardMetrics {
   activeIncidents: number;
@@ -45,33 +44,33 @@ export default function DashboardPage() {
   const { data: metrics, isLoading: metricsLoading } = useQuery<DashboardMetrics>({
     queryKey: ['dashboard-metrics'],
     queryFn: async () => {
-      const response = await fetch('/api/dashboard/metrics');
+      const response = await fetch('/api/public/dashboard/metrics');
       if (!response.ok) throw new Error('Failed to fetch metrics');
       return response.json();
     },
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 5000, // Refetch every 5 seconds for real-time feel
   });
 
   // Fetch recent incidents
   const { data: incidents, isLoading: incidentsLoading } = useQuery<RecentIncident[]>({
     queryKey: ['recent-incidents'],
     queryFn: async () => {
-      const response = await fetch('/api/dashboard/incidents?limit=5');
+      const response = await fetch('/api/public/dashboard/incidents?limit=5');
       if (!response.ok) throw new Error('Failed to fetch incidents');
       return response.json();
     },
-    refetchInterval: 30000,
+    refetchInterval: 5000,
   });
 
   // Fetch recent AI actions
   const { data: aiActions, isLoading: aiActionsLoading } = useQuery<RecentAiAction[]>({
     queryKey: ['recent-ai-actions'],
     queryFn: async () => {
-      const response = await fetch('/api/dashboard/ai-actions?limit=5');
+      const response = await fetch('/api/public/dashboard/ai-actions?limit=5');
       if (!response.ok) throw new Error('Failed to fetch AI actions');
       return response.json();
     },
-    refetchInterval: 30000,
+    refetchInterval: 5000,
   });
 
   // Get team ID from user session
@@ -122,27 +121,6 @@ export default function DashboardPage() {
 
   const currentMetrics = metrics || defaultMetrics;
 
-  // Test function to create incident
-  const createTestIncident = async () => {
-    try {
-      const response = await fetch('/api/test/create-incident', {
-        method: 'POST',
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        console.log('Test incident created:', result);
-        // Refetch data to update the dashboard
-        queryClient.invalidateQueries({ queryKey: ['recent-incidents'] });
-        queryClient.invalidateQueries({ queryKey: ['dashboard-metrics'] });
-        queryClient.invalidateQueries({ queryKey: ['recent-ai-actions'] });
-      } else {
-        console.error('Failed to create test incident');
-      }
-    } catch (error) {
-      console.error('Error creating test incident:', error);
-    }
-  };
 
   return (
     <section className="flex-1 p-4 lg:p-8 space-y-6">
@@ -180,14 +158,6 @@ export default function DashboardPage() {
             }`}></span>
             AI Agent {currentMetrics.aiAgentStatus === 'online' ? 'Online' : 'Offline'}
           </Badge>
-          <Button
-            onClick={createTestIncident}
-            size="sm"
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Create Test Incident
-          </Button>
         </div>
       </div>
       
