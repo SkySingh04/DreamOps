@@ -6,22 +6,13 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Progress } from '@/components/ui/progress'
-import { useAgentLogs, AgentLogEntry } from '@/lib/hooks/use-agent-logs'
-import { AlertCircle, CheckCircle, Info, AlertTriangle, XCircle, Zap, Trash2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { useAgentLogs } from '@/lib/hooks/use-agent-logs'
+import { Zap, Trash2, Info } from 'lucide-react'
+import { LogEntry } from './agent-log-entry'
 
 interface AgentLogsProps {
   incidentId?: string
   className?: string
-}
-
-const logLevelConfig = {
-  DEBUG: { icon: Info, color: 'text-gray-500', bgColor: 'bg-gray-100', label: 'DEBUG' },
-  INFO: { icon: Info, color: 'text-blue-600', bgColor: 'bg-blue-100', label: 'INFO' },
-  WARNING: { icon: AlertTriangle, color: 'text-yellow-600', bgColor: 'bg-yellow-100', label: 'WARN' },
-  ERROR: { icon: XCircle, color: 'text-red-600', bgColor: 'bg-red-100', label: 'ERROR' },
-  SUCCESS: { icon: CheckCircle, color: 'text-green-600', bgColor: 'bg-green-100', label: 'SUCCESS' },
-  ALERT: { icon: AlertCircle, color: 'text-red-700', bgColor: 'bg-red-200', label: 'ALERT' },
 }
 
 const stageLabels: Record<string, string> = {
@@ -31,66 +22,6 @@ const stageLabels: Record<string, string> = {
   gathering_context: '🔍 Gathering Context',
   claude_analysis: '🤖 Claude Analysis',
   complete: '✅ Analysis Complete',
-}
-
-function LogEntry({ log }: { log: AgentLogEntry }) {
-  const config = logLevelConfig[log.level]
-  const Icon = config.icon
-  
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp)
-    return date.toLocaleTimeString('en-US', { 
-      hour12: false, 
-      hour: '2-digit', 
-      minute: '2-digit', 
-      second: '2-digit',
-      fractionalSecondDigits: 3 
-    })
-  }
-
-  return (
-    <div className={cn(
-      "flex items-start gap-3 p-3 rounded-lg transition-colors",
-      log.level === 'ALERT' && "bg-red-50 border border-red-200",
-      log.level === 'ERROR' && "bg-red-50/50",
-      log.level === 'SUCCESS' && "bg-green-50/50"
-    )}>
-      <Icon className={cn("w-4 h-4 mt-0.5 flex-shrink-0", config.color)} />
-      
-      <div className="flex-1 space-y-1">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground font-mono">
-            {formatTimestamp(log.timestamp)}
-          </span>
-          <Badge variant="secondary" className={cn("text-xs", config.bgColor, config.color)}>
-            {config.label}
-          </Badge>
-          {log.integration && (
-            <Badge variant="outline" className="text-xs">
-              {log.integration}
-            </Badge>
-          )}
-          {log.stage && (
-            <Badge variant="outline" className="text-xs">
-              {stageLabels[log.stage] || log.stage}
-            </Badge>
-          )}
-        </div>
-        
-        <p className="text-sm">{log.message}</p>
-        
-        {log.metadata && Object.keys(log.metadata).length > 0 && (
-          <div className="text-xs text-muted-foreground mt-1">
-            {Object.entries(log.metadata).map(([key, value]) => (
-              <span key={key} className="mr-3">
-                <span className="font-medium">{key}:</span> {String(value)}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )
 }
 
 export function AgentLogs({ incidentId, className }: AgentLogsProps) {

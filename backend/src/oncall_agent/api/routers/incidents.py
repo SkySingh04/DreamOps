@@ -327,11 +327,11 @@ async def get_incident_analysis(
     """Get detailed AI analysis for an incident."""
     if incident_id not in INCIDENTS_DB:
         raise HTTPException(status_code=404, detail="Incident not found")
-    
+
     # Check if we have analysis data
     if incident_id in ANALYSIS_DB:
         return JSONResponse(content=ANALYSIS_DB[incident_id])
-    
+
     # Return placeholder if no analysis yet
     return JSONResponse(content={
         "incident_id": incident_id,

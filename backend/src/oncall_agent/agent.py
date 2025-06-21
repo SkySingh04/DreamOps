@@ -8,11 +8,14 @@ from anthropic import AsyncAnthropic
 from pydantic import BaseModel
 
 from .config import get_config
+from .frontend_integration import (
+    send_ai_action_to_dashboard,
+    send_incident_to_dashboard,
+)
 from .mcp_integrations.base import MCPIntegration
 from .mcp_integrations.grafana_mcp import GrafanaMCPIntegration
 from .mcp_integrations.kubernetes import KubernetesMCPIntegration
 from .mcp_integrations.notion import NotionMCPIntegration
-from .frontend_integration import send_incident_to_dashboard, send_ai_action_to_dashboard
 
 
 class PagerAlert(BaseModel):
@@ -91,6 +94,9 @@ class OncallAgent:
 
     async def handle_pager_alert(self, alert: PagerAlert) -> dict[str, Any]:
         """Handle an incoming pager alert."""
+        import time
+        start_time = time.time()
+
         # Import here to avoid circular dependency
         try:
             from .api.log_streaming import log_stream_manager
@@ -137,7 +143,7 @@ class OncallAgent:
                     progress=0.3
                 )
             all_context = {}
-            
+
             # Send context gathering action to dashboard
             try:
                 await send_ai_action_to_dashboard(
@@ -277,9 +283,25 @@ class OncallAgent:
                     stage="claude_analysis",
                     progress=0.7
                 )
-            
+
             # Parse the analysis into structured sections
             parsed_analysis = self._parse_claude_analysis(analysis)
+
+            # Stream the complete analysis to the frontend
+            if has_log_streaming:
+                await log_stream_manager.log_success(
+                    "✅ AI ANALYSIS COMPLETE",
+                    incident_id=alert.alert_id,
+                    stage="complete",
+                    progress=1.0,
+                    metadata={
+                        "analysis": analysis,  # Full markdown analysis
+                        "parsed_analysis": parsed_analysis,
+                        "confidence_score": parsed_analysis.get("confidence_score", 0.85),
+                        "risk_level": parsed_analysis.get("risk_level", "medium"),
+                        "response_time": f"{time.time() - start_time:.2f}s"
+                    }
+                )
 
             # STEP 4: Send AI analysis action to dashboard
             try:
@@ -326,7 +348,7 @@ class OncallAgent:
                 self.logger.info("🤖 Automated actions available:")
                 for action in result["automated_actions"]:
                     self.logger.info(f"  - {action['action']}: {action['reason']} (confidence: {action['confidence']})")
-                    
+
                     # Send each automated action suggestion to dashboard
                     try:
                         await send_ai_action_to_dashboard(
@@ -519,11 +541,11 @@ class OncallAgent:
                 self.logger.info(f"Disconnected from {name}")
             except Exception as e:
                 self.logger.error(f"Error disconnecting from {name}: {e}")
-    
+
     def _parse_claude_analysis(self, analysis: str) -> dict[str, Any]:
         """Parse Claude's analysis into structured sections."""
         import re
-        
+
         sections = {
             "immediate_actions": [],
             "root_cause": [],
@@ -536,7 +558,7 @@ class OncallAgent:
             "risk_level": "medium",
             "commands": []
         }
-        
+
         # Section patterns
         section_patterns = {
             "immediate_actions": r"(?:IMMEDIATE ACTIONS?|🎯.*IMMEDIATE.*?)[\s:]*\n(.*?)(?=\n\d+\.|🔍|💥|🛠️|📊|🚀|📝|$)",
@@ -547,7 +569,7 @@ class OncallAgent:
             "automation": r"(?:AUTOMATION.*?|🚀.*AUTOMATION.*?)[\s:]*\n(.*?)(?=\n\d+\.|🎯|🔍|💥|🛠️|📊|📝|$)",
             "follow_up": r"(?:FOLLOW-?UP.*?|📝.*FOLLOW.*?)[\s:]*\n(.*?)(?=\n\d+\.|🎯|🔍|💥|🛠️|📊|🚀|$)"
         }
-        
+
         # Extract sections
         for section, pattern in section_patterns.items():
             match = re.search(pattern, analysis, re.DOTALL | re.IGNORECASE)
@@ -563,7 +585,7 @@ class OncallAgent:
                     if cleaned and not cleaned.startswith(('🎯', '🔍', '💥', '🛠️', '📊', '🚀', '📝')):
                         cleaned_items.append(cleaned)
                 sections[section] = cleaned_items
-        
+
         # Extract all commands (bash/kubectl commands)
         command_pattern = r'(?:```(?:bash|sh)?\n(.*?)```|`([^`]+)`)'
         commands = []
@@ -573,19 +595,19 @@ class OncallAgent:
                 commands.extend(cmds)
             elif match.group(2):  # Inline code
                 commands.append(match.group(2).strip())
-        
+
         sections["commands"] = commands
-        
+
         # Extract confidence score if mentioned
         confidence_match = re.search(r'(?:confidence|confident)[\s:]*(\d+)%', analysis, re.IGNORECASE)
         if confidence_match:
             sections["confidence_score"] = int(confidence_match.group(1)) / 100.0
-        
+
         # Extract risk level if mentioned
         risk_match = re.search(r'(?:risk|severity)[\s:]*(?:is\s+)?(\w+)', analysis, re.IGNORECASE)
         if risk_match:
             risk = risk_match.group(1).lower()
             if risk in ["low", "medium", "high", "critical"]:
                 sections["risk_level"] = risk
-        
+
         return sections
