@@ -1,0 +1,6 @@
+[submodule "mcp-grafana"]
+	path = mcp-grafana
+	url = https://github.com/grafana/mcp-grafana.git
+[submodule "notion-mcp-server"]
+	path = notion-mcp-server
+	url = https://github.com/makenotion/notion-mcp-server.git
