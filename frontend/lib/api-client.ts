@@ -225,7 +225,7 @@ class APIClient {
     return this.request<any[]>('/api/v1/agent/action-history');
   }
 
-  async rollbackAction(actionId: string): Promise<APIResponse<any>> {
+  async rollbackAgentAction(actionId: string): Promise<APIResponse<any>> {
     return this.request<any>(`/api/v1/agent/rollback/${actionId}`, {
       method: 'POST',
     });
@@ -293,18 +293,6 @@ class APIClient {
     return this.request<Integration>(`/api/v1/integrations/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ enabled }),
-    });
-  }
-
-  // Settings endpoints
-  async getSettings(): Promise<APIResponse<any>> {
-    return this.request<any>('/api/v1/settings');
-  }
-
-  async updateSettings(settings: any): Promise<APIResponse<any>> {
-    return this.request<any>('/api/v1/settings', {
-      method: 'PUT',
-      body: JSON.stringify(settings),
     });
   }
 

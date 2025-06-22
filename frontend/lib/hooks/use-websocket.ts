@@ -44,7 +44,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
 
   const connect = useCallback(() => {
     // Temporarily disable WebSocket to avoid connection errors
-    return;
+    if (true) return;
     
     if (socketRef.current?.connected || !teamId) return;
 
@@ -64,7 +64,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
         timeout: 20000,
       });
 
-      socketRef.current.on('connect', () => {
+      socketRef.current?.on('connect', () => {
         setIsConnected(true);
         onConnect?.();
         
@@ -74,18 +74,18 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
         }
       });
 
-      socketRef.current.on('disconnect', () => {
+      socketRef.current?.on('disconnect', () => {
         setIsConnected(false);
         onDisconnect?.();
       });
 
-      socketRef.current.on('connect_error', (error: Error) => {
+      socketRef.current?.on('connect_error', (error: Error) => {
         onError?.(error);
         setIsConnected(false);
       });
 
       // Dashboard update handler
-      socketRef.current.on('dashboard-update', (update: DashboardUpdate) => {
+      socketRef.current?.on('dashboard-update', (update: DashboardUpdate) => {
         console.log('Received dashboard update:', update);
         
         switch (update.type) {
@@ -109,9 +109,9 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   const disconnect = useCallback(() => {
     if (socketRef.current) {
       if (teamId) {
-        socketRef.current.emit('leave-team', teamId);
+        socketRef.current?.emit('leave-team', teamId);
       }
-      socketRef.current.disconnect();
+      socketRef.current?.disconnect();
       socketRef.current = null;
       setIsConnected(false);
     }
@@ -119,7 +119,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
 
   const sendMessage = useCallback((event: string, data: any) => {
     if (socketRef.current?.connected) {
-      socketRef.current.emit(event, data);
+      socketRef.current?.emit(event, data);
     }
   }, []);
 

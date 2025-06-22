@@ -245,22 +245,22 @@ export function LogEntry({ log }: LogEntryProps) {
               </div>
               
               {/* Show parsed analysis summary */}
-              {log.metadata.parsed_analysis && (
+              {log.metadata?.parsed_analysis && (
                 <div className="mt-4 pt-4 border-t space-y-2">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-medium">Confidence Score:</span>
-                    <Badge variant="outline">{Math.round((log.metadata.confidence_score || 0.85) * 100)}%</Badge>
+                    <Badge variant="outline">{Math.round((log.metadata?.confidence_score || 0.85) * 100)}%</Badge>
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-medium">Risk Level:</span>
-                    <Badge variant={log.metadata.risk_level === 'high' ? 'destructive' : 'secondary'}>
-                      {log.metadata.risk_level || 'medium'}
+                    <Badge variant={log.metadata?.risk_level === 'high' ? 'destructive' : 'secondary'}>
+                      {log.metadata?.risk_level || 'medium'}
                     </Badge>
                   </div>
-                  {log.metadata.response_time && (
+                  {log.metadata?.response_time && (
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-medium">Response Time:</span>
-                      <span>{log.metadata.response_time}</span>
+                      <span>{log.metadata?.response_time}</span>
                     </div>
                   )}
                 </div>

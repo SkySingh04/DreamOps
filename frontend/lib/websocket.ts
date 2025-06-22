@@ -16,7 +16,7 @@ export interface DashboardUpdate {
   teamId: number;
 }
 
-export function initializeWebSocket(server: NetServer): SocketIOServer {
+export function initializeWebSocket(server: NetServer & { io?: SocketIOServer }): SocketIOServer {
   if (!server.io) {
     console.log('Initializing Socket.IO server...');
     

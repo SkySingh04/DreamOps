@@ -373,7 +373,7 @@ export default function AIControlPage() {
   });
 
   const rollbackMutation = useMutation({
-    mutationFn: (actionId: string) => apiClient.rollbackAction(actionId),
+    mutationFn: (actionId: string) => apiClient.rollbackAgentAction(actionId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.actionHistory });
       toast.success('Action rolled back successfully');
