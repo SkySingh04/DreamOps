@@ -459,24 +459,77 @@ class OncallAgent:
                         result["executed_actions"] = executed_actions
                         result["execution_mode"] = "YOLO"
 
-                        # Now also execute remediation commands from Claude's analysis
-                        if parsed_analysis.get("commands") and hasattr(self, 'k8s_integration'):
-                            self.logger.info("🔧 Executing remediation commands from Claude's analysis...")
+                        # NEW: Use remediation pipeline for intelligent command execution
+                        if k8s_alert_type and hasattr(self, 'k8s_integration'):
+                            self.logger.info("🔧 Executing intelligent remediation pipeline...")
+                            
+                            # Import the remediation pipeline
+                            from .remediation_pipeline import RemediationPipeline
+                            
+                            # Create pipeline instance
+                            pipeline = RemediationPipeline(self.k8s_integration)
+                            
+                            # Extract kubectl commands from Claude's analysis
+                            kubectl_commands = [cmd for cmd in parsed_analysis.get("commands", [])
+                                              if cmd.startswith(('kubectl', 'k '))]
+                            
+                            try:
+                                # Execute the full remediation pipeline
+                                pipeline_result = await pipeline.execute_pipeline(
+                                    alert_type=k8s_alert_type,
+                                    context=k8s_context,
+                                    commands_from_claude=kubectl_commands
+                                )
+                                
+                                result["remediation_pipeline_result"] = pipeline_result
+                                
+                                # Log execution summary
+                                problems = pipeline_result.get('problems_identified', {})
+                                remediation_results = pipeline_result.get('remediation_results', [])
+                                verification = pipeline_result.get('verification_results', {})
+                                
+                                self.logger.info(f"📋 Pipeline execution complete:")
+                                if problems:
+                                    for problem_type, items in problems.items():
+                                        self.logger.info(f"  - {problem_type}: {len(items)} found")
+                                
+                                successful_fixes = [r for r in remediation_results if r.get('status') == 'success']
+                                self.logger.info(f"  - Remediation: {len(successful_fixes)}/{len(remediation_results)} successful")
+                                
+                                if verification.get('fixed'):
+                                    self.logger.info("  - ✅ Issue verified as FIXED!")
+                                    
+                                    # Send resolution to dashboard
+                                    await send_ai_action_to_dashboard(
+                                        action="incident_auto_resolved",
+                                        description="AI agent successfully resolved the incident",
+                                        incident_id=incident_id
+                                    )
+                                else:
+                                    self.logger.info("  - ⚠️  Issue may need further attention")
+                                
+                                # Add execution log to result for visibility
+                                result["execution_log"] = pipeline_result.get('execution_log', [])
+                                
+                            except Exception as pipeline_error:
+                                self.logger.error(f"❌ Pipeline execution error: {pipeline_error}")
+                                result["remediation_error"] = str(pipeline_error)
+                        
+                        # Fallback: Execute any specific non-placeholder commands from Claude
+                        elif parsed_analysis.get("commands") and hasattr(self, 'k8s_integration'):
+                            self.logger.info("🔧 Executing specific commands from Claude's analysis...")
 
                             remediation_results = []
-                            # Filter kubectl commands from all commands
-                            kubectl_commands = [cmd for cmd in parsed_analysis["commands"]
-                                              if cmd.startswith(('kubectl', 'k '))]
+                            # Filter kubectl commands without placeholders
+                            kubectl_commands = [
+                                cmd for cmd in parsed_analysis["commands"]
+                                if cmd.startswith(('kubectl', 'k ')) and not ('<' in cmd and '>' in cmd)
+                            ]
 
-                            for cmd in kubectl_commands[:5]:  # Limit to first 5 commands for safety
+                            for cmd in kubectl_commands[:3]:  # Limit to first 3 commands for safety
                                 # Skip certain dangerous commands even in YOLO mode
                                 if any(danger in cmd.lower() for danger in ['delete', 'drain', 'cordon', 'taint']):
                                     self.logger.warning(f"⚠️  Skipping potentially destructive command: {cmd}")
-                                    continue
-
-                                # Skip commands with placeholders
-                                if '<' in cmd and '>' in cmd:
-                                    self.logger.info(f"ℹ️  Skipping command with placeholders: {cmd}")
                                     continue
 
                                 self.logger.info(f"🏃 Executing remediation command: {cmd}")
@@ -501,37 +554,12 @@ class OncallAgent:
                                         incident_id=incident_id
                                     )
 
-                                    # Check if k8s_integration expects list or string
-                                    if hasattr(self.k8s_integration, 'execute_kubectl_command'):
-                                        # Get method signature to determine parameter type
-                                        import inspect
-                                        sig = inspect.signature(self.k8s_integration.execute_kubectl_command)
-                                        if 'command' in sig.parameters:
-                                            # Check if it's typed as list
-                                            param_type = sig.parameters['command'].annotation
-                                            if 'list' in str(param_type):
-                                                exec_result = await self.k8s_integration.execute_kubectl_command(
-                                                    cmd_parts,
-                                                    dry_run=False,
-                                                    auto_approve=True
-                                                )
-                                            else:
-                                                # Pass as string (join back)
-                                                exec_result = await self.k8s_integration.execute_kubectl_command(
-                                                    ' '.join(cmd_parts),
-                                                    dry_run=False,
-                                                    auto_approve=True
-                                                )
-                                        else:
-                                            # Default to list format
-                                            exec_result = await self.k8s_integration.execute_kubectl_command(
-                                                cmd_parts,
-                                                dry_run=False,
-                                                auto_approve=True
-                                            )
-                                    else:
-                                        self.logger.error("K8s integration doesn't have execute_kubectl_command method")
-                                        continue
+                                    # Execute command
+                                    exec_result = await self.k8s_integration.execute_kubectl_command(
+                                        cmd_parts,
+                                        dry_run=False,
+                                        auto_approve=True
+                                    )
 
                                     if exec_result.get('success'):
                                         self.logger.info(f"✅ Remediation command succeeded: {cmd}")
