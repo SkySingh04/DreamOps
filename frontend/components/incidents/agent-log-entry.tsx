@@ -16,9 +16,9 @@ import {
   Check
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-// import ReactMarkdown from 'react-markdown'
-// import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-// import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import ReactMarkdown from 'react-markdown'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { AgentLogEntry } from '@/lib/hooks/use-agent-logs'
 
 const logLevelConfig = {
@@ -161,11 +161,12 @@ export function LogEntry({ log }: LogEntryProps) {
                 <div className="overflow-x-auto max-w-full">
                   <ReactMarkdown
                   components={{
-                    code({ node, inline, className, children, ...props }) {
+                    code({ node, className, children, ...props }: any) {
                       const match = /language-(\w+)/.exec(className || '')
                       const codeString = String(children).replace(/\n$/, '')
+                      const isInline = !match && (!node || node.position?.start.line === node.position?.end.line)
                       
-                      if (!inline && match) {
+                      if (!isInline && match) {
                         return (
                           <div className="relative group">
                             <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -189,7 +190,7 @@ export function LogEntry({ log }: LogEntryProps) {
                         )
                       }
                       
-                      if (inline) {
+                      if (isInline) {
                         return (
                           <code className="bg-gray-200 px-1 py-0.5 rounded text-sm font-mono" {...props}>
                             {children}

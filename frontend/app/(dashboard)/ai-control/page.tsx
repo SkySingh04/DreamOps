@@ -469,7 +469,11 @@ export default function AIControlPage() {
 
   const handleSaveRiskMatrix = (newMatrix: Record<string, string[]>) => {
     updateConfigMutation.mutate({
-      risk_matrix: newMatrix
+      risk_matrix: newMatrix as {
+        low: string[];
+        medium: string[];
+        high: string[];
+      }
     });
   };
 

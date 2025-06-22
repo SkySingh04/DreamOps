@@ -1,7 +1,7 @@
 // Stripe integration removed
 import { db } from './drizzle';
 import { users, teams, teamMembers } from './schema';
-import { hashPassword } from '@/lib/auth/session';
+import { hashPassword } from '@/lib/auth/session-crypto';
 
 async function seed() {
   const email = 'test@test.com';

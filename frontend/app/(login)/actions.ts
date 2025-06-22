@@ -16,7 +16,8 @@ import {
   ActivityType,
   invitations
 } from '@/lib/db/schema';
-import { comparePasswords, hashPassword, setSession } from '@/lib/auth/session';
+import { setSession } from '@/lib/auth/session';
+import { comparePasswords, hashPassword } from '@/lib/auth/session-crypto';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { createCheckoutSession } from '@/lib/payments/stripe';
