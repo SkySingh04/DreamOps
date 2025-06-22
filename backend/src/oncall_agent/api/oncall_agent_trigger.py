@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any
 
 from src.oncall_agent.agent import OncallAgent, PagerAlert
+from src.oncall_agent.agent_enhanced import EnhancedOncallAgent
 from src.oncall_agent.api.alert_context_parser import ContextExtractor
 from src.oncall_agent.api.log_streaming import log_stream_manager
 from src.oncall_agent.api.models import PagerDutyIncidentData
@@ -16,10 +17,11 @@ from src.oncall_agent.utils import get_logger
 class OncallAgentTrigger:
     """Manages triggering the oncall agent from external sources."""
 
-    def __init__(self, agent: OncallAgent | None = None):
+    def __init__(self, agent: OncallAgent | None = None, use_enhanced: bool = True):
         self.logger = get_logger(__name__)
         self.config = get_config()
         self.agent = agent
+        self.use_enhanced = use_enhanced
         self.context_extractor = ContextExtractor()
 
         # Thread pool for async execution
@@ -66,9 +68,19 @@ Please provide brief analysis and recommendations."""
     async def initialize(self):
         """Initialize the oncall agent if not provided."""
         if not self.agent:
-            self.agent = OncallAgent()
+            # Get current AI mode from agent config
+            from src.oncall_agent.api.routers.agent import AGENT_CONFIG
+
+            if self.use_enhanced and self.config.k8s_enabled:
+                # Use enhanced agent with current AI mode for command execution
+                self.agent = EnhancedOncallAgent(ai_mode=AGENT_CONFIG.mode)
+                self.logger.info(f"EnhancedOncallAgent initialized with mode: {AGENT_CONFIG.mode.value}")
+            else:
+                # Use regular agent for read-only operations
+                self.agent = OncallAgent()
+                self.logger.info("OncallAgent initialized for trigger")
+
             await self.agent.connect_integrations()
-            self.logger.info("OncallAgent initialized for trigger")
 
     async def trigger_oncall_agent(self, pagerduty_incident: PagerDutyIncidentData,
                                   context: dict[str, Any] | None = None) -> dict[str, Any]:

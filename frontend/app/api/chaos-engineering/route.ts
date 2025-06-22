@@ -20,9 +20,10 @@ export async function POST(request: NextRequest) {
     
     // Path to the chaos script - try multiple possible locations
     const possiblePaths = [
+      path.join(process.cwd(), '..', '..', 'fuck_kubernetes.sh'),  // Two levels up from frontend
       path.join(process.cwd(), '..', 'fuck_kubernetes.sh'),
       path.join(process.cwd(), 'fuck_kubernetes.sh'),
-      '/mnt/c/Users/incha/oncall-agent/fuck_kubernetes.sh'
+      path.join(process.cwd(), '..', '..', 'backend', 'fuck_kubernetes.sh')
     ];
     
     let scriptPath = '';

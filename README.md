@@ -64,7 +64,7 @@ oncall-agent/
                     ├──────────────────────────┤
                     │ • Kubernetes             │
                     │ • GitHub                 │
-                    │ • Grafana (planned)      │
+                    │ • Grafana                │
                     │ • Slack (planned)        │
                     └──────────────────────────┘
 ```
@@ -147,9 +147,53 @@ K8S_ENABLE_DESTRUCTIVE_OPERATIONS=false
 
 # GitHub integration (optional)
 GITHUB_TOKEN=your-github-token
+
+# Grafana integration (optional)
+GRAFANA_URL=http://localhost:3000
+GRAFANA_API_KEY=your-grafana-api-key
+
+# Notion integration (optional)
+NOTION_TOKEN=your-notion-token
 ```
 
 ## 🚀 Usage
+
+### Enabling YOLO Mode (Autonomous Remediation)
+
+YOLO mode allows the agent to automatically execute remediation commands without human approval.
+
+**Prerequisites:**
+1. Working Kubernetes cluster
+2. Valid `ANTHROPIC_API_KEY` in `.env`
+3. Proper RBAC permissions for kubectl operations
+
+**Quick Setup:**
+```bash
+cd backend
+./enable_yolo_mode.sh  # Sets K8S_ENABLE_DESTRUCTIVE_OPERATIONS=true
+```
+
+**Manual Setup:**
+1. Edit `backend/.env`:
+   ```env
+   K8S_ENABLE_DESTRUCTIVE_OPERATIONS=true
+   K8S_ENABLED=true
+   ```
+
+2. Start the API server:
+   ```bash
+   uv run python api_server.py
+   ```
+
+3. In the frontend, set AI Mode to "YOLO" using the toggle
+
+**How it Works:**
+- Agent receives PagerDuty alert (e.g., "Pod OOMKilled")
+- Runs diagnostic commands (`kubectl top pods`, `kubectl get events`)
+- Parses output to identify specific resources
+- Generates remediation commands (e.g., `kubectl patch deployment app --patch '{"spec":{"template":{"spec":{"containers":[{"name":"app","resources":{"limits":{"memory":"1Gi"}}}]}}}}'`)
+- Executes commands automatically if confidence ≥ 0.8
+- Verifies fix and auto-resolves PagerDuty incident
 
 ### Quick Start Demo
 
@@ -199,7 +243,7 @@ kind create cluster --name oncall-test
 
 2. **Deploy a broken pod**:
 ```bash
-kubectl apply -f backend/broken-app.yaml
+kubectl apply -f crash-loop-test.yaml
 ```
 
 3. **Run the agent**:
@@ -208,591 +252,956 @@ cd backend
 uv run python main.py
 ```
 
-### EKS Testing (Advanced)
+### Testing with Simulated Issues
 
-For testing with a real AWS EKS cluster with multiple failure scenarios:
+Use the `fuck_kubernetes.sh` script to simulate various Kubernetes failures:
 
 ```bash
-# Deploy EKS infrastructure
-cd infrastructure/eks
-terraform init
-terraform apply
+# Usage from project root
+./fuck_kubernetes.sh [1-5|all|random|clean]
 
-# Deploy test apps
-./deploy-sample-apps.sh
+# Simulates:
+# 1 - Pod crashes (CrashLoopBackOff)
+# 2 - Image pull errors (ImagePullBackOff)  
+# 3 - OOM kills
+# 4 - Deployment failures
+# 5 - Service unavailability
 
-# Run test scenarios
-cd backend
-uv run python tests/test_eks_scenarios.py all
+# The script:
+# - Creates issues in 'fuck-kubernetes-test' namespace
+# - Triggers CloudWatch alarms within 60 seconds
+# - Sends alerts through SNS → PagerDuty → Slack
+# - Helps verify the entire alerting pipeline
 ```
 
 ### Running Tests
 
 ```bash
 cd backend
-
-# Run all tests
 uv run pytest tests/
-
-# Run specific test
-uv run pytest tests/test_kubernetes_integration.py
-
-# Run with coverage
-uv run pytest tests/ --cov=src --cov-report=html
 ```
 
-### Docker Integration Testing
-
-For comprehensive integration testing of all MCP integrations (Notion, GitHub, and Kubernetes) using mock services:
+### Linting and Type Checking
 
 ```bash
-# From the tests directory
-cd tests
-./run-docker-test.sh
+# Run linter and fix issues
+uv run ruff check . --fix
 
-# Or from project root  
-cd tests && ./run-docker-test.sh
-
-# Or directly with docker-compose
-docker-compose -f tests/docker-compose.test.yml up --build
+# Run type checker
+uv run mypy . --ignore-missing-imports
 ```
-
-**What gets tested:**
-- **Kubernetes Integration**: Pod status, event logs, container logs
-- **GitHub Integration**: Recent commits, open issues, GitHub Actions status  
-- **Notion Integration**: Real API connection and incident page creation
-- **AI Analysis**: Claude processes alerts with context from all integrations
-
-**Test Architecture:**
-- `mock-kubernetes`: Nginx server simulating Kubernetes API
-- `mock-github`: Nginx server simulating GitHub API
-- `oncall-test`: The on-call agent running integration tests
-
-**Test Results:**
-- Console output shows real-time results
-- `test-results/test-summary.txt` contains saved summary
-- Notion workspace shows created incident pages
-
-**Prerequisites for Docker tests:**
-- Docker and Docker Compose installed
-- `.env` file with required API keys (ANTHROPIC_API_KEY, NOTION_TOKEN, NOTION_DATABASE_ID, GITHUB_TOKEN)
-
-**Cleanup:**
-```bash
-docker-compose -f tests/docker-compose.test.yml down
-```
-
-### Testing with Kubernetes Issues
-
-The project includes `fuck_kubernetes.sh` - a comprehensive testing script that simulates various Kubernetes failures to verify the complete alerting pipeline:
-
-```bash
-# From project root directory
-./fuck_kubernetes.sh [option]
-
-# Options:
-# 1         - Simulate pod crash (CrashLoopBackOff)
-# 2         - Simulate image pull error (ImagePullBackOff)
-# 3         - Simulate OOM kill
-# 4         - Simulate deployment failure
-# 5         - Simulate service unavailable
-# all       - Run all simulations sequentially
-# random    - Run a random simulation (default)
-# clean     - Clean up all test resources
-# trigger   - Force CloudWatch alarms to fire immediately
-# loop      - Continuous testing loop with auto-triggering
-
-# Examples:
-./fuck_kubernetes.sh          # Random issue
-./fuck_kubernetes.sh 1        # Pod crash
-./fuck_kubernetes.sh all      # All issues
-./fuck_kubernetes.sh clean    # Cleanup
-
-# Advanced Testing:
-./fuck_kubernetes.sh trigger  # Force alarms to send alerts NOW
-./fuck_kubernetes.sh loop     # Continuous testing (Ctrl+C to stop)
-```
-
-#### Quick Testing Workflow
-
-1. **Single Test with Immediate Alert**:
-   ```bash
-   ./fuck_kubernetes.sh 1        # Create pod crash
-   ./fuck_kubernetes.sh trigger  # Force PagerDuty alert
-   ```
-
-2. **Continuous Testing Mode**:
-   ```bash
-   ./fuck_kubernetes.sh loop
-   # This will:
-   # - Create random K8s issues every 3 minutes
-   # - Force CloudWatch alarms to trigger
-   # - Send alerts to PagerDuty continuously
-   # - Show pod status after each iteration
-   ```
-
-The script creates issues in a dedicated `fuck-kubernetes-test` namespace and triggers the complete flow: CloudWatch → SNS → PagerDuty → Slack → AI Agent.
 
 ## 🔌 MCP Integrations
 
-### Available Integrations
+### Kubernetes Integration
 
-1. **Kubernetes** - Debugs pod crashes, OOM issues, and config problems
-2. **GitHub** - Fetches context from repositories and creates incident issues (🚀 **Auto-starts MCP server**)
-3. **Notion** - Creates incident documentation (if configured)
+The Kubernetes integration supports:
+- **Actual command execution** via kubectl or Kubernetes MCP server
+- **Risk assessment** for all kubectl commands
+- **YOLO mode** - Auto-executes low/medium risk commands with high confidence
+- **Approval mode** - Requests approval before executing commands
+- **Plan mode** - Shows what commands would be executed without running them
 
-### 🤖 GitHub MCP Integration - Automatic Startup
+#### Configuration
 
-The GitHub MCP integration features **automatic server management** - no manual setup required!
+```env
+# Enable destructive operations (required for YOLO mode)
+K8S_ENABLE_DESTRUCTIVE_OPERATIONS=true
 
-**How it works:**
-1. When you enable GitHub integration (`--github-integration`), the agent automatically:
-   - 🚀 Starts the GitHub MCP server as a subprocess
-   - 🔗 Establishes MCP protocol connection via JSON-RPC 2.0
-   - 🏓 Performs health checks to ensure connectivity
-   - 🧹 Automatically cleans up the server process on shutdown
+# Optional: Use Kubernetes MCP server
+K8S_USE_MCP_SERVER=true
+K8S_MCP_SERVER_PATH=/path/to/kubernetes-mcp-server
+K8S_MCP_SERVER_HOST=localhost
+K8S_MCP_SERVER_PORT=8085
 
-**Configuration:**
+# Configure Kubernetes context
+K8S_CONFIG_PATH=/path/to/kubeconfig
+K8S_CONTEXT=your-cluster-context
+```
+
+#### AI Modes
+
+- **YOLO Mode** 🚀: Auto-executes actions if confidence score ≥ 0.8 for low/medium risk commands
+  - **REQUIRES**: `K8S_ENABLE_DESTRUCTIVE_OPERATIONS=true` in `.env`
+  - **HOW TO ENABLE**: Run `./enable_yolo_mode.sh` in the backend directory
+  - Auto-executes remediation commands without human approval
+  - Only executes commands with high confidence (≥ 0.8) and low/medium risk
+- **Approval Mode** ✅: Shows exact kubectl commands and waits for approval
+  - Default mode for safety
+  - Requires manual approval for each command
+- **Plan Mode** 📋: Shows command preview without executing
+  - Preview mode only - never executes commands
+  - Useful for understanding what the agent would do
+
+#### Risk Assessment
+
+Commands are classified into three risk levels:
+
+- **Low Risk**: `kubectl get`, `describe`, `logs` - Auto-executed in YOLO mode
+- **Medium Risk**: `kubectl scale`, `rollout`, `restart` - Auto-executed with high confidence
+- **High Risk**: `kubectl delete`, `apply`, `create` - Requires very high confidence or manual approval
+
+### GitHub Integration
+
+The GitHub MCP integration provides:
+- Repository access and management
+- Issue and pull request operations
+- Code analysis and review
+- Automated documentation updates
+
+#### Setup
+
+1. **Clone the GitHub MCP server**:
 ```bash
-# Required in .env file
-GITHUB_TOKEN=your_github_personal_access_token
+cd ..
+git clone https://github.com/github/github-mcp-server.git
+cd github-mcp-server
+# Follow their installation instructions
+```
+
+2. **Configure environment**:
+```env
+GITHUB_TOKEN=your-github-token
 GITHUB_MCP_SERVER_PATH=../github-mcp-server/github-mcp-server
-
-# Optional settings
-GITHUB_MCP_HOST=localhost
-GITHUB_MCP_PORT=8081
 ```
 
-**Usage:**
+#### Features
+
+- **Context for Incident Analysis**: Repository information, recent commits, open issues
+- **Actions During Incidents**: Create issues, update documentation, notify teams
+- **Automatic Features**: Links incidents to relevant code changes and issues
+
+### Grafana Integration
+
+The Grafana integration provides comprehensive monitoring data for incident analysis.
+
+#### Setup
+
+1. **Build the Grafana MCP server**:
 ```bash
-# GitHub MCP server starts automatically with this command
-uv run python simulate_pagerduty_alert.py pod_crash --github-integration
-
-# Or with the main demo
-uv run python main.py  # If GitHub token is configured
+cd ../mcp-grafana
+make build
+ls -la dist/mcp-grafana  # Verify binary was created
 ```
 
-**Capabilities:**
-- 📊 Fetch recent commits and repository context
-- 🔍 Search code for error patterns and related issues
-- 📝 Create GitHub issues for incident tracking
-- ⚡ Check GitHub Actions workflow status
-- 📁 Access repository files and documentation
-
-**Benefits:**
-- ✅ Zero manual server management
-- ✅ Automatic process lifecycle handling  
-- ✅ Full GitHub API access via MCP protocol
-- ✅ Clean resource cleanup and error handling
-
-2. **GitHub** - Fetches context from repositories and creates incident issues
-3. **Notion** - Creates incident documentation (if configured)
-
-### Adding New Integrations
-
-1. Create a new file in `backend/src/oncall_agent/mcp_integrations/`
-2. Extend the `MCPIntegration` base class:
-
-```python
-from src.oncall_agent.mcp_integrations.base import MCPIntegration
-
-class MyIntegration(MCPIntegration):
-    def __init__(self):
-        super().__init__(name="my_integration")
-    
-    async def connect(self):
-        # Establish connection
-        pass
-    
-    async def fetch_context(self, params: Dict[str, Any]):
-        # Retrieve relevant information
-        pass
-    
-    # Implement other required methods
-```
-
-## 🚀 AWS Deployment Guide
-
-### Step 1: Prepare AWS Secrets
-
-Create secrets in AWS Secrets Manager:
-
+2. **Set up Grafana instance**:
 ```bash
-# Store Anthropic API key
-aws secretsmanager create-secret \
-  --name oncall-agent/anthropic-api-key \
-  --secret-string "YOUR_ANTHROPIC_API_KEY"
-
-# Store Kubernetes config (if using K8s integration)
-aws secretsmanager create-secret \
-  --name dreamops/k8s-config \
-  --secret-string file://~/.kube/config
+# Option A: Local Grafana with Docker
+docker run -d \
+  -p 3000:3000 \
+  --name=grafana \
+  -e "GF_SECURITY_ADMIN_PASSWORD=admin" \
+  grafana/grafana:latest
 ```
 
-### Step 2: Configure GitHub Secrets
+3. **Get API key**:
+   - Open Grafana: http://localhost:3000
+   - Login (admin/admin)
+   - Go to Configuration → API Keys
+   - Create new key with "Admin" or "Editor" role
 
-Add these secrets to your GitHub repository (Settings → Secrets → Actions):
+4. **Configure environment**:
+```env
+GRAFANA_URL=http://localhost:3000
+GRAFANA_API_KEY=your-grafana-api-key
+```
 
-1. **AWS_ACCESS_KEY_ID** - AWS access key for deployment
-2. **AWS_SECRET_ACCESS_KEY** - AWS secret key  
-3. **ANTHROPIC_API_KEY** - Your Anthropic API key
-4. **CLOUDFRONT_DISTRIBUTION_ID** - CloudFront ID (add after initial deployment)
-5. **REACT_APP_API_URL** - Backend API URL (add after initial deployment)
+#### Features
 
-### Step 3: Deploy Infrastructure with Terraform
+- **Context for Incident Analysis**: Dashboards, metrics, alerts, data sources
+- **Actions During Incidents**: Query metrics, create dashboards, silence alerts
+- **Automatic Features**: Service metrics, performance data, historical context
 
-1. Initialize Terraform:
+## 🐛 Troubleshooting
+
+### Integration Issues
+
+#### GitHub MCP Integration Error
+**Problem**: GitHub MCP server path is incorrect
+
+**Solutions**:
+- **Option A (Easiest)**: Disable GitHub integration by commenting out `GITHUB_TOKEN` in `.env`
+- **Option B**: Install GitHub MCP server and update `GITHUB_MCP_SERVER_PATH`
+
+#### Notion MCP Integration Error
+**Problem**: Hardcoded Windows path issues
+
+**Solution**: Comment out `NOTION_TOKEN` in `.env` to disable
+
+#### Kubernetes Context Error
+**Problem**: No Kubernetes cluster available
+
+**Solutions**:
+- Install local cluster (Kind, Minikube, Docker Desktop)
+- Connect to existing cluster (update `K8S_CONTEXT` in `.env`)
+- Set `K8S_ENABLED=false` to disable
+
+#### Grafana Connection Issues
+
+**"mcp-grafana binary not found"**:
+```bash
+cd ../mcp-grafana
+make build
+ls -la dist/  # Should show mcp-grafana binary
+```
+
+**"Connection refused to Grafana"**:
+- Check if Grafana is running: `curl http://localhost:3000/api/health`
+- Verify URL in .env matches your Grafana instance
+
+**"API Key authentication failed"**:
+- Verify API key is correct and hasn't expired
+- Ensure API key has sufficient permissions (Editor/Admin)
+
+### Recommended .env for Local Development
+
+```env
+# Core settings
+ANTHROPIC_API_KEY=your-anthropic-key
+LOG_LEVEL=INFO
+
+# Kubernetes (disable if no cluster)
+K8S_ENABLED=false
+
+# Disable optional integrations if not needed
+# GITHUB_TOKEN=
+# NOTION_TOKEN=
+# GRAFANA_URL=
+
+# PagerDuty (if testing webhooks)
+PAGERDUTY_ENABLED=true
+PAGERDUTY_WEBHOOK_SECRET=test-secret
+```
+
+### Common Issues
+
+1. **"mcp-grafana binary not found"**: Build the Grafana MCP server first
+2. **"Connection refused"**: Check if services are running and ports are correct
+3. **"API authentication failed"**: Verify API keys and permissions
+4. **"No metrics data"**: Check if data sources are configured in Grafana
+
+## 🔌 MCP Integrations
+
+### Kubernetes Integration
+
+The Kubernetes integration supports:
+- **Actual command execution** via kubectl or Kubernetes MCP server
+- **Risk assessment** for all kubectl commands
+- **YOLO mode** - Auto-executes low/medium risk commands with high confidence
+- **Approval mode** - Requests approval before executing commands
+- **Plan mode** - Shows what commands would be executed without running them
+
+#### Configuration
+
+```env
+# Enable destructive operations (required for YOLO mode)
+K8S_ENABLE_DESTRUCTIVE_OPERATIONS=true
+
+# Optional: Use Kubernetes MCP server
+K8S_USE_MCP_SERVER=true
+K8S_MCP_SERVER_PATH=/path/to/kubernetes-mcp-server
+K8S_MCP_SERVER_HOST=localhost
+K8S_MCP_SERVER_PORT=8085
+
+# Configure Kubernetes context
+K8S_CONFIG_PATH=/path/to/kubeconfig
+K8S_CONTEXT=your-cluster-context
+```
+
+#### AI Modes
+
+- **YOLO Mode** 🚀: Auto-executes actions if confidence score ≥ 0.8 for low/medium risk commands
+  - **REQUIRES**: `K8S_ENABLE_DESTRUCTIVE_OPERATIONS=true` in `.env`
+  - **HOW TO ENABLE**: Run `./enable_yolo_mode.sh` in the backend directory
+  - Auto-executes remediation commands without human approval
+  - Only executes commands with high confidence (≥ 0.8) and low/medium risk
+- **Approval Mode** ✅: Shows exact kubectl commands and waits for approval
+  - Default mode for safety
+  - Requires manual approval for each command
+- **Plan Mode** 📋: Shows command preview without executing
+  - Preview mode only - never executes commands
+  - Useful for understanding what the agent would do
+
+#### Risk Assessment
+
+Commands are classified into three risk levels:
+
+- **Low Risk**: `kubectl get`, `describe`, `logs` - Auto-executed in YOLO mode
+- **Medium Risk**: `kubectl scale`, `rollout`, `restart` - Auto-executed with high confidence
+- **High Risk**: `kubectl delete`, `apply`, `create` - Requires very high confidence or manual approval
+
+### GitHub Integration
+
+The GitHub MCP integration provides:
+- Repository access and management
+- Issue and pull request operations
+- Code analysis and review
+- Automated documentation updates
+
+#### Setup
+
+1. **Clone the GitHub MCP server**:
+```bash
+cd ..
+git clone https://github.com/github/github-mcp-server.git
+cd github-mcp-server
+# Follow their installation instructions
+```
+
+2. **Configure environment**:
+```env
+GITHUB_TOKEN=your-github-token
+GITHUB_MCP_SERVER_PATH=../github-mcp-server/github-mcp-server
+```
+
+#### Features
+
+- **Context for Incident Analysis**: Repository information, recent commits, open issues
+- **Actions During Incidents**: Create issues, update documentation, notify teams
+- **Automatic Features**: Links incidents to relevant code changes and issues
+
+### Grafana Integration
+
+The Grafana integration provides comprehensive monitoring data for incident analysis.
+
+#### Setup
+
+1. **Build the Grafana MCP server**:
+```bash
+cd ../mcp-grafana
+make build
+ls -la dist/mcp-grafana  # Verify binary was created
+```
+
+2. **Set up Grafana instance**:
+```bash
+# Option A: Local Grafana with Docker
+docker run -d \
+  -p 3000:3000 \
+  --name=grafana \
+  -e "GF_SECURITY_ADMIN_PASSWORD=admin" \
+  grafana/grafana:latest
+```
+
+3. **Get API key**:
+   - Open Grafana: http://localhost:3000
+   - Login (admin/admin)
+   - Go to Configuration → API Keys
+   - Create new key with "Admin" or "Editor" role
+
+4. **Configure environment**:
+```env
+GRAFANA_URL=http://localhost:3000
+GRAFANA_API_KEY=your-grafana-api-key
+```
+
+#### Features
+
+- **Context for Incident Analysis**: Dashboards, metrics, alerts, data sources
+- **Actions During Incidents**: Query metrics, create dashboards, silence alerts
+- **Automatic Features**: Service metrics, performance data, historical context
+
+## 🐛 Troubleshooting
+
+### Integration Issues
+
+#### GitHub MCP Integration Error
+**Problem**: GitHub MCP server path is incorrect
+
+**Solutions**:
+- **Option A (Easiest)**: Disable GitHub integration by commenting out `GITHUB_TOKEN` in `.env`
+- **Option B**: Install GitHub MCP server and update `GITHUB_MCP_SERVER_PATH`
+
+#### Notion MCP Integration Error
+**Problem**: Hardcoded Windows path issues
+
+**Solution**: Comment out `NOTION_TOKEN` in `.env` to disable
+
+#### Kubernetes Context Error
+**Problem**: No Kubernetes cluster available
+
+**Solutions**:
+- Install local cluster (Kind, Minikube, Docker Desktop)
+- Connect to existing cluster (update `K8S_CONTEXT` in `.env`)
+- Set `K8S_ENABLED=false` to disable
+
+#### Grafana Connection Issues
+
+**"mcp-grafana binary not found"**:
+```bash
+cd ../mcp-grafana
+make build
+ls -la dist/  # Should show mcp-grafana binary
+```
+
+**"Connection refused to Grafana"**:
+- Check if Grafana is running: `curl http://localhost:3000/api/health`
+- Verify URL in .env matches your Grafana instance
+
+**"API Key authentication failed"**:
+- Verify API key is correct and hasn't expired
+- Ensure API key has sufficient permissions (Editor/Admin)
+
+### Recommended .env for Local Development
+
+```env
+# Core settings
+ANTHROPIC_API_KEY=your-anthropic-key
+LOG_LEVEL=INFO
+
+# Kubernetes (disable if no cluster)
+K8S_ENABLED=false
+
+# Disable optional integrations if not needed
+# GITHUB_TOKEN=
+# NOTION_TOKEN=
+# GRAFANA_URL=
+
+# PagerDuty (if testing webhooks)
+PAGERDUTY_ENABLED=true
+PAGERDUTY_WEBHOOK_SECRET=test-secret
+```
+
+### Common Issues
+
+1. **"mcp-grafana binary not found"**: Build the Grafana MCP server first
+2. **"Connection refused"**: Check if services are running and ports are correct
+3. **"API authentication failed"**: Verify API keys and permissions
+4. **"No metrics data"**: Check if data sources are configured in Grafana
+
+## 🏭 Deployment
+
+### AWS Deployment
+
+1. **Prerequisites**:
+   - AWS CLI configured
+   - Terraform installed
+   - Domain name (optional)
+
+2. **Deploy infrastructure**:
 ```bash
 cd infrastructure/terraform
 terraform init
-```
-
-2. Create a `terraform.tfvars` file:
-```hcl
-project_name = "oncall-agent"
-environment  = "production"
-aws_region   = "us-east-1"
-
-# Replace with your secret ARNs from Step 1
-anthropic_api_key_arn = "arn:aws:secretsmanager:us-east-1:YOUR_ACCOUNT:secret:dreamops/anthropic-api-key-XXXXX"
-k8s_config_secret_arn = "arn:aws:secretsmanager:us-east-1:YOUR_ACCOUNT:secret:dreamops/k8s-config-XXXXX"
-
-alarm_email = "your-email@example.com"
-```
-
-3. Deploy:
-```bash
 terraform plan
 terraform apply
 ```
 
-4. Note the outputs:
-   - `backend_api_url`: Add as `REACT_APP_API_URL` in GitHub Secrets
-   - `cloudfront_distribution_id`: Add as `CLOUDFRONT_DISTRIBUTION_ID` in GitHub Secrets
-
-### Step 4: Initial Backend Deployment
-
-Build and push the initial Docker image:
-
+3. **Deploy application**:
 ```bash
-cd backend
+# Build and push Docker image
+docker build -t your-account.dkr.ecr.region.amazonaws.com/oncall-agent:latest -f backend/Dockerfile.prod backend/
+docker push your-account.dkr.ecr.region.amazonaws.com/oncall-agent:latest
 
-# Get ECR login token
-aws ecr get-login-password --region us-east-1 | \
-  docker login --username AWS --password-stdin YOUR_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com
-
-# Build and push
-docker build -t oncall-agent-backend -f Dockerfile.prod .
-docker tag oncall-agent-backend:latest \
-  YOUR_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/oncall-agent-backend:latest
-docker push YOUR_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/oncall-agent-backend:latest
+# Update ECS service
+aws ecs update-service --cluster oncall-cluster --service oncall-service --force-new-deployment
 ```
 
-### Step 5: Deploy Frontend
+### Docker Compose
 
 ```bash
-cd frontend
-npm install
-npm run build
+# Development
+docker-compose up
 
-# Sync to S3
-aws s3 sync build/ s3://oncall-agent-frontend-production --delete
-
-# Invalidate CloudFront
-aws cloudfront create-invalidation \
-  --distribution-id YOUR_DISTRIBUTION_ID \
-  --paths "/*"
+# Production
+docker-compose -f docker-compose.prod.yml up
 ```
 
-### Step 6: Verify Deployment
+## 🧑‍💻 Development
 
-1. Check ECS service:
-```bash
-aws ecs describe-services \
-  --cluster oncall-agent-cluster \
-  --services oncall-agent-backend-service
-```
+### Adding New MCP Integrations
 
-2. Test the API:
-```bash
-curl http://YOUR_ALB_DNS_NAME/health
-```
+1. Create file in `src/oncall_agent/mcp_integrations/`
+2. Extend `MCPIntegration` base class
+3. Implement all abstract methods
+4. Add configuration to `.env.example`
+5. Update this README with usage instructions
 
-### Automated CI/CD
+### Code Style Guidelines
 
-After initial setup, the GitHub Actions workflows will automatically:
-- Run tests and linting on pull requests
-- Deploy to AWS when merging to main branch
+- Use descriptive variable names
+- Add type hints to all functions
+- Include docstrings for all public methods
+- Follow PEP 8 conventions
+- Use `async/await` for all I/O operations
 
-Workflows are configured in:
-- `.github/workflows/backend-ci.yml`
-- `.github/workflows/frontend-ci.yml`
+### Pre-commit Checklist
 
-## 🛠️ Development
-
-### ⚠️ Pre-commit Checklist
-
-**ALWAYS run these before committing:**
+**ALWAYS run these commands before committing:**
 
 ```bash
-cd backend
-
-# 1. Fix code style
+# 1. Run linter and fix any issues
 uv run ruff check . --fix
 
-# 2. Check types (optional - legacy issues exist)
+# 2. Run type checker
 uv run mypy . --ignore-missing-imports
 
-# 3. Run tests
+# 3. Run all tests
 uv run pytest tests/
 
-# 4. Verify it works
+# 4. Verify the application still runs
 uv run python main.py
 ```
 
-### Quick Validation
+### Testing Approach
 
-```bash
-cd backend
-./scripts/validate.sh
-```
+When testing changes:
+1. Check if `.env` exists, if not copy from `.env.example`
+2. Ensure `ANTHROPIC_API_KEY` is set
+3. Run with: `uv run python main.py`
+4. For specific integrations, create mock implementations first
 
-### Development Workflow
+## 📈 Recent Improvements
 
-1. Create feature branch
-2. Make changes
-3. Run validation (see above)
-4. Submit PR with tests
+### Remediation Pipeline Enhancements
 
-## 📊 Example Output
+- **Fixed agent execution**: Now executes actual remediation commands (not just diagnostics)
+- **Improved resolution logic**: Only marks incidents as resolved after successful remediations
+- **Enhanced placeholder replacement**: Properly replaces deployment/pod names in commands
+- **Better command parsing**: Prioritizes remediation commands over diagnostic ones
 
-```
-🚨 ALERT RECEIVED
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Alert ID: K8S-001
-Service: payment-service
-Description: Pod payment-service-7d9f8b6c5-x2n4m is in CrashLoopBackOff state
+### Test Infrastructure Improvements
 
-🔍 DETECTING ALERT TYPE
-✓ Detected Kubernetes alert type: pod_crash
-
-📊 GATHERING KUBERNETES CONTEXT
-✓ Found pod in namespace: default
-✓ Container State: Waiting (CrashLoopBackOff)
-✓ Restart Count: 5
-✓ Recent Logs: ERROR: Configuration file /config/app.conf not found!
-
-🤖 CLAUDE AI ANALYSIS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-## Root Cause
-Missing ConfigMap containing application configuration
-
-## Immediate Actions
-1. Check if ConfigMap exists:
-   kubectl get configmap payment-config -n default
-
-2. Create ConfigMap if missing:
-   kubectl create configmap payment-config --from-file=app.conf
-
-## Resolution Confidence: HIGH
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
-
-## 🏃 Quick Reference
-
-```bash
-# Backend
-uv run python main.py                    # Run demo
-uv run uvicorn src.oncall_agent.api:app # Start API
-uv run pytest tests/                     # Run tests
-uv run ruff check . --fix               # Fix linting
-
-# Frontend  
-npm run dev                              # Start dev server
-npm run build                            # Build for production
-npm test                                 # Run tests
-
-# Docker
-docker-compose up                        # Run full stack
-docker build -f backend/Dockerfile.prod  # Build backend
-
-# Validation
-cd backend && ./scripts/validate.sh      # Run all checks
-```
-
-## 📊 Monitoring & Operations
-
-### CloudWatch Monitoring
-- **Dashboards**: View metrics in AWS Console
-- **Alarms**: CPU and memory alerts via email
-- **Logs**: Application logs in CloudWatch Logs
-
-### Cost Optimization
-- Use Fargate Spot for non-production
-- Set auto-scaling policies
-- Use S3 lifecycle policies for logs
-- Consider Lambda for intermittent loads
-
-### Troubleshooting
-
-**ECS Task Fails to Start**
-- Check CloudWatch Logs
-- Verify secrets are accessible
-- Ensure Docker image is built correctly
-
-**Frontend Not Loading**
-- Check CloudFront status
-- Verify S3 bucket policy
-- Check browser console for CORS
-
-**High AWS Costs**
-- Review CloudWatch metrics
-- Check for unused resources
-- Enable cost allocation tags
-
-## 🔒 Security
-
-- **Never commit** API keys or secrets
-- **Use AWS Secrets Manager** for production
-- **Enable audit logging** for all automated actions
-- **Set `K8S_ENABLE_DESTRUCTIVE_OPERATIONS=false`** by default
-- **Security scanning** runs automatically on every PR
-- **Use IAM roles** instead of access keys where possible
-- **Enable MFA** for AWS accounts
-- **Regularly rotate** secrets and access keys
-- **Enable GuardDuty** for threat detection
+- **Consolidated test files**: All tests moved to `/tests` directory
+- **Docker test environment**: Improved Docker-based testing setup
+- **Mock services**: Enhanced mock services for integration testing
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. **Run all validation checks**
-5. Submit a pull request
+We welcome contributions! Please follow these guidelines:
 
-## 📝 License
+### Prerequisites for Development
 
-MIT License - see LICENSE file for details
+1. Install Go [through download](https://go.dev/doc/install) or [Homebrew](https://formulae.brew.sh/formula/go)
+2. Install [golangci-lint v2](https://golangci-lint.run/welcome/install/#local-installation)
 
-## 🙏 Acknowledgments
+### Submitting a Pull Request
 
-- Built with [AGNO Framework](https://github.com/agno-ai/agno)
-- Powered by [Claude AI](https://www.anthropic.com/claude)
-- Uses [Model Context Protocol](https://modelcontextprotocol.io/)
+1. Fork and clone the repository
+2. Make sure tests pass: `go test -v ./...` (for Go components)
+3. Make sure linter passes: `golangci-lint run` (for Go components)
+4. For Python components: Run `uv run ruff check . --fix` and `uv run pytest tests/`
+5. Create a new branch: `git checkout -b my-branch-name`
+6. Make your changes, add tests, and ensure everything passes
+7. Push to your fork and submit a pull request
 
----
+### Code of Conduct
 
-Built with ❤️ by the Oncall AI Team
+This project follows the [Contributor Covenant Code of Conduct](https://www.contributor-covenant.org/version/2/0/code_of_conduct.html). By participating, you agree to abide by its terms.
 
----
+### Security
 
-# 📚 Comprehensive Documentation
+If you believe you have found a security vulnerability, please do not report it through public GitHub issues. Instead, send an email to the project maintainers.
 
-## 🔥 Quick Testing Guide
+## 📚 Additional Resources
 
-### PagerDuty Integration Quick Start (2 minutes)
+- [MCP Official Specification](https://modelcontextprotocol.io/specification/draft)
+- [MCP SDKs](https://modelcontextprotocol.io/sdk/java/mcp-overview)
+- [GitHub Apps Documentation](https://docs.github.com/en/apps/creating-github-apps)
+- [OAuth Apps Documentation](https://docs.github.com/en/apps/oauth-apps)
+- [Kubernetes Documentation](https://kubernetes.io/docs/)
+- [Grafana Documentation](https://grafana.com/docs/)
 
-#### Option 1: Automated Setup
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🆘 Support
+
+For help or questions:
+- Open an issue on GitHub
+- Check the troubleshooting section above
+- Review the additional resources section
+
+The project is under active development and maintained by the community. We'll do our best to respond to support requests in a timely manner.
+
+2. **Deploy a broken pod**:
+```bash
+kubectl apply -f crash-loop-test.yaml
+```
+
+3. **Run the agent**:
 ```bash
 cd backend
-./quick_test_pagerduty.sh
+uv run python main.py
 ```
 
-This script will:
-1. Set up your environment
-2. Start the API server
-3. Send test alerts
-4. Show you the results
+### Testing with Simulated Issues
 
-#### Option 2: Manual Setup
+Use the `fuck_kubernetes.sh` script to simulate various Kubernetes failures:
 
-1. **Set up environment**
+```bash
+# Usage from project root
+./fuck_kubernetes.sh [1-5|all|random|clean]
+
+# Simulates:
+# 1 - Pod crashes (CrashLoopBackOff)
+# 2 - Image pull errors (ImagePullBackOff)  
+# 3 - OOM kills
+# 4 - Deployment failures
+# 5 - Service unavailability
+
+# The script:
+# - Creates issues in 'fuck-kubernetes-test' namespace
+# - Triggers CloudWatch alarms within 60 seconds
+# - Sends alerts through SNS → PagerDuty → Slack
+# - Helps verify the entire alerting pipeline
+```
+
+### Running Tests
+
 ```bash
 cd backend
-
-# Copy simple config
-cp .env.simple .env
-
-# Edit .env and add your ANTHROPIC_API_KEY
-# Replace 'your-api-key-here' with your actual key
+uv run pytest tests/
 ```
 
-2. **Install dependencies**
+### Linting and Type Checking
+
 ```bash
-uv sync
+# Run linter and fix issues
+uv run ruff check . --fix
+
+# Run type checker
+uv run mypy . --ignore-missing-imports
 ```
 
-3. **Start the API server**
+## 🔌 MCP Integrations
+
+### Kubernetes Integration
+
+The Kubernetes integration supports:
+- **Actual command execution** via kubectl or Kubernetes MCP server
+- **Risk assessment** for all kubectl commands
+- **YOLO mode** - Auto-executes low/medium risk commands with high confidence
+- **Approval mode** - Requests approval before executing commands
+- **Plan mode** - Shows what commands would be executed without running them
+
+#### Configuration
+
+```env
+# Enable destructive operations (required for YOLO mode)
+K8S_ENABLE_DESTRUCTIVE_OPERATIONS=true
+
+# Optional: Use Kubernetes MCP server
+K8S_USE_MCP_SERVER=true
+K8S_MCP_SERVER_PATH=/path/to/kubernetes-mcp-server
+K8S_MCP_SERVER_HOST=localhost
+K8S_MCP_SERVER_PORT=8085
+
+# Configure Kubernetes context
+K8S_CONFIG_PATH=/path/to/kubeconfig
+K8S_CONTEXT=your-cluster-context
+```
+
+#### AI Modes
+
+- **YOLO Mode** 🚀: Auto-executes actions if confidence score ≥ 0.8 for low/medium risk commands
+  - **REQUIRES**: `K8S_ENABLE_DESTRUCTIVE_OPERATIONS=true` in `.env`
+  - **HOW TO ENABLE**: Run `./enable_yolo_mode.sh` in the backend directory
+  - Auto-executes remediation commands without human approval
+  - Only executes commands with high confidence (≥ 0.8) and low/medium risk
+- **Approval Mode** ✅: Shows exact kubectl commands and waits for approval
+  - Default mode for safety
+  - Requires manual approval for each command
+- **Plan Mode** 📋: Shows command preview without executing
+  - Preview mode only - never executes commands
+  - Useful for understanding what the agent would do
+
+#### Risk Assessment
+
+Commands are classified into three risk levels:
+
+- **Low Risk**: `kubectl get`, `describe`, `logs` - Auto-executed in YOLO mode
+- **Medium Risk**: `kubectl scale`, `rollout`, `restart` - Auto-executed with high confidence
+- **High Risk**: `kubectl delete`, `apply`, `create` - Requires very high confidence or manual approval
+
+### GitHub Integration
+
+The GitHub MCP integration provides:
+- Repository access and management
+- Issue and pull request operations
+- Code analysis and review
+- Automated documentation updates
+
+#### Setup
+
+1. **Clone the GitHub MCP server**:
 ```bash
-uv run python api_server.py
+cd ..
+git clone https://github.com/github/github-mcp-server.git
+cd github-mcp-server
+# Follow their installation instructions
 ```
 
-4. **Send test alerts**
-In a new terminal:
+2. **Configure environment**:
+```env
+GITHUB_TOKEN=your-github-token
+GITHUB_MCP_SERVER_PATH=../github-mcp-server/github-mcp-server
+```
+
+#### Features
+
+- **Context for Incident Analysis**: Repository information, recent commits, open issues
+- **Actions During Incidents**: Create issues, update documentation, notify teams
+- **Automatic Features**: Links incidents to relevant code changes and issues
+
+### Grafana Integration
+
+The Grafana integration provides comprehensive monitoring data for incident analysis.
+
+#### Setup
+
+1. **Build the Grafana MCP server**:
 ```bash
-cd backend
-
-# Test a single alert
-uv run python test_pagerduty_alerts.py
-
-# Test specific alert types (no Kubernetes needed!)
-uv run python test_pagerduty_alerts.py --type database
-uv run python test_pagerduty_alerts.py --type server
-uv run python test_pagerduty_alerts.py --type security
-uv run python test_pagerduty_alerts.py --type network
-
-# Test all alert types
-uv run python test_pagerduty_alerts.py --all
-
-# Send multiple alerts at once
-uv run python test_pagerduty_alerts.py --batch 5
-
-# Stress test
-uv run python test_pagerduty_alerts.py --stress 10 --rate 2.0
+cd ../mcp-grafana
+make build
+ls -la dist/mcp-grafana  # Verify binary was created
 ```
 
-### Available Alert Types (No K8s Required)
+2. **Set up Grafana instance**:
+```bash
+# Option A: Local Grafana with Docker
+docker run -d \
+  -p 3000:3000 \
+  --name=grafana \
+  -e "GF_SECURITY_ADMIN_PASSWORD=admin" \
+  grafana/grafana:latest
+```
 
-#### Database Alerts
-- Connection pool exhaustion
-- Slow query timeouts
-- High error rates
+3. **Get API key**:
+   - Open Grafana: http://localhost:3000
+   - Login (admin/admin)
+   - Go to Configuration → API Keys
+   - Create new key with "Admin" or "Editor" role
 
-#### Server Alerts  
-- High CPU usage
-- Memory leaks / OOM killer
-- Process crashes
+4. **Configure environment**:
+```env
+GRAFANA_URL=http://localhost:3000
+GRAFANA_API_KEY=your-grafana-api-key
+```
 
-#### Security Alerts
-- Brute force attacks
-- SQL injection attempts
-- Suspicious authentication
+#### Features
 
-#### Network Alerts
-- CDN latency issues
-- DNS resolution failures
-- Packet loss
+- **Context for Incident Analysis**: Dashboards, metrics, alerts, data sources
+- **Actions During Incidents**: Query metrics, create dashboards, silence alerts
+- **Automatic Features**: Service metrics, performance data, historical context
 
-### Understanding the Flow
+## 🐛 Troubleshooting
 
-1. **Test Script** generates realistic PagerDuty webhook payloads
-2. **API Server** receives webhooks at `/webhook/pagerduty`
-3. **Alert Parser** extracts technical details from the alert
-4. **Oncall Agent** analyzes the incident using Claude AI
-5. **Response** includes:
-   - Root cause analysis
-   - Immediate mitigation steps
-   - Long-term recommendations
-   - Monitoring suggestions
+### Integration Issues
 
-### Viewing Results
+#### GitHub MCP Integration Error
+**Problem**: GitHub MCP server path is incorrect
 
-1. **API Server Logs**: The terminal running `api_server.py` will show incoming webhooks and processing status
-2. **Check Processing Status**: `curl http://localhost:8000/webhook/pagerduty/status`
-3. **API Health Check**: `curl http://localhost:8000/health`
+**Solutions**:
+- **Option A (Easiest)**: Disable GitHub integration by commenting out `GITHUB_TOKEN` in `.env`
+- **Option B**: Install GitHub MCP server and update `GITHUB_MCP_SERVER_PATH`
 
-## 🔧 Complete API Documentation
+#### Notion MCP Integration Error
+**Problem**: Hardcoded Windows path issues
+
+**Solution**: Comment out `NOTION_TOKEN` in `.env` to disable
+
+#### Kubernetes Context Error
+**Problem**: No Kubernetes cluster available
+
+**Solutions**:
+- Install local cluster (Kind, Minikube, Docker Desktop)
+- Connect to existing cluster (update `K8S_CONTEXT` in `.env`)
+- Set `K8S_ENABLED=false` to disable
+
+#### Grafana Connection Issues
+
+**"mcp-grafana binary not found"**:
+```bash
+cd ../mcp-grafana
+make build
+ls -la dist/  # Should show mcp-grafana binary
+```
+
+**"Connection refused to Grafana"**:
+- Check if Grafana is running: `curl http://localhost:3000/api/health`
+- Verify URL in .env matches your Grafana instance
+
+**"API Key authentication failed"**:
+- Verify API key is correct and hasn't expired
+- Ensure API key has sufficient permissions (Editor/Admin)
+
+### Recommended .env for Local Development
+
+```env
+# Core settings
+ANTHROPIC_API_KEY=your-anthropic-key
+LOG_LEVEL=INFO
+
+# Kubernetes (disable if no cluster)
+K8S_ENABLED=false
+
+# Disable optional integrations if not needed
+# GITHUB_TOKEN=
+# NOTION_TOKEN=
+# GRAFANA_URL=
+
+# PagerDuty (if testing webhooks)
+PAGERDUTY_ENABLED=true
+PAGERDUTY_WEBHOOK_SECRET=test-secret
+```
+
+### Common Issues
+
+1. **"mcp-grafana binary not found"**: Build the Grafana MCP server first
+2. **"Connection refused"**: Check if services are running and ports are correct
+3. **"API authentication failed"**: Verify API keys and permissions
+4. **"No metrics data"**: Check if data sources are configured in Grafana
+
+## 🏭 Deployment
+
+### AWS Deployment
+
+1. **Prerequisites**:
+   - AWS CLI configured
+   - Terraform installed
+   - Domain name (optional)
+
+2. **Deploy infrastructure**:
+```bash
+cd infrastructure/terraform
+terraform init
+terraform plan
+terraform apply
+```
+
+3. **Deploy application**:
+```bash
+# Build and push Docker image
+docker build -t your-account.dkr.ecr.region.amazonaws.com/oncall-agent:latest -f backend/Dockerfile.prod backend/
+docker push your-account.dkr.ecr.region.amazonaws.com/oncall-agent:latest
+
+# Update ECS service
+aws ecs update-service --cluster oncall-cluster --service oncall-service --force-new-deployment
+```
+
+### Docker Compose
+
+```bash
+# Development
+docker-compose up
+
+# Production
+docker-compose -f docker-compose.prod.yml up
+```
+
+## 🧑‍💻 Development
+
+### Adding New MCP Integrations
+
+1. Create file in `src/oncall_agent/mcp_integrations/`
+2. Extend `MCPIntegration` base class
+3. Implement all abstract methods
+4. Add configuration to `.env.example`
+5. Update this README with usage instructions
+
+### Code Style Guidelines
+
+- Use descriptive variable names
+- Add type hints to all functions
+- Include docstrings for all public methods
+- Follow PEP 8 conventions
+- Use `async/await` for all I/O operations
+
+### Pre-commit Checklist
+
+**ALWAYS run these commands before committing:**
+
+```bash
+# 1. Run linter and fix any issues
+uv run ruff check . --fix
+
+# 2. Run type checker
+uv run mypy . --ignore-missing-imports
+
+# 3. Run all tests
+uv run pytest tests/
+
+# 4. Verify the application still runs
+uv run python main.py
+```
+
+### Testing Approach
+
+When testing changes:
+1. Check if `.env` exists, if not copy from `.env.example`
+2. Ensure `ANTHROPIC_API_KEY` is set
+3. Run with: `uv run python main.py`
+4. For specific integrations, create mock implementations first
+
+## 📈 Recent Improvements
+
+### Remediation Pipeline Enhancements
+
+- **Fixed agent execution**: Now executes actual remediation commands (not just diagnostics)
+- **Improved resolution logic**: Only marks incidents as resolved after successful remediations
+- **Enhanced placeholder replacement**: Properly replaces deployment/pod names in commands
+- **Better command parsing**: Prioritizes remediation commands over diagnostic ones
+
+### Test Infrastructure Improvements
+
+- **Consolidated test files**: All tests moved to `/tests` directory
+- **Docker test environment**: Improved Docker-based testing setup
+- **Mock services**: Enhanced mock services for integration testing
+
+## 🤝 Contributing
+
+We welcome contributions! Please follow these guidelines:
+
+### Prerequisites for Development
+
+1. Install Go [through download](https://go.dev/doc/install) or [Homebrew](https://formulae.brew.sh/formula/go)
+2. Install [golangci-lint v2](https://golangci-lint.run/welcome/install/#local-installation)
+
+### Submitting a Pull Request
+
+1. Fork and clone the repository
+2. Make sure tests pass: `go test -v ./...` (for Go components)
+3. Make sure linter passes: `golangci-lint run` (for Go components)
+4. For Python components: Run `uv run ruff check . --fix` and `uv run pytest tests/`
+5. Create a new branch: `git checkout -b my-branch-name`
+6. Make your changes, add tests, and ensure everything passes
+7. Push to your fork and submit a pull request
+
+### Code of Conduct
+
+This project follows the [Contributor Covenant Code of Conduct](https://www.contributor-covenant.org/version/2/0/code_of_conduct.html). By participating, you agree to abide by its terms.
+
+### Security
+
+If you believe you have found a security vulnerability, please do not report it through public GitHub issues. Instead, send an email to the project maintainers.
+
+## 📚 Additional Resources
+
+- [MCP Official Specification](https://modelcontextprotocol.io/specification/draft)
+- [MCP SDKs](https://modelcontextprotocol.io/sdk/java/mcp-overview)
+- [GitHub Apps Documentation](https://docs.github.com/en/apps/creating-github-apps)
+- [OAuth Apps Documentation](https://docs.github.com/en/apps/oauth-apps)
+- [Kubernetes Documentation](https://kubernetes.io/docs/)
+- [Grafana Documentation](https://grafana.com/docs/)
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🆘 Support
+
+For help or questions:
+- Open an issue on GitHub
+- Check the troubleshooting section above
+- Review the additional resources section
+
+The project is under active development and maintained by the community. We'll do our best to respond to support requests in a timely manner.
+
+# ... (rest of the code remains unchanged)
+
+## Resolution Confidence: HIGH
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ### Starting the API Server
 
@@ -993,195 +1402,6 @@ curl http://localhost:8000/api/v1/agent/status
 
 # List integrations
 curl http://localhost:8000/api/v1/integrations
-```
-
-### Frontend Integration Examples
-
-```javascript
-// Example: Fetch dashboard stats
-const response = await fetch('http://localhost:8000/api/v1/dashboard/stats');
-const stats = await response.json();
-
-// Example: Create incident
-const incident = await fetch('http://localhost:8000/api/v1/incidents', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    title: 'API Error',
-    description: 'High error rate detected',
-    severity: 'high',
-    service_name: 'api-gateway',
-    alert_source: 'prometheus'
-  })
-});
-
-// Example: WebSocket for real-time metrics
-const ws = new WebSocket('ws://localhost:8000/api/v1/monitoring/ws/metrics');
-ws.onmessage = (event) => {
-  const metrics = JSON.parse(event.data);
-  updateDashboard(metrics);
-};
-```
-
-### Key Endpoints for Frontend
-
-#### Dashboard Page
-- `GET /api/v1/dashboard/stats` - Main statistics
-- `GET /api/v1/dashboard/metrics/incidents?period=24h` - Incident trends
-- `GET /api/v1/dashboard/activity-feed` - Recent activities
-- `WebSocket /api/v1/monitoring/ws/metrics` - Real-time metrics
-
-#### Incidents Page
-- `GET /api/v1/incidents` - List all incidents
-- `POST /api/v1/incidents` - Create new incident
-- `PATCH /api/v1/incidents/{id}` - Update incident
-- `POST /api/v1/incidents/{id}/acknowledge` - Acknowledge
-- `POST /api/v1/incidents/{id}/resolve` - Resolve
-
-#### AI Agent Page
-- `GET /api/v1/agent/status` - Agent health
-- `POST /api/v1/agent/analyze` - Trigger analysis
-- `GET /api/v1/agent/capabilities` - Available actions
-
-#### Integrations Page
-- `GET /api/v1/integrations` - List all integrations
-- `PUT /api/v1/integrations/{name}/config` - Update config
-- `POST /api/v1/integrations/{name}/test` - Test connection
-
-#### Analytics Page
-- `POST /api/v1/analytics/incidents` - Incident analytics
-- `GET /api/v1/analytics/services/health` - Service health
-- `GET /api/v1/analytics/patterns` - Incident patterns
-
-#### Settings Page
-- `GET /api/v1/settings` - All settings
-- `PUT /api/v1/settings/notifications` - Update notifications
-- `GET /api/v1/settings/oncall-schedules` - On-call schedules
-
-### Mock Data
-
-The API includes comprehensive mock data for development:
-- Pre-populated incidents with various severities
-- Mock AI analysis responses
-- Simulated real-time metrics
-- Example integration configurations
-- Sample audit logs and security events
-
-### Environment Variables for API
-
-Make sure these are set in your `.env` file:
-
-```env
-API_HOST=0.0.0.0
-API_PORT=8000
-API_RELOAD=true
-LOG_LEVEL=INFO
-CORS_ORIGINS=["http://localhost:3000"]
-```
-
-### Rate Limiting
-
-- Default: 1000 requests per hour per API key
-- Webhooks: 10000 requests per hour
-- WebSocket connections: 10 concurrent connections per API key
-
-### Error Codes
-
-- `400` - Bad Request (invalid parameters)
-- `401` - Unauthorized (missing or invalid API key)
-- `403` - Forbidden (insufficient permissions)
-- `404` - Not Found
-- `429` - Too Many Requests (rate limit exceeded)
-- `500` - Internal Server Error
-- `503` - Service Unavailable
-
-## 🏗️ Kubernetes Integration
-
-### Kind Setup for Local Testing
-
-This guide helps you set up a local Kubernetes cluster using Kind to test the PagerDuty to DreamOps integration end-to-end.
-
-#### Prerequisites
-
-- Docker Desktop running on Windows (since WSL doesn't support Docker directly)
-- kubectl installed in WSL
-- Kind installed on Windows
-- Python environment set up in the backend directory
-
-#### Setup Instructions
-
-1. **Create Kind Cluster (Run on Windows)**
-
-```powershell
-# Create the Kind cluster using the provided configuration
-kind create cluster --config kind-config.yaml --name oncall-agent
-
-# Export the kubeconfig
-kind get kubeconfig --name dreamops > dreamops-kubeconfig
-
-# Verify cluster is running
-kubectl cluster-info --context kind-dreamops
-```
-
-2. **Configure WSL Environment**
-
-```bash
-# Copy the kubeconfig to WSL
-mkdir -p ~/.kube
-cp /mnt/c/path/to/oncall-agent-kubeconfig ~/.kube/oncall-agent-config
-
-# Set KUBECONFIG environment variable
-export KUBECONFIG=~/.kube/oncall-agent-config
-
-# Verify connection from WSL
-kubectl cluster-info
-```
-
-3. **Set Up Demo Applications**
-
-```bash
-cd backend
-
-# Run the setup script
-./setup-k8s-demo.sh
-
-# Or manually:
-kubectl create namespace demo-apps
-kubectl apply -f k8s-demo-apps.yaml
-```
-
-4. **Configure Oncall Agent**
-
-```bash
-# Copy the Kind-specific environment file
-cp .env.kind .env
-
-# Edit .env and add your ANTHROPIC_API_KEY
-# ANTHROPIC_API_KEY=your-actual-key-here
-```
-
-5. **Start the API Server**
-
-```bash
-# In the backend directory
-uv run python api_server.py
-```
-
-6. **Test the Integration**
-
-```bash
-# This will monitor the cluster and send alerts automatically
-uv run python test_k8s_pagerduty_integration.py
-
-# Run once to see current issues
-uv run python test_k8s_pagerduty_integration.py --once
-```
-
-#### Demo Applications
-
-The setup creates several intentionally broken applications to test different scenarios:
 
 | Application | Issue | Expected Alert |
 |------------|-------|----------------|
@@ -1579,12 +1799,6 @@ uv run python test_pagerduty_alerts.py --type security
 uv run python test_pagerduty_alerts.py --type network
 ```
 
-#### Test 3: Batch Testing
-```bash
-# Send 5 random alerts
-uv run python test_pagerduty_alerts.py --batch 5
-```
-
 #### Test 4: All Alert Types
 ```bash
 # Test one of each type
@@ -1843,7 +2057,7 @@ INFO:     Uvicorn running on http://0.0.0.0:8000
 ```
 
 2. **Health Check Response:**
-```json
+```
 {
   "status": "healthy",
   "checks": {
@@ -1871,3 +2085,148 @@ You can now:
 - ✅ Use the system for real incident response
 
 **Everything is fixed and tested! 🎉**
+
+## 🏭 Deployment
+
+### AWS Deployment
+
+1. **Prerequisites**:
+   - AWS CLI configured
+   - Terraform installed
+   - Domain name (optional)
+
+2. **Deploy infrastructure**:
+```bash
+cd infrastructure/terraform
+terraform init
+terraform plan
+terraform apply
+```
+
+3. **Deploy application**:
+```bash
+# Build and push Docker image
+docker build -t your-account.dkr.ecr.region.amazonaws.com/oncall-agent:latest -f backend/Dockerfile.prod backend/
+docker push your-account.dkr.ecr.region.amazonaws.com/oncall-agent:latest
+
+# Update ECS service
+aws ecs update-service --cluster oncall-cluster --service oncall-service --force-new-deployment
+```
+
+### Docker Compose
+
+```bash
+# Development
+docker-compose up
+
+# Production
+docker-compose -f docker-compose.prod.yml up
+```
+
+## 🧑‍💻 Development
+
+### Adding New MCP Integrations
+
+1. Create file in `src/oncall_agent/mcp_integrations/`
+2. Extend `MCPIntegration` base class
+3. Implement all abstract methods
+4. Add configuration to `.env.example`
+5. Update this README with usage instructions
+
+### Code Style Guidelines
+
+- Use descriptive variable names
+- Add type hints to all functions
+- Include docstrings for all public methods
+- Follow PEP 8 conventions
+- Use `async/await` for all I/O operations
+
+### Pre-commit Checklist
+
+**ALWAYS run these commands before committing:**
+
+```bash
+# 1. Run linter and fix any issues
+uv run ruff check . --fix
+
+# 2. Run type checker
+uv run mypy . --ignore-missing-imports
+
+# 3. Run all tests
+uv run pytest tests/
+
+# 4. Verify the application still runs
+uv run python main.py
+```
+
+### Testing Approach
+
+When testing changes:
+1. Check if `.env` exists, if not copy from `.env.example`
+2. Ensure `ANTHROPIC_API_KEY` is set
+3. Run with: `uv run python main.py`
+4. For specific integrations, create mock implementations first
+
+## 📈 Recent Improvements
+
+### Remediation Pipeline Enhancements
+
+- **Fixed agent execution**: Now executes actual remediation commands (not just diagnostics)
+- **Improved resolution logic**: Only marks incidents as resolved after successful remediations
+- **Enhanced placeholder replacement**: Properly replaces deployment/pod names in commands
+- **Better command parsing**: Prioritizes remediation commands over diagnostic ones
+
+### Test Infrastructure Improvements
+
+- **Consolidated test files**: All tests moved to `/tests` directory
+- **Docker test environment**: Improved Docker-based testing setup
+- **Mock services**: Enhanced mock services for integration testing
+
+## 🤝 Contributing
+
+We welcome contributions! Please follow these guidelines:
+
+### Prerequisites for Development
+
+1. Install Go [through download](https://go.dev/doc/install) or [Homebrew](https://formulae.brew.sh/formula/go)
+2. Install [golangci-lint v2](https://golangci-lint.run/welcome/install/#local-installation)
+
+### Submitting a Pull Request
+
+1. Fork and clone the repository
+2. Make sure tests pass: `go test -v ./...` (for Go components)
+3. Make sure linter passes: `golangci-lint run` (for Go components)
+4. For Python components: Run `uv run ruff check . --fix` and `uv run pytest tests/`
+5. Create a new branch: `git checkout -b my-branch-name`
+6. Make your changes, add tests, and ensure everything passes
+7. Push to your fork and submit a pull request
+
+### Code of Conduct
+
+This project follows the [Contributor Covenant Code of Conduct](https://www.contributor-covenant.org/version/2/0/code_of_conduct.html). By participating, you agree to abide by its terms.
+
+### Security
+
+If you believe you have found a security vulnerability, please do not report it through public GitHub issues. Instead, send an email to the project maintainers.
+
+## 📚 Additional Resources
+
+- [MCP Official Specification](https://modelcontextprotocol.io/specification/draft)
+- [MCP SDKs](https://modelcontextprotocol.io/sdk/java/mcp-overview)
+- [GitHub Apps Documentation](https://docs.github.com/en/apps/creating-github-apps)
+- [OAuth Apps Documentation](https://docs.github.com/en/apps/oauth-apps)
+- [Kubernetes Documentation](https://kubernetes.io/docs/)
+- [Grafana Documentation](https://grafana.com/docs/)
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🆘 Support
+
+For help or questions:
+- Open an issue on GitHub
+- Check the troubleshooting section above
+- Review the additional resources section
+
+The project is under active development and maintained by the community. We'll do our best to respond to support requests in a timely manner.

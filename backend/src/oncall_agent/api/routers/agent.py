@@ -659,7 +659,7 @@ async def get_agent_config() -> AIAgentConfig:
 async def update_agent_config(config_update: AIAgentConfigUpdate) -> AIAgentConfig:
     """Update AI agent configuration."""
     try:
-        global AGENT_CONFIG
+        global AGENT_CONFIG, enhanced_agent_instance
 
         # Update only provided fields
         update_data = config_update.model_dump(exclude_unset=True)
@@ -670,6 +670,17 @@ async def update_agent_config(config_update: AIAgentConfigUpdate) -> AIAgentConf
 
         # Validate and create new config
         AGENT_CONFIG = AIAgentConfig(**current_config)
+
+        # If mode changed, reset agent instances to use new mode
+        if "mode" in update_data:
+            # Reset webhook agent trigger to use new mode
+            from src.oncall_agent.api import webhooks
+            webhooks.agent_trigger = None
+
+            # Reset enhanced agent instance
+            enhanced_agent_instance = None
+
+            logger.info(f"AI mode changed to {AGENT_CONFIG.mode.value}, agent instances will be recreated")
 
         logger.info(f"Agent configuration updated: {update_data}")
         return AGENT_CONFIG

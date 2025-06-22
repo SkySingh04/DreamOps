@@ -998,3 +998,156 @@ GITHUB_MCP_SERVER_E2E_DEBUG=true go test -v --tags e2e ./e2e
 10. **Documentation**: Update README.md for any user-facing changes
 11. **MCP Testing**: Use Docker-based integration tests for comprehensive validation
 12. **GitHub MCP**: Local development supports full debugging, remote for production
+
+## 🔧 Integration Setup and Troubleshooting (Consolidated)
+
+### MCP Integration Issues
+
+#### GitHub MCP Integration Fix
+**Problem**: GitHub MCP server path errors
+
+**Solutions**:
+- **Quick Fix**: Run `./fix_env_paths.sh`
+- **Disable**: Comment out `GITHUB_TOKEN` in `.env`
+- **Install**: Clone GitHub MCP server and update path
+
+#### Kubernetes Enhanced Integration
+The Kubernetes integration now supports actual command execution with multiple modes:
+
+**YOLO Mode** 🚀: Auto-executes low/medium risk commands
+- Confidence ≥ 0.8 for low risk, ≥ 0.9 for high risk
+- Automatic verification of actions
+
+**Approval Mode** ✅: Shows exact commands and waits for approval
+**Plan Mode** 📋: Preview commands without execution
+
+**Risk Assessment:**
+- **Low Risk**: `kubectl get`, `describe`, `logs` (read-only)
+- **Medium Risk**: `kubectl scale`, `rollout restart` (reversible)
+- **High Risk**: `kubectl delete`, `apply` (destructive)
+
+#### Grafana Integration Setup
+Complete monitoring integration:
+
+1. **Build MCP server**: `cd ../mcp-grafana && make build`
+2. **Setup Grafana**: Docker or existing instance
+3. **Get API key**: Admin/Editor permissions required
+4. **Configure**: Set `GRAFANA_URL` and `GRAFANA_API_KEY`
+
+**Features**:
+- Automatic metric queries during incidents
+- Dashboard creation and alert silencing
+- Historical performance context
+
+### Test Infrastructure (Consolidated)
+
+#### Migration Complete
+All test files moved to `/tests` directory:
+- `docker-compose.test.yml` → `tests/docker-compose.test.yml`
+- Test scripts and configurations consolidated
+- Mock services for integration testing
+- Comprehensive Docker test environment
+
+#### Remediation Pipeline Fixes
+Recent improvements to actual incident remediation:
+
+**Fixed Issues:**
+- Agent now executes real remediation commands (not just diagnostics)
+- Proper placeholder replacement in kubectl commands
+- Resolution only after successful remediation execution
+- Enhanced command parsing prioritizing fixes over diagnostics
+
+**Implementation:**
+- `RemediationPipeline` class for execution flow
+- `DiagnosticParser` for kubectl output parsing
+- `RemediationActions` for specific fix operations
+- Verification logic for successful remediation
+
+### Security and Contributing (Consolidated)
+
+#### GitHub MCP Server OAuth Integration
+For remote GitHub MCP server usage:
+
+**OAuth Configuration:**
+- **GitHub Apps**: Recommended (expiring tokens, fine-grained permissions)
+- **OAuth Apps**: Simpler but less secure
+- **PKCE**: Strongly recommended for authorization flows
+
+**Authentication Flow:**
+1. Client requests without token → 401 with WWW-Authenticate
+2. Client initiates OAuth flow with GitHub
+3. GitHub returns access token
+4. Client makes authenticated requests
+
+**Security Considerations:**
+- Use secure token storage (platform APIs)
+- Validate all input parameters
+- HTTPS only in production
+- Handle organization access restrictions
+
+#### Contributing Guidelines (Consolidated)
+
+**For Go Components (GitHub MCP Server):**
+```bash
+# Prerequisites
+go install # Go 1.22+
+golangci-lint run # Linter
+
+# Testing
+go test -v ./...
+golangci-lint run
+```
+
+**For Python Components:**
+```bash
+# Prerequisites
+uv sync # Package management
+
+# Development workflow
+uv run ruff check . --fix # Linter
+uv run mypy . --ignore-missing-imports # Type checker
+uv run pytest tests/ # Tests
+uv run python main.py # Verify functionality
+```
+
+**Code of Conduct:**
+- Harassment-free environment for all participants
+- Respectful of differing opinions and experiences
+- Constructive feedback and community focus
+- Professional conduct in all interactions
+
+#### Security Policy
+**Vulnerability Reporting:**
+- DO NOT use public GitHub issues
+- Email security concerns to maintainers
+- Include detailed reproduction steps and impact assessment
+- Follow responsible disclosure practices
+
+### Support and Resources (Consolidated)
+
+#### Getting Help
+- **GitHub Issues**: Bug reports and feature requests
+- **Search First**: Check existing issues before creating new ones
+- **Community Support**: Active development with maintainer oversight
+- **Documentation**: Comprehensive guides in README.md and CLAUDE.md
+
+#### Additional Resources
+- [MCP Official Specification](https://modelcontextprotocol.io/specification/draft)
+- [MCP SDKs](https://modelcontextprotocol.io/sdk/java/mcp-overview)
+- [GitHub Apps Documentation](https://docs.github.com/en/apps/creating-github-apps)
+- [OAuth Apps Documentation](https://docs.github.com/en/apps/oauth-apps)
+- [Kubernetes Documentation](https://kubernetes.io/docs/)
+- [Grafana Documentation](https://grafana.com/docs/)
+- [Building Copilot Extensions](https://docs.github.com/en/copilot/building-copilot-extensions)
+
+## Final Documentation Consolidation Note
+
+**All separate README and documentation files have been consolidated into this CLAUDE.md and the main README.md.** This provides:
+
+- Single source of truth for all documentation
+- Comprehensive troubleshooting and setup guides  
+- Complete integration instructions
+- Consolidated security and contributing guidelines
+- Unified support and resource information
+
+**Removed redundant documentation files to maintain clarity and prevent version drift.**

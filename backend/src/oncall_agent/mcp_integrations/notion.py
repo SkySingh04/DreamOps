@@ -53,7 +53,7 @@ class NotionMCPIntegration(MCPIntegration):
                 stderr=subprocess.PIPE,
                 text=True,
                 env=env,
-                cwd="/mnt/c/Users/himan/OneDrive/Desktop/WarpSpeed/oncall-agent/backend"
+                cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             )
 
             # Wait a moment for the server to start
