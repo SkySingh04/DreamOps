@@ -50,7 +50,7 @@ class ActionType(str, Enum):
 class AIMode(str, Enum):
     """AI operation modes."""
     YOLO = "yolo"
-    PLAN = "plan" 
+    PLAN = "plan"
     APPROVAL = "approval"
 
 
@@ -455,7 +455,7 @@ class APIKeySettings(BaseModel):
     anthropic_api_key: str = ""
     webhook_url: str = ""
     webhook_secret: str = ""
-    
+
 class NotificationSettings(BaseModel):
     """Notification preferences."""
     email_enabled: bool = True

@@ -58,7 +58,9 @@ class OncallAgent:
             # Check if we should use the enhanced MCP integration
             use_enhanced = self.config.get("k8s_enable_destructive_operations", False)
             if use_enhanced:
-                from .mcp_integrations.kubernetes_mcp import KubernetesMCPServerIntegration
+                from .mcp_integrations.kubernetes_mcp import (
+                    KubernetesMCPServerIntegration,
+                )
                 self.k8s_integration = KubernetesMCPServerIntegration()
                 self.register_mcp_integration("kubernetes", self.k8s_integration)
                 self.logger.info("Using enhanced K8s integration with command execution")
@@ -398,22 +400,22 @@ class OncallAgent:
                         )
                     except Exception as e:
                         self.logger.error(f"❌ Failed to send automated action to dashboard: {e}")
-                
+
                 # Check if we should execute in YOLO mode
                 try:
                     # Import here to avoid circular dependency
                     from .api.routers.agent import AGENT_CONFIG
                     from .api.schemas import AIMode
-                    
+
                     if AGENT_CONFIG.mode == AIMode.YOLO and AGENT_CONFIG.auto_execute_enabled:
                         self.logger.info("🚀 YOLO MODE ACTIVATED - Executing automated actions!")
-                        
+
                         # Execute high confidence actions
                         executed_actions = []
                         for action in result["automated_actions"]:
                             if action.get("confidence", 0) >= 0.6:  # Execute if confidence >= 60%
                                 self.logger.info(f"⚡ Executing action: {action['action']}")
-                                
+
                                 # Execute via K8s MCP integration
                                 if hasattr(self, 'k8s_integration'):
                                     # Check if this is a kubectl command
@@ -431,7 +433,7 @@ class OncallAgent:
                                     else:
                                         self.logger.error(f"K8s integration doesn't support action: {action['action']}")
                                         continue
-                                    
+
                                     if exec_result.get('success'):
                                         self.logger.info(f"✅ Successfully executed: {action['action']}")
                                         executed_actions.append({
@@ -439,7 +441,7 @@ class OncallAgent:
                                             'result': exec_result,
                                             'status': 'success'
                                         })
-                                        
+
                                         # Send execution result to dashboard
                                         await send_ai_action_to_dashboard(
                                             action=f"executed_{action['action']}",
@@ -453,10 +455,82 @@ class OncallAgent:
                                             'result': exec_result,
                                             'status': 'failed'
                                         })
-                        
+
                         result["executed_actions"] = executed_actions
                         result["execution_mode"] = "YOLO"
-                        
+
+                        # Now also execute remediation commands from Claude's analysis
+                        if parsed_analysis.get("commands") and hasattr(self, 'k8s_integration'):
+                            self.logger.info("🔧 Executing remediation commands from Claude's analysis...")
+
+                            remediation_results = []
+                            # Filter kubectl commands from all commands
+                            kubectl_commands = [cmd for cmd in parsed_analysis["commands"]
+                                              if cmd.startswith(('kubectl', 'k '))]
+
+                            for cmd in kubectl_commands[:5]:  # Limit to first 5 commands for safety
+                                # Skip certain dangerous commands even in YOLO mode
+                                if any(danger in cmd.lower() for danger in ['delete', 'drain', 'cordon', 'taint']):
+                                    self.logger.warning(f"⚠️  Skipping potentially destructive command: {cmd}")
+                                    continue
+
+                                # Skip commands with placeholders
+                                if '<' in cmd and '>' in cmd:
+                                    self.logger.info(f"ℹ️  Skipping command with placeholders: {cmd}")
+                                    continue
+
+                                self.logger.info(f"🏃 Executing remediation command: {cmd}")
+
+                                # Extract the kubectl command (remove 'kubectl ' prefix)
+                                kubectl_cmd = cmd.replace('kubectl ', '').replace('k ', '')
+
+                                try:
+                                    # Send action to dashboard before execution
+                                    await send_ai_action_to_dashboard(
+                                        action="remediation_command_execution",
+                                        description=f"Executing remediation: {cmd}",
+                                        incident_id=incident_id
+                                    )
+
+                                    exec_result = await self.k8s_integration.execute_kubectl_command(
+                                        kubectl_cmd,
+                                        dry_run=False,
+                                        auto_approve=True
+                                    )
+
+                                    if exec_result.get('success'):
+                                        self.logger.info(f"✅ Remediation command succeeded: {cmd}")
+                                        remediation_results.append({
+                                            'command': cmd,
+                                            'status': 'success',
+                                            'output': exec_result.get('output', '')[:500]  # Limit output size
+                                        })
+
+                                        # Send success to dashboard
+                                        await send_ai_action_to_dashboard(
+                                            action="remediation_command_success",
+                                            description=f"✅ Successfully executed: {cmd}",
+                                            incident_id=incident_id
+                                        )
+                                    else:
+                                        self.logger.error(f"❌ Remediation command failed: {cmd} - {exec_result.get('error')}")
+                                        remediation_results.append({
+                                            'command': cmd,
+                                            'status': 'failed',
+                                            'error': exec_result.get('error', 'Unknown error')
+                                        })
+                                except Exception as cmd_error:
+                                    self.logger.error(f"❌ Error executing remediation command {cmd}: {cmd_error}")
+                                    remediation_results.append({
+                                        'command': cmd,
+                                        'status': 'error',
+                                        'error': str(cmd_error)
+                                    })
+
+                            if remediation_results:
+                                result["remediation_commands_executed"] = remediation_results
+                                self.logger.info(f"📋 Executed {len(remediation_results)} remediation commands")
+
                 except Exception as e:
                     self.logger.error(f"Error checking/executing YOLO mode: {e}")
 
@@ -598,7 +672,7 @@ class OncallAgent:
                             "reason": f"High {alert_type.split('_')[1]} usage, scaling up may help"
                         }
                     ]
-                    
+
             elif alert_type == "oom_kill":
                 # For OOMKill alerts, find pods with high restart counts
                 self.logger.info("Detecting OOMKill - searching for problematic pods...")
@@ -609,23 +683,23 @@ class OncallAgent:
                     # Fallback to fetch_context if list_pods doesn't work
                     ctx_result = await k8s.fetch_context("list_pods", namespace=namespace)
                     all_pods = ctx_result.get("pods", [])
-                    
+
                 context["total_pods"] = len(all_pods)
-                
+
                 # Find pods with restarts or issues
                 problematic_pods = []
                 for pod in all_pods:
                     if isinstance(pod, dict):
                         # Check for restart count or problematic status
-                        if (pod.get("status") in ["CrashLoopBackOff", "Error", "OOMKilled"] or 
+                        if (pod.get("status") in ["CrashLoopBackOff", "Error", "OOMKilled"] or
                             pod.get("restarts", 0) > 0):
                             problematic_pods.append(pod)
-                
+
                 context["problematic_pods"] = problematic_pods
-                
+
                 # Generate automated actions for OOMKill
                 automated_actions = []
-                
+
                 # Action 1: Check top memory consumers
                 automated_actions.append({
                     "action": "execute_kubectl_command",
@@ -637,7 +711,7 @@ class OncallAgent:
                     },
                     "reason": "Identify memory-hungry pods to find OOMKill culprits"
                 })
-                
+
                 # Action 2: Get events related to OOMKill
                 automated_actions.append({
                     "action": "execute_kubectl_command",
@@ -649,7 +723,7 @@ class OncallAgent:
                     },
                     "reason": "Check recent OOMKill events to identify affected pods"
                 })
-                
+
                 # Action 3: If we found problematic pods, restart the worst one
                 if problematic_pods:
                     worst_pod = max(problematic_pods, key=lambda p: p.get("restarts", 0))
@@ -662,7 +736,7 @@ class OncallAgent:
                         },
                         "reason": f"Restart pod with {worst_pod.get('restarts', 0)} restarts to clear memory state"
                     })
-                
+
                 # Action 4: Check node memory pressure
                 automated_actions.append({
                     "action": "execute_kubectl_command",
@@ -670,11 +744,11 @@ class OncallAgent:
                     "params": {
                         "command": ["describe", "nodes"],
                         "dry_run": False,
-                        "auto_approve": True  
+                        "auto_approve": True
                     },
                     "reason": "Check for node-level memory pressure that might cause OOMKills"
                 })
-                
+
                 context["automated_actions"] = automated_actions
                 self.logger.info(f"Generated {len(automated_actions)} automated actions for OOMKill")
 
