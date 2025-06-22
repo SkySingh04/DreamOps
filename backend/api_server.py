@@ -90,7 +90,7 @@ async def log_requests(request: Request, call_next):
         logger.info(f"PagerDuty webhook headers: {dict(request.headers)}")
         try:
             payload = json.loads(body) if body else {}
-            logger.info(f"PagerDuty webhook payload: {json.dumps(payload, indent=2)}")
+            # logger.info(f"PagerDuty webhook payload: {json.dumps(payload, indent=2)}")
         except:
             logger.info(f"PagerDuty webhook raw body: {body}")
 

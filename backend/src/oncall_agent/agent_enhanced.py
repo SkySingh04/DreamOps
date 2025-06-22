@@ -166,8 +166,14 @@ class EnhancedOncallAgent:
                 # Store current incident ID for approval callback
                 self._current_incident_id = alert.alert_id
 
-                # Acknowledge the PagerDuty incident
-                await acknowledge_pagerduty_incident(alert.alert_id)
+                # Acknowledge the PagerDuty incident (ignore errors in YOLO mode)
+                try:
+                    await acknowledge_pagerduty_incident(alert.alert_id)
+                except Exception as e:
+                    if self.ai_mode == AIMode.YOLO:
+                        self.logger.warning(f"⚠️ YOLO MODE: Ignoring PagerDuty acknowledge error: {e}")
+                    else:
+                        raise
 
                 # Send action to dashboard without incident_id (will be handled by frontend webhook)
                 await send_ai_action_to_dashboard(
@@ -211,10 +217,32 @@ class EnhancedOncallAgent:
                             f"Alert type: {k8s_alert_type or 'general'}"
                         )
 
-                    if await resolve_pagerduty_incident(alert.alert_id, resolution_note):
-                        self.logger.info(f"✅ PagerDuty incident {alert.alert_id} resolved automatically")
-                    else:
-                        self.logger.warning(f"⚠️  Could not resolve PagerDuty incident {alert.alert_id} - manual resolution required")
+                    try:
+                        if await resolve_pagerduty_incident(alert.alert_id, resolution_note):
+                            self.logger.info(f"✅ PagerDuty incident {alert.alert_id} resolved automatically")
+                        else:
+                            if self.ai_mode == AIMode.YOLO:
+                                self.logger.warning("⚠️ YOLO MODE: PagerDuty resolution failed but treating as resolved")
+                            else:
+                                self.logger.warning(f"⚠️  Could not resolve PagerDuty incident {alert.alert_id} - manual resolution required")
+                    except Exception as e:
+                        if self.ai_mode == AIMode.YOLO:
+                            self.logger.warning(f"⚠️ YOLO MODE: Ignoring PagerDuty resolution error: {e} - treating as resolved")
+                            # Send resolution log to frontend even if PagerDuty API fails
+                            from .api.log_streaming import log_stream_manager
+                            await log_stream_manager.log_success(
+                                f"✅ [YOLO] Incident resolved: {alert.description[:50]}... (PagerDuty API error ignored)",
+                                incident_id=alert.alert_id,
+                                stage="incident_resolved",
+                                progress=1.0,
+                                metadata={
+                                    "forced_resolution": True,
+                                    "pagerduty_error": str(e),
+                                    "mode": "YOLO"
+                                }
+                            )
+                        else:
+                            self.logger.error(f"❌ Error resolving PagerDuty incident: {e}")
             else:
                 self.logger.info("📋 No auto-remediation - providing analysis and recommendations only")
 
