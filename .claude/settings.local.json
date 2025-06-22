@@ -35,7 +35,13 @@
       "Bash(chmod:*)",
       "Bash(npm install:*)",
       "Bash(python test_kubectl_parsing.py)",
-      "Bash(touch:*)"
+      "Bash(touch:*)",
+      "Bash(./enable_yolo_mode.sh:*)",
+      "Bash(sed:*)",
+      "Bash(bash:*)",
+      "Bash(./inject_k8s_issues.sh:*)",
+      "Bash(dos2unix:*)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }

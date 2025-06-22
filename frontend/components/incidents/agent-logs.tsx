@@ -57,21 +57,23 @@ export function AgentLogs({ incidentId, className }: AgentLogsProps) {
             <CardTitle className="flex items-center gap-2 min-w-0 w-full max-w-full overflow-hidden">
               <Zap className="w-5 h-5 flex-shrink-0" />
               <span className="truncate flex-1 min-w-0">AI Agent Logs</span>
-              {activeIncidents.size > 0 && (
-                <Badge variant="destructive" className="animate-pulse flex-shrink-0">
-                  {activeIncidents.size} Active
-                </Badge>
-              )}
             </CardTitle>
-            <CardDescription className="truncate w-full max-w-full overflow-hidden">
-              Real-time logs from the AI agent processing
+            <CardDescription className="flex items-center gap-2 mt-1 w-full max-w-full overflow-hidden">
+              <span className="truncate flex-1 min-w-0">Real-time logs from the AI agent processing</span>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {activeIncidents.size > 0 && (
+                  <Badge variant="destructive" className="animate-pulse flex-shrink-0">
+                    {activeIncidents.size} Active
+                  </Badge>
+                )}
+                <Badge variant={isConnected ? "default" : "secondary"} className="flex-shrink-0">
+                  {isConnected ? "● Connected" : "○ Disconnected"}
+                </Badge>
+              </div>
             </CardDescription>
           </div>
           
           <div className="flex items-center gap-2 flex-shrink-0 overflow-hidden">
-            <Badge variant={isConnected ? "default" : "secondary"} className="flex-shrink-0">
-              {isConnected ? "● Connected" : "○ Disconnected"}
-            </Badge>
             <Button
               variant="ghost"
               size="sm"

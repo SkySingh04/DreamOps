@@ -65,6 +65,7 @@ class Config(BaseSettings):
     pagerduty_webhook_secret: str | None = Field(None, env="PAGERDUTY_WEBHOOK_SECRET")
     pagerduty_api_key: str | None = Field(None, env="PAGERDUTY_API_KEY")
     pagerduty_enabled: bool = Field(True, env="PAGERDUTY_ENABLED")
+    pagerduty_user_email: str = Field("oncall-agent@example.com", env="PAGERDUTY_USER_EMAIL")
 
     # API server settings
     api_host: str = Field("0.0.0.0", env="API_HOST")

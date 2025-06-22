@@ -20,6 +20,19 @@ class ResolutionAction:
     rollback_possible: bool
     prerequisites: list[str] = None
 
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "action_type": self.action_type,
+            "description": self.description,
+            "params": self.params,
+            "confidence": self.confidence,
+            "risk_level": self.risk_level,
+            "estimated_time": self.estimated_time,
+            "rollback_possible": self.rollback_possible,
+            "prerequisites": self.prerequisites or []
+        }
+
 
 class KubernetesResolver:
     """Implements resolution strategies for Kubernetes issues."""
@@ -210,20 +223,18 @@ class KubernetesResolver:
             rollback_possible=True
         ))
 
-        # Strategy 3: Check for resource leaks
-        if resource_type == "memory":
-            actions.append(ResolutionAction(
-                action_type="check_memory_leak",
-                description="Analyze application for potential memory leaks",
-                params={
-                    "deployment_name": deployment_name,
-                    "namespace": namespace
-                },
-                confidence=0.6,
-                risk_level="low",
-                estimated_time="10m",
-                rollback_possible=False
-            ))
+        # Strategy 3: Check resource constraints (executable action)
+        actions.append(ResolutionAction(
+            action_type="check_resource_constraints",
+            description="Check current resource usage metrics",
+            params={
+                "namespace": namespace
+            },
+            confidence=0.6,
+            risk_level="low",
+            estimated_time="30s",
+            rollback_possible=False
+        ))
 
         return sorted(actions, key=lambda x: x.confidence, reverse=True)
 
@@ -441,3 +452,103 @@ class KubernetesResolver:
     def get_resolution_history(self) -> list[dict[str, Any]]:
         """Get the history of resolution attempts."""
         return self.resolution_history
+
+    async def resolve_generic_pod_errors(self, namespace: str, context: dict[str, Any]) -> list[ResolutionAction]:
+        """Generate resolution actions for generic pod errors."""
+        actions = []
+
+        # First, we need to identify problematic pods
+        actions.append(ResolutionAction(
+            action_type="identify_error_pods",
+            description="Identify pods with errors in the namespace",
+            params={
+                "namespace": namespace,
+                "check_all_namespaces": namespace == "default"
+            },
+            confidence=0.95,
+            risk_level="low",
+            estimated_time="10s",
+            rollback_possible=False,
+            prerequisites=[]
+        ))
+
+        # Generic recovery action - restart problematic pods
+        actions.append(ResolutionAction(
+            action_type="restart_error_pods",
+            description="Restart pods that are in error state",
+            params={
+                "namespace": namespace,
+                "states": ["Error", "CrashLoopBackOff", "ImagePullBackOff", "Pending"]
+            },
+            confidence=0.85,
+            risk_level="medium",
+            estimated_time="2m",
+            rollback_possible=False,
+            prerequisites=["identify_error_pods"]
+        ))
+
+        # Check resource constraints
+        actions.append(ResolutionAction(
+            action_type="check_resource_constraints",
+            description="Check if pods are failing due to resource constraints",
+            params={
+                "namespace": namespace
+            },
+            confidence=0.8,
+            risk_level="low",
+            estimated_time="30s",
+            rollback_possible=False
+        ))
+
+        return sorted(actions, key=lambda x: x.confidence, reverse=True)
+
+    async def resolve_oom_kills(self, namespace: str, context: dict[str, Any]) -> list[ResolutionAction]:
+        """Generate resolution actions for OOM kill issues."""
+        actions = []
+
+        # Identify pods with OOM kills
+        actions.append(ResolutionAction(
+            action_type="identify_oom_pods",
+            description="Identify pods that were OOM killed",
+            params={
+                "namespace": namespace,
+                "timeframe": "1h"
+            },
+            confidence=0.95,
+            risk_level="low",
+            estimated_time="10s",
+            rollback_possible=False
+        ))
+
+        # Increase memory limits for affected deployments
+        actions.append(ResolutionAction(
+            action_type="increase_memory_limits",
+            description="Increase memory limits for deployments with OOM killed pods",
+            params={
+                "namespace": namespace,
+                "increase_percentage": 50,
+                "target_deployments": "auto-detect"
+            },
+            confidence=0.9,
+            risk_level="medium",
+            estimated_time="2m",
+            rollback_possible=True,
+            prerequisites=["identify_oom_pods"]
+        ))
+
+        # Scale up to distribute load
+        actions.append(ResolutionAction(
+            action_type="scale_deployment",
+            description="Scale up deployments to distribute memory load",
+            params={
+                "namespace": namespace,
+                "scale_factor": 2,
+                "max_replicas": 10
+            },
+            confidence=0.75,
+            risk_level="medium",
+            estimated_time="1m",
+            rollback_possible=True
+        ))
+
+        return sorted(actions, key=lambda x: x.confidence, reverse=True)

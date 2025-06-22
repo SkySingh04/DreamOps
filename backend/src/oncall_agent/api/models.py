@@ -47,11 +47,22 @@ class PagerDutyMessage(BaseModel):
 
 
 # V3 Webhook Models
+class PagerDutyV3Agent(BaseModel):
+    """PagerDuty V3 agent information."""
+    id: str
+    type: str
+    summary: str | None = None
+    self: str | None = None
+    html_url: str | None = None
+
+
 class PagerDutyV3Event(BaseModel):
     """PagerDuty V3 webhook event."""
     id: str
     event_type: str
     occurred_at: datetime
+    agent: PagerDutyV3Agent | None = None
+    client: dict[str, Any] | None = None
     data: dict[str, Any]
 
 

@@ -2,15 +2,14 @@
 
 import asyncio
 import uuid
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
-
-UTC = UTC
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from src.oncall_agent.agent import OncallAgent
+from src.oncall_agent.approval_manager import approval_manager
 from src.oncall_agent.api.schemas import (
     ActionHistory,
     ActionRiskAssessment,
@@ -32,6 +31,7 @@ from src.oncall_agent.api.schemas import (
     SafetyConfig,
     SuccessResponse,
 )
+from src.oncall_agent.approval_manager import approval_manager
 from src.oncall_agent.utils import get_logger
 
 logger = get_logger(__name__)
@@ -47,7 +47,7 @@ AGENT_METRICS = {
     "total_response_time_ms": 0,
     "errors": [],
     "last_analysis": None,
-    "start_time": datetime.now(timezone.utc)
+    "start_time": datetime.now(UTC)
 }
 
 # Default risk matrix for AI actions
@@ -77,7 +77,7 @@ DEFAULT_RISK_MATRIX = {
 
 # In-memory configuration storage (in production, this would be database-backed)
 AGENT_CONFIG = AIAgentConfig(
-    mode=AIMode.APPROVAL,
+    mode=AIMode.YOLO,
     confidence_threshold=70,
     risk_matrix=DEFAULT_RISK_MATRIX,
     auto_execute_enabled=True,
@@ -107,7 +107,7 @@ SAFETY_CONFIG = SafetyConfig(
 )
 
 # In-memory storage for safety features
-APPROVAL_QUEUE: dict[str, ApprovalRequest] = {}
+# Note: APPROVAL_QUEUE is now managed by approval_manager
 ACTION_HISTORY: list[ActionHistory] = []
 CONFIDENCE_HISTORY: list[tuple[datetime, float]] = []
 
@@ -349,7 +349,7 @@ async def get_agent_status() -> AgentStatus:
         agent = await get_agent()
 
         # Calculate metrics
-        uptime = (datetime.now(timezone.utc) - AGENT_METRICS["start_time"]).total_seconds()
+        uptime = (datetime.now(UTC) - AGENT_METRICS["start_time"]).total_seconds()
         avg_response_time = (
             AGENT_METRICS["total_response_time_ms"] / AGENT_METRICS["incidents_processed"]
             if AGENT_METRICS["incidents_processed"] > 0 else 0
@@ -383,7 +383,7 @@ async def trigger_analysis(
 ) -> AgentResponse:
     """Manually trigger AI analysis for an incident."""
     try:
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         # Mock analysis for now
         analysis = AIAnalysis(
@@ -416,12 +416,12 @@ async def trigger_analysis(
         )
 
         # Calculate execution time
-        execution_time = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+        execution_time = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
         # Update metrics
         AGENT_METRICS["incidents_processed"] += 1
         AGENT_METRICS["total_response_time_ms"] += execution_time
-        AGENT_METRICS["last_analysis"] = datetime.now(timezone.utc)
+        AGENT_METRICS["last_analysis"] = datetime.now(UTC)
 
         # Mock automated actions
         automated_actions = []
@@ -597,10 +597,10 @@ async def get_learning_metrics() -> JSONResponse:
                 "patterns_learned": 156,
                 "incidents_analyzed": AGENT_METRICS["incidents_processed"],
                 "knowledge_base_size": 1024,
-                "last_model_update": (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+                "last_model_update": (datetime.now(UTC) - timedelta(days=3)).isoformat()
             },
             "performance_over_time": [
-                {"date": (datetime.now(timezone.utc) - timedelta(days=i)).date().isoformat(),
+                {"date": (datetime.now(UTC) - timedelta(days=i)).date().isoformat(),
                  "accuracy": 0.80 + (i * 0.01),
                  "incidents": 20 + i}
                 for i in range(7, -1, -1)
@@ -629,7 +629,7 @@ async def submit_feedback(
             "helpful": helpful,
             "accuracy": accuracy,
             "comments": comments,
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(UTC).isoformat()
         }
 
         logger.info(f"Received feedback for incident {incident_id}: {feedback_data}")
@@ -772,15 +772,7 @@ async def assess_risk(action_type: str, action_details: dict = {}) -> ActionRisk
 async def get_pending_approvals() -> list[ApprovalRequest]:
     """Get list of pending approval requests."""
     try:
-        pending = [req for req in APPROVAL_QUEUE.values() if req.status == "PENDING"]
-
-        # Check for expired approvals
-        current_time = datetime.now(UTC)
-        for approval in pending:
-            if current_time > approval.timeout_at:
-                approval.status = "EXPIRED"
-
-        return [req for req in pending if req.status == "PENDING"]
+        return approval_manager.get_pending_approvals()
 
     except Exception as e:
         logger.error(f"Error getting pending approvals: {e}")
@@ -791,23 +783,17 @@ async def get_pending_approvals() -> list[ApprovalRequest]:
 async def approve_action(approval_id: str, comments: str = "") -> SuccessResponse:
     """Approve a pending action."""
     try:
-        if approval_id not in APPROVAL_QUEUE:
-            raise HTTPException(status_code=404, detail="Approval request not found")
+        success = approval_manager.approve_action(approval_id)
 
-        approval = APPROVAL_QUEUE[approval_id]
-        if approval.status != "PENDING":
-            raise HTTPException(status_code=400, detail=f"Approval already {approval.status}")
+        if not success:
+            raise HTTPException(status_code=404, detail="Approval request not found or already processed")
 
-        approval.status = "APPROVED"
-        approval.comments = comments
-
-        # In real implementation, would execute the approved actions
         logger.info(f"Action approved: {approval_id}")
 
         return SuccessResponse(
             success=True,
             message="Action approved and will be executed",
-            data={"approval_id": approval_id}
+            data={"approval_id": approval_id, "comments": comments}
         )
 
     except HTTPException:
@@ -821,22 +807,17 @@ async def approve_action(approval_id: str, comments: str = "") -> SuccessRespons
 async def reject_action(approval_id: str, comments: str = "") -> SuccessResponse:
     """Reject a pending action."""
     try:
-        if approval_id not in APPROVAL_QUEUE:
-            raise HTTPException(status_code=404, detail="Approval request not found")
+        success = approval_manager.reject_action(approval_id)
 
-        approval = APPROVAL_QUEUE[approval_id]
-        if approval.status != "PENDING":
-            raise HTTPException(status_code=400, detail=f"Approval already {approval.status}")
-
-        approval.status = "REJECTED"
-        approval.comments = comments
+        if not success:
+            raise HTTPException(status_code=404, detail="Approval request not found or already processed")
 
         logger.info(f"Action rejected: {approval_id}")
 
         return SuccessResponse(
             success=True,
             message="Action rejected",
-            data={"approval_id": approval_id}
+            data={"approval_id": approval_id, "comments": comments}
         )
 
     except HTTPException:
@@ -927,7 +908,7 @@ async def emergency_stop() -> SuccessResponse:
         return SuccessResponse(
             success=True,
             message="Emergency stop activated - all AI operations halted",
-            data={"timestamp": datetime.now(timezone.utc).isoformat()}
+            data={"timestamp": datetime.now(UTC).isoformat()}
         )
 
     except Exception as e:
@@ -994,7 +975,7 @@ async def execute_remediation_action(
             # Add execution metadata
             result["executed_by"] = "manual_api_call"
             result["mode"] = AGENT_CONFIG.mode.value
-            result["timestamp"] = datetime.now(timezone.utc).isoformat()
+            result["timestamp"] = datetime.now(UTC).isoformat()
 
             return result
         else:

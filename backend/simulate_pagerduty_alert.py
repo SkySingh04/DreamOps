@@ -40,7 +40,9 @@ import requests
 # Add the src directory to the path so we can import the agent modules
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from oncall_agent.agent import OncallAgent, PagerAlert
+from oncall_agent.agent import PagerAlert
+from oncall_agent.agent_enhanced import EnhancedOncallAgent
+from oncall_agent.api.schemas import AIMode
 from oncall_agent.mcp_integrations.github_mcp import GitHubMCPIntegration
 from oncall_agent.mcp_integrations.notion_direct import NotionDirectIntegration
 from oncall_agent.utils import setup_logging
@@ -448,7 +450,8 @@ async def run_oncall_agent_with_integrations(alert_data: dict[str, Any], config:
         )
 
         # Initialize agent
-        agent = OncallAgent()
+        # Use enhanced agent in YOLO mode
+        agent = EnhancedOncallAgent(ai_mode=AIMode.YOLO)
 
         # Register GitHub MCP integration if enabled
         if config.get("github_integration", False):

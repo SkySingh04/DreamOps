@@ -87,7 +87,7 @@ async def pagerduty_webhook(
         payload_dict = await request.json()
 
         # Log the raw payload for debugging
-        logger.debug(f"Raw webhook payload: {payload_dict}")
+        # logger.debug(f"Raw webhook payload: {payload_dict}")
 
         # Detect if this is a V3 webhook
         logger.info(f"Webhook payload keys: {list(payload_dict.keys())}")
@@ -109,9 +109,43 @@ async def pagerduty_webhook(
             if v3_payload.event.event_type.startswith('incident.'):
                 incident_data = event_data.get('incident', event_data)
 
-                # Only process triggered incidents
-                if incident_data.get('status') != 'triggered':
-                    logger.info(f"Skipping incident {incident_data.get('id')} with status {incident_data.get('status')}")
+                # Handle different incident statuses
+                incident_status = incident_data.get('status')
+                incident_id = incident_data.get('id')
+
+                if incident_status == 'resolved':
+                    # Log incident resolution
+                    logger.info(f"Incident {incident_id} resolved")
+
+                    # Update incident status in DB
+                    if incident_id in INCIDENTS_DB:
+                        INCIDENTS_DB[incident_id].status = IncidentStatus.RESOLVED
+                        INCIDENTS_DB[incident_id].resolved_at = datetime.now(UTC)
+
+                    # Send resolution log to frontend
+                    resolved_by = 'System'
+                    if v3_payload.event.agent:
+                        resolved_by = v3_payload.event.agent.summary or v3_payload.event.agent.type or 'Unknown'
+
+                    await log_stream_manager.log_success(
+                        f"✅ Incident resolved: {incident_data.get('title', 'Unknown')}",
+                        incident_id=incident_id,
+                        stage="incident_resolved",
+                        progress=1.0,
+                        metadata={
+                            "event_type": v3_payload.event.event_type,
+                            "resolved_by": resolved_by,
+                            "resolved_at": v3_payload.event.occurred_at.isoformat()
+                        }
+                    )
+
+                    return JSONResponse(
+                        status_code=200,
+                        content={"status": "success", "message": "Incident resolution logged"}
+                    )
+
+                elif incident_status != 'triggered':
+                    logger.info(f"Skipping incident {incident_id} with status {incident_status}")
                     return JSONResponse(
                         status_code=200,
                         content={"status": "success", "message": "Incident not in triggered state"}
