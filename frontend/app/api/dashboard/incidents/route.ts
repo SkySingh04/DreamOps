@@ -3,6 +3,9 @@ import { getUser } from '@/lib/db/queries';
 import { getUserWithTeam } from '@/lib/db/queries';
 import { getRecentIncidents, createIncident } from '@/lib/db/dashboard-queries';
 
+// Force dynamic rendering to prevent build-time database access
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const user = await getUser();
