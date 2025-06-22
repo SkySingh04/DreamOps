@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   experimental: {
     // ppr: true, // Requires Next.js canary version
     clientSegmentCache: true,
-    nodeMiddleware: true
+    // nodeMiddleware: true  // Disabled due to Next.js version compatibility
   },
   eslint: {
     // Warning: This allows production builds to successfully complete even if

@@ -32,7 +32,8 @@
       "Bash(find:*)",
       "Bash(ls:*)",
       "Bash(npm run lint)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(npm install:*)"
     ],
     "deny": []
   }

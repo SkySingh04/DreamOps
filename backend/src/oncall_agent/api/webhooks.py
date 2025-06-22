@@ -27,6 +27,8 @@ config = get_config()
 # Global trigger instance
 agent_trigger: OncallAgentTrigger | None = None
 
+UTC = UTC
+
 
 async def get_agent_trigger() -> OncallAgentTrigger:
     """Get or create the agent trigger instance."""
@@ -323,6 +325,26 @@ async def pagerduty_webhook(
                             logger.info("📊 Context gathered from integrations:")
                             for integration, success in result["agent_response"]["context_gathered"].items():
                                 logger.info(f"  - {integration}: {'✅ Success' if success else '❌ Failed'}")
+
+                        # Log executed actions in YOLO mode
+                        if result.get("agent_response", {}).get("execution_mode") == "YOLO":
+                            logger.info("\n🚀 YOLO MODE - Automated Actions Executed:")
+
+                            # Log regular automated actions
+                            if result.get("agent_response", {}).get("executed_actions"):
+                                logger.info("📌 Automated actions:")
+                                for action in result["agent_response"]["executed_actions"]:
+                                    status_icon = "✅" if action['status'] == 'success' else "❌"
+                                    logger.info(f"  {status_icon} {action['action']}")
+
+                            # Log remediation commands
+                            if result.get("agent_response", {}).get("remediation_commands_executed"):
+                                logger.info("🔧 Remediation commands from Claude's analysis:")
+                                for cmd_result in result["agent_response"]["remediation_commands_executed"]:
+                                    status_icon = "✅" if cmd_result['status'] == 'success' else "❌"
+                                    logger.info(f"  {status_icon} {cmd_result['command']}")
+                                    if cmd_result['status'] != 'success' and 'error' in cmd_result:
+                                        logger.info(f"     Error: {cmd_result['error']}")
 
                     results.append(result)
 

@@ -13,7 +13,8 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
-  Check
+  Check,
+  Zap
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import ReactMarkdown from 'react-markdown'
@@ -90,17 +91,20 @@ export function LogEntry({ log }: LogEntryProps) {
   }
 
   return (
-    <div className={cn(
-      "rounded-lg transition-colors",
-      log.level === 'ALERT' && "bg-red-50 border border-red-200",
-      log.level === 'ERROR' && "bg-red-50/50",
-      log.level === 'SUCCESS' && "bg-green-50/50"
-    )}>
-      <div className="flex items-start gap-3 p-3">
+    <div 
+      className={cn(
+        "rounded-lg transition-colors overflow-hidden max-w-full",
+        log.level === 'ALERT' && "bg-red-50 border border-red-200",
+        log.level === 'ERROR' && "bg-red-50/50",
+        log.level === 'SUCCESS' && "bg-green-50/50"
+      )}
+      style={{ maxWidth: '100%', width: '100%', overflowX: 'hidden', wordBreak: 'break-all' }}
+    >
+      <div className="flex items-start gap-3 p-3 overflow-hidden max-w-full">
         <Icon className={cn("w-4 h-4 mt-0.5 flex-shrink-0", config.color)} />
         
-        <div className="flex-1 space-y-1">
-          <div className="flex items-center gap-2">
+        <div className="flex-1 space-y-1 min-w-0 overflow-hidden max-w-full">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-muted-foreground font-mono">
               {formatTimestamp(log.timestamp)}
             </span>
@@ -119,16 +123,33 @@ export function LogEntry({ log }: LogEntryProps) {
             )}
           </div>
           
-          <p className="text-sm">{log.message}</p>
+          <p className="text-sm break-words">{log.message}</p>
+          
+          {/* Special highlighting for command executions */}
+          {(log.message.includes('Executing action:') || 
+            log.message.includes('Executing remediation command:') ||
+            log.message.includes('YOLO MODE ACTIVATED')) && (
+            <div className="mt-2 flex items-center gap-2">
+              <Badge variant="destructive" className="animate-pulse">
+                <Zap className="h-3 w-3 mr-1" />
+                Auto-Executing
+              </Badge>
+              {log.metadata?.command && (
+                <code className="text-xs bg-gray-900 text-gray-100 px-2 py-1 rounded font-mono">
+                  {log.metadata.command}
+                </code>
+              )}
+            </div>
+          )}
           
           {/* Basic metadata (always visible) */}
           {log.metadata && !hasFullAnalysis && Object.keys(log.metadata).length > 0 && (
-            <div className="text-xs text-muted-foreground mt-1">
+            <div className="text-xs text-muted-foreground mt-1 overflow-hidden max-w-full">
               {Object.entries(log.metadata)
                 .filter(([key]) => !['analysis', 'parsed_analysis'].includes(key))
                 .slice(0, 3)
                 .map(([key, value]) => (
-                  <span key={key} className="mr-3">
+                  <span key={key} className="mr-3 break-all">
                     <span className="font-medium">{key}:</span> {String(value)}
                   </span>
                 ))}
@@ -154,17 +175,19 @@ export function LogEntry({ log }: LogEntryProps) {
 
       {/* Expanded content */}
       {isExpanded && (
-        <div className="px-3 pb-3 ml-7 max-w-full overflow-hidden">
+        <div className="pb-3 overflow-hidden max-w-full">
           {hasFullAnalysis ? (
-            <Card className="p-4 bg-gray-50/50 overflow-hidden">
-              <div className="markdown-content w-full overflow-x-auto">
-                <ReactMarkdown
+            <div className="mt-2 overflow-hidden max-w-full">
+              <div className="markdown-content px-3 overflow-hidden max-w-full">
+                <div className="overflow-x-auto max-w-full w-full">
+                  <ReactMarkdown
                   components={{
-                    code({ node, inline, className, children, ...props }) {
+                    code({ className, children, ...props }: any) {
                       const match = /language-(\w+)/.exec(className || '')
                       const codeString = String(children).replace(/\n$/, '')
+                      const isInline = !className || !match
                       
-                      if (!inline && match) {
+                      if (!isInline && match) {
                         return (
                           <div className="relative group">
                             <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -172,12 +195,14 @@ export function LogEntry({ log }: LogEntryProps) {
                             </div>
                             <SyntaxHighlighter
                               language={match[1]}
-                              style={oneDark}
+                              style={oneDark as any}
                               customStyle={{
                                 margin: 0,
                                 borderRadius: '0.375rem',
                                 fontSize: '0.875rem',
-                              }}
+                                maxWidth: '100%',
+                                overflowX: 'auto',
+                              } as any}
                               {...props}
                             >
                               {codeString}
@@ -186,7 +211,7 @@ export function LogEntry({ log }: LogEntryProps) {
                         )
                       }
                       
-                      if (inline) {
+                      if (isInline) {
                         return (
                           <code className="bg-gray-200 px-1 py-0.5 rounded text-sm font-mono" {...props}>
                             {children}
@@ -208,14 +233,15 @@ export function LogEntry({ log }: LogEntryProps) {
                     h1: ({ children }) => <h1 className="text-lg font-bold mt-4 mb-2">{children}</h1>,
                     h2: ({ children }) => <h2 className="text-base font-semibold mt-3 mb-2">{children}</h2>,
                     h3: ({ children }) => <h3 className="text-sm font-semibold mt-2 mb-1">{children}</h3>,
-                    ul: ({ children }) => <ul className="list-disc pl-5 space-y-1">{children}</ul>,
-                    ol: ({ children }) => <ol className="list-decimal pl-5 space-y-1">{children}</ol>,
-                    li: ({ children }) => <li className="text-sm">{children}</li>,
-                    p: ({ children }) => <p className="text-sm mb-2">{children}</p>,
+                    ul: ({ children }) => <ul className="list-disc pl-5 space-y-1 max-w-full overflow-hidden">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal pl-5 space-y-1 max-w-full overflow-hidden">{children}</ol>,
+                    li: ({ children }) => <li className="text-sm break-words max-w-full overflow-hidden">{children}</li>,
+                    p: ({ children }) => <p className="text-sm mb-2 break-words max-w-full overflow-hidden">{children}</p>,
                   }}
-                >
-                  {log.metadata.analysis}
-                </ReactMarkdown>
+                  >
+                    {log.metadata?.analysis}
+                  </ReactMarkdown>
+                </div>
               </div>
               
               {/* Show parsed analysis summary */}
@@ -239,14 +265,16 @@ export function LogEntry({ log }: LogEntryProps) {
                   )}
                 </div>
               )}
-            </Card>
+            </div>
           ) : (
             // Regular metadata display
-            <div className="text-xs text-muted-foreground space-y-1">
+            <div className="text-xs text-muted-foreground space-y-1 px-3 overflow-hidden max-w-full">
               {Object.entries(log.metadata || {}).map(([key, value]) => (
-                <div key={key}>
+                <div key={key} className="overflow-hidden">
                   <span className="font-medium">{key}:</span>{' '}
-                  {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                  <span className="break-all">
+                    {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                  </span>
                 </div>
               ))}
             </div>

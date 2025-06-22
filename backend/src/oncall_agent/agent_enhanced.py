@@ -2,10 +2,9 @@
 
 import logging
 import re
-from typing import Any, Optional
+from typing import Any
 
 from anthropic import AsyncAnthropic
-from pydantic import BaseModel
 
 from .agent import PagerAlert
 from .agent_executor import AgentExecutor
@@ -13,7 +12,6 @@ from .api.schemas import AIMode
 from .config import get_config
 from .frontend_integration import (
     send_ai_action_to_dashboard,
-    send_incident_to_dashboard,
 )
 from .mcp_integrations.base import MCPIntegration
 from .mcp_integrations.kubernetes_mcp import KubernetesMCPServerIntegration
@@ -33,24 +31,24 @@ class EnhancedOncallAgent:
         self.logger = logging.getLogger(__name__)
         self.ai_mode = ai_mode
         self.mcp_integrations: dict[str, MCPIntegration] = {}
-        
+
         # Initialize Anthropic client
         self.anthropic_client = AsyncAnthropic(api_key=self.config.anthropic_api_key)
-        
+
         # Initialize Kubernetes MCP integration
         self.k8s_mcp = None
         self.k8s_resolver = None
         self.agent_executor = None
-        
+
         if self.config.k8s_enabled:
             # Use the enhanced MCP integration
             self.k8s_mcp = KubernetesMCPServerIntegration()
             self.register_mcp_integration("kubernetes_mcp", self.k8s_mcp)
-            
+
             # Initialize resolver and executor
             self.k8s_resolver = KubernetesResolver(self.k8s_mcp)
             self.agent_executor = AgentExecutor(self.k8s_mcp)
-            
+
         # Alert patterns (from original agent)
         self.k8s_alert_patterns = {
             "pod_crash": re.compile(r"(Pod|pod).*(?:CrashLoopBackOff|crash|restarting)", re.IGNORECASE),
@@ -93,43 +91,43 @@ class EnhancedOncallAgent:
         self.logger.info(f"Service: {alert.service_name}")
         self.logger.info(f"Severity: {alert.severity}")
         self.logger.info(f"Description: {alert.description[:200]}...")
-        
+
         try:
             # Detect alert type
             k8s_alert_type = self._detect_k8s_alert_type(alert.description)
-            
+
             # Gather context
             context = {}
             if k8s_alert_type and self.k8s_mcp:
                 context = await self._gather_k8s_context(alert, k8s_alert_type)
-                
+
             # Get AI analysis (from Claude)
             analysis = await self._get_ai_analysis(alert, context)
-            
+
             # Generate resolution actions if Kubernetes alert
             resolution_actions = []
             if k8s_alert_type and self.k8s_resolver:
                 resolution_actions = await self._generate_resolution_actions(
                     alert, k8s_alert_type, context
                 )
-                
+
             # Decide on auto-remediation
             should_remediate = self._should_auto_remediate(
                 alert, resolution_actions, auto_remediate
             )
-            
+
             # Execute remediation if appropriate
             execution_results = None
             if should_remediate and resolution_actions and self.agent_executor:
                 self.logger.info(f"🤖 AUTO-REMEDIATION ENABLED (Mode: {self.ai_mode.value})")
-                
+
                 # Send action to dashboard
                 await send_ai_action_to_dashboard(
                     action="auto_remediation_started",
                     description=f"Starting auto-remediation with {len(resolution_actions)} actions",
                     incident_id=alert.alert_id
                 )
-                
+
                 # Execute the remediation plan
                 execution_results = await self.agent_executor.execute_remediation_plan(
                     actions=resolution_actions,
@@ -138,9 +136,9 @@ class EnhancedOncallAgent:
                     confidence_threshold=0.7,
                     approval_callback=self._get_approval_callback()
                 )
-                
+
                 self.logger.info(f"✅ Execution complete: {execution_results['actions_successful']}/{execution_results['actions_executed']} successful")
-                
+
                 # Send completion to dashboard
                 await send_ai_action_to_dashboard(
                     action="auto_remediation_completed",
@@ -149,7 +147,7 @@ class EnhancedOncallAgent:
                 )
             else:
                 self.logger.info("📋 No auto-remediation - providing analysis and recommendations only")
-            
+
             # Prepare response
             result = {
                 "alert_id": alert.alert_id,
@@ -171,13 +169,13 @@ class EnhancedOncallAgent:
                 "auto_remediation_enabled": should_remediate,
                 "execution_results": execution_results,
             }
-            
+
             # Show command previews if in PLAN mode
             if self.ai_mode == AIMode.PLAN and resolution_actions:
                 result["command_preview"] = await self._generate_command_preview(resolution_actions)
-                
+
             return result
-            
+
         except Exception as e:
             self.logger.error(f"Error handling alert {alert.alert_id}: {e}")
             return {
@@ -187,7 +185,7 @@ class EnhancedOncallAgent:
                 "ai_mode": self.ai_mode.value
             }
 
-    def _detect_k8s_alert_type(self, description: str) -> Optional[str]:
+    def _detect_k8s_alert_type(self, description: str) -> str | None:
         """Detect if an alert is Kubernetes-related and return the type."""
         for alert_type, pattern in self.k8s_alert_patterns.items():
             if pattern.search(description):
@@ -199,7 +197,7 @@ class EnhancedOncallAgent:
         context = {"alert_type": alert_type}
         metadata = alert.metadata
         namespace = metadata.get("namespace", "default")
-        
+
         try:
             # Use enhanced MCP to gather context
             if alert_type == "pod_crash":
@@ -211,27 +209,27 @@ class EnhancedOncallAgent:
                         {"pod_name": pod_name, "namespace": namespace, "lines": 100}
                     )
                     context["pod_logs"] = logs_result
-                    
+
                     # Get pod status
                     status_result = await self.k8s_mcp.execute_action(
                         "check_pod_status",
                         {"pod_name": pod_name, "namespace": namespace}
                     )
                     context["pod_status"] = status_result
-                    
+
             elif alert_type == "service_down":
                 service_name = metadata.get("service_name", alert.service_name)
                 # Check service endpoints
                 cmd = ["get", "endpoints", service_name, "-n", namespace, "-o", "json"]
                 ep_result = await self.k8s_mcp.execute_kubectl_command(cmd, auto_approve=True)
                 context["service_endpoints"] = ep_result
-                
+
             # Add more context gathering as needed
-            
+
         except Exception as e:
             self.logger.error(f"Error gathering K8s context: {e}")
             context["error"] = str(e)
-            
+
         return context
 
     async def _get_ai_analysis(self, alert: PagerAlert, context: dict[str, Any]) -> str:
@@ -256,52 +254,52 @@ class EnhancedOncallAgent:
         
         Current AI Mode: {self.ai_mode.value}
         """
-        
+
         response = await self.anthropic_client.messages.create(
             model=self.config.claude_model,
             max_tokens=2000,
             messages=[{"role": "user", "content": prompt}]
         )
-        
+
         return response.content[0].text if response.content else "No analysis available"
 
     def _format_context_for_prompt(self, context: dict[str, Any]) -> str:
         """Format context for Claude prompt."""
         if not context:
             return "No additional context available"
-            
+
         formatted = []
         for key, value in context.items():
             if isinstance(value, dict) and "output" in value:
                 formatted.append(f"{key}: {value.get('output', '')[:500]}...")
             else:
                 formatted.append(f"{key}: {value}")
-                
+
         return "\n".join(formatted)
 
     async def _generate_resolution_actions(
-        self, 
-        alert: PagerAlert, 
-        alert_type: str, 
+        self,
+        alert: PagerAlert,
+        alert_type: str,
         context: dict[str, Any]
     ) -> list:
         """Generate resolution actions using the Kubernetes resolver."""
         if not self.k8s_resolver:
             return []
-            
+
         # Use the resolver to generate actions based on alert type
         if alert_type == "pod_crash":
             pod_name = alert.metadata.get("pod_name")
             namespace = alert.metadata.get("namespace", "default")
             if pod_name:
                 return await self.k8s_resolver.resolve_pod_crash(pod_name, namespace, context)
-                
+
         elif alert_type == "image_pull":
             pod_name = alert.metadata.get("pod_name")
             namespace = alert.metadata.get("namespace", "default")
             if pod_name:
                 return await self.k8s_resolver.resolve_image_pull_error(pod_name, namespace, context)
-                
+
         elif alert_type in ["high_memory", "high_cpu"]:
             deployment_name = alert.metadata.get("deployment_name")
             namespace = alert.metadata.get("namespace", "default")
@@ -310,12 +308,12 @@ class EnhancedOncallAgent:
                 return await self.k8s_resolver.resolve_high_resource_usage(
                     resource_type, deployment_name, namespace, context
                 )
-                
+
         elif alert_type == "service_down":
             service_name = alert.metadata.get("service_name", alert.service_name)
             namespace = alert.metadata.get("namespace", "default")
             return await self.k8s_resolver.resolve_service_down(service_name, namespace, context)
-            
+
         elif alert_type == "deployment_failed":
             deployment_name = alert.metadata.get("deployment_name")
             namespace = alert.metadata.get("namespace", "default")
@@ -323,40 +321,40 @@ class EnhancedOncallAgent:
                 return await self.k8s_resolver.resolve_deployment_failure(
                     deployment_name, namespace, context
                 )
-                
+
         return []
 
     def _should_auto_remediate(
-        self, 
-        alert: PagerAlert, 
+        self,
+        alert: PagerAlert,
         resolution_actions: list,
-        override: Optional[bool] = None
+        override: bool | None = None
     ) -> bool:
         """Determine if auto-remediation should be attempted."""
         if override is not None:
             return override
-            
+
         # Check AI mode
         if self.ai_mode == AIMode.PLAN:
             return False  # Plan mode never executes
-            
+
         if self.ai_mode == AIMode.YOLO:
             # YOLO mode executes if we have high-confidence actions
             if resolution_actions:
                 avg_confidence = sum(a.confidence for a in resolution_actions) / len(resolution_actions)
                 return avg_confidence >= 0.7
-                
+
         if self.ai_mode == AIMode.APPROVAL:
             # Approval mode needs explicit approval (handled in executor)
             return True  # Let executor handle approval flow
-            
+
         return False
 
-    def _get_approval_callback(self) -> Optional[callable]:
+    def _get_approval_callback(self) -> callable | None:
         """Get approval callback for APPROVAL mode."""
         if self.ai_mode != AIMode.APPROVAL:
             return None
-            
+
         # In a real implementation, this would integrate with UI/Slack/etc.
         # For now, we'll auto-approve low-risk actions in approval mode
         async def mock_approval(action):
@@ -366,20 +364,20 @@ class EnhancedOncallAgent:
             else:
                 self.logger.info(f"Would request approval for: {action.action_type} (risk: {action.risk_level})")
                 return False  # In real implementation, would wait for user
-                
+
         return mock_approval
 
     async def _generate_command_preview(self, resolution_actions: list) -> list[dict[str, Any]]:
         """Generate preview of commands that would be executed."""
         previews = []
-        
+
         for action in resolution_actions:
             # Generate the kubectl command
             result = await self.k8s_mcp.execute_action(
                 action.action_type,
                 {**action.params, "dry_run": True}
             )
-            
+
             if result.get("command"):
                 previews.append({
                     "action": action.action_type,
@@ -388,7 +386,7 @@ class EnhancedOncallAgent:
                     "confidence": action.confidence,
                     "would_execute": result.get("would_execute", False)
                 })
-                
+
         return previews
 
     async def set_ai_mode(self, mode: AIMode) -> None:
