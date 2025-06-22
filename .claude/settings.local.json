@@ -45,7 +45,8 @@
       "Bash(rg:*)",
       "Bash(npm run:*)",
       "Bash(npx drizzle-kit:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(go build:*)"
     ],
     "deny": []
   }

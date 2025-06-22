@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import subprocess
+from datetime import datetime
 from typing import Any
 
 from .base import MCPIntegration
@@ -29,7 +30,7 @@ class GitHubMCPIntegration(MCPIntegration):
         self.server_host = config.get("server_host", "localhost")
         self.server_port = config.get("server_port", 8081)
         self.server_process = None
-        self._connected = False
+        self.connected = False
 
         # Service to repository mapping
         self.service_repo_mapping = {
@@ -47,7 +48,7 @@ class GitHubMCPIntegration(MCPIntegration):
         print("🚀 GITHUB MCP: Initializing GitHub MCP integration...")
         self.logger.info("🚀 Initializing GitHub MCP integration...")
 
-        if self._connected:
+        if self.connected:
             print("✅ GITHUB MCP: GitHub MCP integration already connected")
             self.logger.info("✅ GitHub MCP integration already connected")
             return
@@ -108,7 +109,6 @@ class GitHubMCPIntegration(MCPIntegration):
 
             print(f"✅ GITHUB MCP: GitHub MCP server is running with PID {self.server_process.pid}")
             self.logger.info(f"✅ GitHub MCP server is running with PID {self.server_process.pid}")
-            self._connected = True
 
             # Initialize MCP connection
             print("🤝 GITHUB MCP: Initializing MCP protocol connection...")
@@ -117,6 +117,8 @@ class GitHubMCPIntegration(MCPIntegration):
 
             print("🎉 GITHUB MCP: GitHub MCP integration connected successfully!")
             self.logger.info("🎉 GitHub MCP integration connected successfully!")
+            self.connected = True
+            self.connection_time = datetime.now()
 
         except Exception as e:
             self.logger.error(f"❌ Failed to connect to GitHub MCP: {e}")
@@ -226,7 +228,7 @@ class GitHubMCPIntegration(MCPIntegration):
                 self.logger.error(f"❌ Error stopping GitHub MCP server: {e}")
             finally:
                 self.server_process = None
-                self._connected = False
+                self.connected = False
                 self.logger.info("🔌 GitHub MCP integration disconnected")
 
     async def fetch_context(self, context_type: str, **params) -> dict[str, Any]:
@@ -239,7 +241,7 @@ class GitHubMCPIntegration(MCPIntegration):
         Returns:
             Dictionary containing the requested context
         """
-        if not self._connected:
+        if not self.connected:
             raise RuntimeError("GitHub MCP integration not connected")
 
         try:
@@ -380,7 +382,7 @@ class GitHubMCPIntegration(MCPIntegration):
         Returns:
             Result of the action
         """
-        if not self._connected:
+        if not self.connected:
             raise RuntimeError("GitHub MCP integration not connected")
 
         try:
@@ -487,12 +489,12 @@ class GitHubMCPIntegration(MCPIntegration):
 
     async def health_check(self) -> bool:
         """Check if the GitHub MCP integration is healthy."""
-        if not self._connected or not self.server_process:
+        if not self.connected or not self.server_process:
             return False
 
         # Check if process is still running
         if self.server_process.poll() is not None:
-            self._connected = False
+            self.connected = False
             return False
 
         # Try a simple MCP ping
