@@ -41,7 +41,11 @@
       "Bash(bash:*)",
       "Bash(./inject_k8s_issues.sh:*)",
       "Bash(dos2unix:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(rg:*)",
+      "Bash(npm run:*)",
+      "Bash(npx drizzle-kit:*)",
+      "Bash(node:*)"
     ],
     "deny": []
   }

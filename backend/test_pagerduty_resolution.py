@@ -23,30 +23,30 @@ async def test_pagerduty_resolution():
         acknowledge_pagerduty_incident,
         resolve_pagerduty_incident,
     )
-    
+
     # Check if API key is configured
     api_key = os.getenv("PAGERDUTY_API_KEY")
     if not api_key:
         logger.warning("PAGERDUTY_API_KEY not set - skipping PagerDuty tests")
         logger.info("To enable PagerDuty incident resolution, set PAGERDUTY_API_KEY in your .env file")
         return
-    
+
     logger.info("✅ PagerDuty API key configured")
-    
+
     # Test with a dummy incident ID (this will fail unless you have a real incident)
     test_incident_id = "TEST123"
-    
+
     logger.info(f"Testing acknowledge for incident: {test_incident_id}")
     ack_result = await acknowledge_pagerduty_incident(test_incident_id)
     logger.info(f"Acknowledge result: {ack_result}")
-    
+
     logger.info(f"Testing resolve for incident: {test_incident_id}")
     resolve_result = await resolve_pagerduty_incident(
-        test_incident_id, 
+        test_incident_id,
         "Test resolution from oncall-agent"
     )
     logger.info(f"Resolve result: {resolve_result}")
-    
+
     # Test the client directly
     async with PagerDutyClient() as client:
         logger.info("Testing add note functionality")
@@ -60,9 +60,9 @@ async def test_pagerduty_resolution():
 async def test_frontend_integration():
     """Test frontend integration fix."""
     from src.oncall_agent.frontend_integration import FrontendIntegration
-    
+
     logger.info("\n🔧 Testing frontend integration...")
-    
+
     # Test creating incident without integer ID
     async with FrontendIntegration() as integration:
         # This should work without passing incident_id
@@ -72,7 +72,7 @@ async def test_frontend_integration():
             incident_id=None  # This is the fix - don't pass PagerDuty string ID
         )
         logger.info(f"Frontend action result (no incident_id): {action_result}")
-        
+
         # Test creating an incident first
         incident_result = await integration.create_incident(
             title="Test Incident",
@@ -81,11 +81,11 @@ async def test_frontend_integration():
             source="test",
             source_id="TEST123"  # PagerDuty ID goes here
         )
-        
+
         if incident_result and incident_result.get('id'):
             frontend_incident_id = incident_result['id']  # This is the integer ID
             logger.info(f"Created incident with frontend ID: {frontend_incident_id}")
-            
+
             # Now we can use the integer ID for actions
             action_result2 = await integration.record_ai_action(
                 action="test_action_with_id",
@@ -98,13 +98,13 @@ async def test_frontend_integration():
 async def main():
     """Run all tests."""
     logger.info("🚀 Testing Oncall Agent fixes...")
-    
+
     # Test PagerDuty resolution
     await test_pagerduty_resolution()
-    
+
     # Test frontend integration
     await test_frontend_integration()
-    
+
     logger.info("\n✅ Test complete!")
     logger.info("\nSummary of fixes:")
     logger.info("1. Frontend integration now handles incident_id properly (doesn't pass PagerDuty string IDs)")

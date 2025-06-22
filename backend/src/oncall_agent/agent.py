@@ -16,7 +16,7 @@ from .mcp_integrations.base import MCPIntegration
 from .mcp_integrations.github_mcp import GitHubMCPIntegration
 from .mcp_integrations.grafana_mcp import GrafanaMCPIntegration
 from .mcp_integrations.kubernetes import KubernetesMCPIntegration
-from .mcp_integrations.notion import NotionMCPIntegration
+from .mcp_integrations.notion_direct import NotionDirectIntegration
 
 
 class PagerAlert(BaseModel):
@@ -71,7 +71,7 @@ class OncallAgent:
 
         # Initialize Notion integration if configured
         if self.config.notion_token:
-            self.notion_integration = NotionMCPIntegration({
+            self.notion_integration = NotionDirectIntegration({
                 "notion_token": self.config.notion_token,
                 "database_id": self.config.notion_database_id,
                 "notion_version": self.config.notion_version
@@ -233,7 +233,7 @@ class OncallAgent:
                 try:
                     grafana = self.mcp_integrations["grafana"]
                     # Try to find relevant dashboards based on service name
-                    dashboards = await grafana.fetch_context({"action": "search_dashboards", "query": alert.service_name})
+                    dashboards = await grafana.fetch_context("search", query=alert.service_name)
                     all_context["grafana"] = {
                         "dashboards": dashboards,
                         "service": alert.service_name
@@ -248,10 +248,10 @@ class OncallAgent:
                 try:
                     notion = self.mcp_integrations["notion"]
                     # Search for relevant runbooks or documentation
-                    docs = await notion.fetch_context({
-                        "action": "search",
-                        "query": f"{alert.service_name} {alert.description[:50]}"
-                    })
+                    docs = await notion.fetch_context(
+                        "search",
+                        query=f"{alert.service_name} {alert.description[:50]}"
+                    )
                     all_context["notion"] = docs
                 except Exception as e:
                     self.logger.error(f"Error fetching Notion context: {e}")
@@ -576,7 +576,7 @@ class OncallAgent:
                                         remediation_results.append({
                                             'command': cmd,
                                             'status': 'success',
-                                            'output': exec_result.get('output', '')[:500]  # Limit output size
+                                            'output': str(exec_result.get('output', ''))[:500]  # Limit output size
                                         })
 
                                         # Send success to dashboard
@@ -635,9 +635,9 @@ class OncallAgent:
                 if "alert_type" in data:
                     formatted.append(f"  - Alert Type: {data.get('alert_type')}")
                 if "pod_logs" in data:
-                    formatted.append(f"  - Recent Pod Logs: {data.get('pod_logs', '')[:500]}...")
+                    formatted.append(f"  - Recent Pod Logs: {str(data.get('pod_logs', ''))[:500]}...")
                 if "pod_events" in data:
-                    formatted.append(f"  - Pod Events: {data.get('pod_events', '')[:300]}...")
+                    formatted.append(f"  - Pod Events: {str(data.get('pod_events', ''))[:300]}...")
                 if "problematic_pods" in data:
                     formatted.append(f"  - Problematic Pods: {len(data.get('problematic_pods', []))}")
                 if "unhealthy_pods" in data:

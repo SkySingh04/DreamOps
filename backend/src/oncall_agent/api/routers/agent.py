@@ -9,7 +9,6 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from src.oncall_agent.agent import OncallAgent
-from src.oncall_agent.approval_manager import approval_manager
 from src.oncall_agent.api.schemas import (
     ActionHistory,
     ActionRiskAssessment,
