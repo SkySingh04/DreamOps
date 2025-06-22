@@ -1,4 +1,4 @@
-"""Incident management API endpoints."""
+"""Incident management API endpoints for DreamOps."""
 
 import uuid
 from datetime import UTC, datetime

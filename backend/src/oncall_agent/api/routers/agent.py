@@ -2,9 +2,10 @@
 
 import asyncio
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
-UTC = timezone.utc
+
+UTC = UTC
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -53,7 +54,7 @@ AGENT_METRICS = {
 DEFAULT_RISK_MATRIX = {
     "low": [
         "Read metrics and logs",
-        "Query monitoring systems", 
+        "Query monitoring systems",
         "Generate reports",
         "Send notifications",
         "Update incident status",
@@ -61,7 +62,7 @@ DEFAULT_RISK_MATRIX = {
     "medium": [
         "Restart services",
         "Scale deployments",
-        "Clear caches", 
+        "Clear caches",
         "Rotate credentials",
         "Update configurations",
     ],
@@ -69,7 +70,7 @@ DEFAULT_RISK_MATRIX = {
         "Delete resources",
         "Modify production data",
         "Change security settings",
-        "Perform database operations", 
+        "Perform database operations",
         "Execute custom scripts",
     ],
 }
@@ -139,11 +140,11 @@ RISK_MATRIX = {
 
 class ConfidenceScorer:
     """Calculate confidence scores for AI actions."""
-    
+
     @staticmethod
     def calculate_confidence(incident_data: dict, context_quality: float = 0.8) -> ConfidenceScore:
         """Calculate overall confidence score."""
-        
+
         # Mock confidence calculation (in production, use ML models)
         factors = ConfidenceFactors(
             pattern_recognition=min(1.0, len(incident_data.get("symptoms", [])) * 0.2),
@@ -152,7 +153,7 @@ class ConfidenceScorer:
             resource_availability=0.9,  # Mock resource availability
             time_sensitivity=0.8 if incident_data.get("severity") == "high" else 0.6,
         )
-        
+
         # Weighted calculation
         overall_confidence = (
             factors.pattern_recognition * 0.30 +
@@ -161,7 +162,7 @@ class ConfidenceScorer:
             factors.resource_availability * 0.15 +
             factors.time_sensitivity * 0.10
         )
-        
+
         # Determine recommendation
         if overall_confidence >= 0.8:
             recommendation = "High confidence - safe for auto-execution"
@@ -169,9 +170,9 @@ class ConfidenceScorer:
             recommendation = "Medium confidence - consider approval workflow"
         else:
             recommendation = "Low confidence - requires human intervention"
-        
+
         threshold_met = overall_confidence >= SAFETY_CONFIG.confidence_threshold
-        
+
         return ConfidenceScore(
             overall_confidence=overall_confidence,
             factor_breakdown=factors,
@@ -182,18 +183,18 @@ class ConfidenceScorer:
 
 class RiskAssessment:
     """Assess risk levels for actions."""
-    
+
     @staticmethod
     def classify_action_risk(action_type: str, action_details: dict) -> ActionRiskAssessment:
         """Classify the risk level of an action."""
-        
+
         # Find risk level in matrix
         risk_level = RiskLevel.MEDIUM  # Default
         for category, actions in RISK_MATRIX.items():
             if action_type in actions:
                 risk_level = actions[action_type]
                 break
-        
+
         # Determine risk factors
         risk_factors = []
         if action_details.get("affects_production", False):
@@ -202,20 +203,20 @@ class RiskAssessment:
             risk_factors.append("data_modification")
         if action_details.get("security_impact", False):
             risk_factors.append("security_impact")
-        
+
         # Check permissions
         auto_execute_allowed = (
             SAFETY_CONFIG.auto_execute_permissions.get(action_type, False) and
             risk_level != RiskLevel.HIGH and
             not SAFETY_CONFIG.emergency_stop_active
         )
-        
+
         requires_approval = (
             action_type in SAFETY_CONFIG.mandatory_approval_actions or
             risk_level == RiskLevel.HIGH or
             not auto_execute_allowed
         )
-        
+
         return ActionRiskAssessment(
             action_type=action_type,
             risk_level=risk_level,
@@ -227,19 +228,19 @@ class RiskAssessment:
 
 class DryRunExecutor:
     """Execute dry run simulations."""
-    
+
     @staticmethod
     def execute_dry_run(action_plan: list[dict]) -> list[DryRunResult]:
         """Simulate action execution without actually performing actions."""
         results = []
-        
+
         for i, action in enumerate(action_plan):
             action_id = f"dryrun_{uuid.uuid4().hex[:8]}"
             action_type = action.get("type", "unknown")
-            
+
             # Simulate execution logic
             would_execute = not SAFETY_CONFIG.emergency_stop_active
-            
+
             # Generate realistic outcomes
             if action_type == "restart_pod":
                 expected_outcome = f"Pod {action.get('target', 'unknown')} would be restarted"
@@ -250,14 +251,14 @@ class DryRunExecutor:
                 replicas = action.get("replicas", 3)
                 expected_outcome = f"Deployment scaled to {replicas} replicas"
                 potential_risks = ["Resource exhaustion", "Increased costs"]
-                rollback_plan = f"Scale back to original replica count"
+                rollback_plan = "Scale back to original replica count"
                 estimated_duration = 30
             else:
                 expected_outcome = f"Would execute {action_type} action"
                 potential_risks = ["Unknown side effects"]
                 rollback_plan = "Manual intervention required"
                 estimated_duration = 120
-            
+
             result = DryRunResult(
                 action_id=action_id,
                 action_type=action_type,
@@ -273,18 +274,18 @@ class DryRunExecutor:
                 },
             )
             results.append(result)
-        
+
         return results
 
 
 class RollbackManager:
     """Manage action rollbacks."""
-    
+
     @staticmethod
     def record_action(action_type: str, action_details: dict, original_state: dict) -> str:
         """Record an executed action for potential rollback."""
         action_id = f"action_{uuid.uuid4().hex[:8]}"
-        
+
         action_record = ActionHistory(
             id=action_id,
             incident_id=action_details.get("incident_id", "unknown"),
@@ -294,24 +295,24 @@ class RollbackManager:
             original_state=original_state,
             rollback_available=action_type in ["restart_pod", "scale_deployment", "update_config"],
         )
-        
+
         ACTION_HISTORY.append(action_record)
         return action_id
-    
+
     @staticmethod
     def rollback_action(action_id: str) -> dict:
         """Rollback a specific action."""
         action = next((a for a in ACTION_HISTORY if a.id == action_id), None)
-        
+
         if not action:
             return {"success": False, "error": "Action not found"}
-        
+
         if not action.rollback_available:
             return {"success": False, "error": "Rollback not supported for this action"}
-        
+
         if action.rollback_executed:
             return {"success": False, "error": "Action already rolled back"}
-        
+
         # Simulate rollback logic
         if action.action_type == "restart_pod":
             rollback_result = "Pod rollback initiated"
@@ -320,11 +321,11 @@ class RollbackManager:
             rollback_result = f"Deployment scaled back to {original_replicas} replicas"
         else:
             rollback_result = "Configuration restored to original state"
-        
+
         # Mark as rolled back
         action.rollback_executed = True
         action.rollback_at = datetime.now(UTC)
-        
+
         return {
             "success": True,
             "message": "Action rolled back successfully",
@@ -659,20 +660,20 @@ async def update_agent_config(config_update: AIAgentConfigUpdate) -> AIAgentConf
     """Update AI agent configuration."""
     try:
         global AGENT_CONFIG
-        
+
         # Update only provided fields
         update_data = config_update.model_dump(exclude_unset=True)
-        
+
         # Create new config with updates
         current_config = AGENT_CONFIG.model_dump()
         current_config.update(update_data)
-        
+
         # Validate and create new config
         AGENT_CONFIG = AIAgentConfig(**current_config)
-        
+
         logger.info(f"Agent configuration updated: {update_data}")
         return AGENT_CONFIG
-        
+
     except Exception as e:
         logger.error(f"Error updating agent config: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -695,15 +696,15 @@ async def update_safety_config(config_update: dict) -> SafetyConfig:
     """Update safety configuration."""
     try:
         global SAFETY_CONFIG
-        
+
         # Update configuration fields
         for key, value in config_update.items():
             if hasattr(SAFETY_CONFIG, key):
                 setattr(SAFETY_CONFIG, key, value)
-        
+
         logger.info(f"Safety configuration updated: {config_update}")
         return SAFETY_CONFIG
-        
+
     except Exception as e:
         logger.error(f"Error updating safety config: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -716,7 +717,7 @@ async def execute_dry_run(action_plan: list[dict]) -> list[DryRunResult]:
         results = DryRunExecutor.execute_dry_run(action_plan)
         logger.info(f"Dry run executed for {len(action_plan)} actions")
         return results
-        
+
     except Exception as e:
         logger.error(f"Error executing dry run: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -727,17 +728,17 @@ async def calculate_confidence(incident_data: dict) -> ConfidenceScore:
     """Calculate confidence score for incident analysis."""
     try:
         confidence_result = ConfidenceScorer.calculate_confidence(incident_data)
-        
+
         # Record confidence history
         CONFIDENCE_HISTORY.append((datetime.now(UTC), confidence_result.overall_confidence))
-        
+
         # Keep only last 100 entries
         if len(CONFIDENCE_HISTORY) > 100:
             CONFIDENCE_HISTORY.pop(0)
-        
+
         logger.info(f"Confidence calculated: {confidence_result.overall_confidence:.2f}")
         return confidence_result
-        
+
     except Exception as e:
         logger.error(f"Error calculating confidence: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -750,7 +751,7 @@ async def assess_risk(action_type: str, action_details: dict = {}) -> ActionRisk
         risk_assessment = RiskAssessment.classify_action_risk(action_type, action_details)
         logger.info(f"Risk assessed for {action_type}: {risk_assessment.risk_level}")
         return risk_assessment
-        
+
     except Exception as e:
         logger.error(f"Error assessing risk: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -761,15 +762,15 @@ async def get_pending_approvals() -> list[ApprovalRequest]:
     """Get list of pending approval requests."""
     try:
         pending = [req for req in APPROVAL_QUEUE.values() if req.status == "PENDING"]
-        
+
         # Check for expired approvals
         current_time = datetime.now(UTC)
         for approval in pending:
             if current_time > approval.timeout_at:
                 approval.status = "EXPIRED"
-        
+
         return [req for req in pending if req.status == "PENDING"]
-        
+
     except Exception as e:
         logger.error(f"Error getting pending approvals: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -781,23 +782,23 @@ async def approve_action(approval_id: str, comments: str = "") -> SuccessRespons
     try:
         if approval_id not in APPROVAL_QUEUE:
             raise HTTPException(status_code=404, detail="Approval request not found")
-        
+
         approval = APPROVAL_QUEUE[approval_id]
         if approval.status != "PENDING":
             raise HTTPException(status_code=400, detail=f"Approval already {approval.status}")
-        
+
         approval.status = "APPROVED"
         approval.comments = comments
-        
+
         # In real implementation, would execute the approved actions
         logger.info(f"Action approved: {approval_id}")
-        
+
         return SuccessResponse(
             success=True,
             message="Action approved and will be executed",
             data={"approval_id": approval_id}
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -811,22 +812,22 @@ async def reject_action(approval_id: str, comments: str = "") -> SuccessResponse
     try:
         if approval_id not in APPROVAL_QUEUE:
             raise HTTPException(status_code=404, detail="Approval request not found")
-        
+
         approval = APPROVAL_QUEUE[approval_id]
         if approval.status != "PENDING":
             raise HTTPException(status_code=400, detail=f"Approval already {approval.status}")
-        
+
         approval.status = "REJECTED"
         approval.comments = comments
-        
+
         logger.info(f"Action rejected: {approval_id}")
-        
+
         return SuccessResponse(
             success=True,
             message="Action rejected",
             data={"approval_id": approval_id}
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -840,7 +841,7 @@ async def get_action_history() -> list[ActionHistory]:
     try:
         # Return last 50 actions, most recent first
         return sorted(ACTION_HISTORY, key=lambda x: x.executed_at, reverse=True)[:50]
-        
+
     except Exception as e:
         logger.error(f"Error getting action history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -851,14 +852,14 @@ async def rollback_action(action_id: str) -> dict:
     """Rollback a specific action."""
     try:
         result = RollbackManager.rollback_action(action_id)
-        
+
         if result["success"]:
             logger.info(f"Action rolled back: {action_id}")
         else:
             logger.warning(f"Rollback failed for {action_id}: {result['error']}")
-        
+
         return result
-        
+
     except Exception as e:
         logger.error(f"Error rolling back action: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -870,14 +871,14 @@ async def rollback_last_action() -> dict:
     try:
         if not ACTION_HISTORY:
             return {"success": False, "error": "No actions to rollback"}
-        
+
         # Find most recent rollback-able action
         for action in reversed(ACTION_HISTORY):
             if action.rollback_available and not action.rollback_executed:
                 return RollbackManager.rollback_action(action.id)
-        
+
         return {"success": False, "error": "No rollback-able actions found"}
-        
+
     except Exception as e:
         logger.error(f"Error rolling back last action: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -894,7 +895,7 @@ async def get_confidence_history() -> list[dict]:
             }
             for timestamp, confidence in CONFIDENCE_HISTORY
         ]
-        
+
     except Exception as e:
         logger.error(f"Error getting confidence history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -909,15 +910,15 @@ async def emergency_stop() -> SuccessResponse:
         # 2. Cancel queued tasks
         # 3. Set agent to emergency stop mode
         # 4. Send notifications to team
-        
+
         logger.warning("Emergency stop activated for AI agent")
-        
+
         return SuccessResponse(
             success=True,
             message="Emergency stop activated - all AI operations halted",
             data={"timestamp": datetime.now(timezone.utc).isoformat()}
         )
-        
+
     except Exception as e:
         logger.error(f"Error during emergency stop: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -964,27 +965,26 @@ async def execute_remediation_action(
     try:
         # Import here to avoid circular dependency
         from src.oncall_agent.agent_enhanced import EnhancedOncallAgent
-        from src.oncall_agent.mcp_integrations.kubernetes_mcp import KubernetesMCPServerIntegration
-        
+
         global enhanced_agent_instance
-        
+
         # Create enhanced agent if needed
         if not enhanced_agent_instance:
             enhanced_agent_instance = EnhancedOncallAgent(ai_mode=AGENT_CONFIG.mode)
             await enhanced_agent_instance.connect_integrations()
-        
+
         # Execute via K8s MCP integration
         if enhanced_agent_instance.k8s_mcp:
             result = await enhanced_agent_instance.k8s_mcp.execute_action(
                 action_type,
                 {**params, "dry_run": dry_run, "auto_approve": auto_approve}
             )
-            
+
             # Add execution metadata
             result["executed_by"] = "manual_api_call"
             result["mode"] = AGENT_CONFIG.mode.value
             result["timestamp"] = datetime.now(timezone.utc).isoformat()
-            
+
             return result
         else:
             return {
@@ -992,7 +992,7 @@ async def execute_remediation_action(
                 "error": "Kubernetes integration not available",
                 "executed_by": "manual_api_call"
             }
-            
+
     except Exception as e:
         logger.error(f"Error executing action: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1003,14 +1003,14 @@ async def get_execution_history(limit: int = 50) -> list[dict]:
     """Get history of executed remediation actions."""
     try:
         global enhanced_agent_instance
-        
+
         if enhanced_agent_instance and enhanced_agent_instance.agent_executor:
             history = enhanced_agent_instance.agent_executor.get_execution_history()
             # Return most recent entries
             return history[-limit:]
         else:
             return []
-            
+
     except Exception as e:
         logger.error(f"Error getting execution history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1021,14 +1021,14 @@ async def get_k8s_audit_log(limit: int = 100) -> list[dict]:
     """Get Kubernetes command audit log."""
     try:
         global enhanced_agent_instance
-        
+
         if enhanced_agent_instance and enhanced_agent_instance.k8s_mcp:
             audit_log = enhanced_agent_instance.k8s_mcp.get_audit_log()
             # Return most recent entries
             return audit_log[-limit:]
         else:
             return []
-            
+
     except Exception as e:
         logger.error(f"Error getting K8s audit log: {e}")
         raise HTTPException(status_code=500, detail=str(e))

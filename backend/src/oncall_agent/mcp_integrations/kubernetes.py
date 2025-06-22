@@ -458,6 +458,8 @@ class KubernetesMCPIntegration(MCPIntegration):
 
     async def execute_kubectl_command(self, command: str) -> dict[str, Any]:
         """Execute arbitrary kubectl command (with restrictions)."""
+        import shlex
+
         # Safety: Disallow certain dangerous commands
         dangerous_keywords = ["delete", "exec", "port-forward", "proxy", "edit", "apply", "create", "patch"]
         command_lower = command.lower()
@@ -468,9 +470,16 @@ class KubernetesMCPIntegration(MCPIntegration):
                 "error": f"Command contains restricted keywords: {dangerous_keywords}. Enable destructive operations to use these."
             }
 
-        # Parse and execute command
-        cmd_parts = command.split()
-        if cmd_parts[0] == "kubectl":
+        # Parse command properly, handling quoted strings
+        try:
+            cmd_parts = shlex.split(command)
+        except ValueError as e:
+            return {
+                "success": False,
+                "error": f"Failed to parse command: {e}"
+            }
+
+        if cmd_parts and cmd_parts[0] == "kubectl":
             cmd_parts = cmd_parts[1:]  # Remove kubectl prefix if present
 
         result = await self._execute_k8s_command(*cmd_parts)

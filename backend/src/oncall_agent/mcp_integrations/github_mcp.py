@@ -46,7 +46,7 @@ class GitHubMCPIntegration(MCPIntegration):
         """Connect to the GitHub MCP server by starting it as a subprocess."""
         print("🚀 GITHUB MCP: Initializing GitHub MCP integration...")
         self.logger.info("🚀 Initializing GitHub MCP integration...")
-        
+
         if self._connected:
             print("✅ GITHUB MCP: GitHub MCP integration already connected")
             self.logger.info("✅ GitHub MCP integration already connected")
@@ -58,7 +58,7 @@ class GitHubMCPIntegration(MCPIntegration):
             if not self.github_token:
                 self.logger.error("❌ GitHub token not configured. Set GITHUB_TOKEN in .env")
                 raise ValueError("GitHub token not configured. Set GITHUB_TOKEN in .env")
-            
+
             self.logger.info(f"✅ GitHub token configured (length: {len(self.github_token)})")
 
             # Convert relative path to absolute path
@@ -77,7 +77,7 @@ class GitHubMCPIntegration(MCPIntegration):
             self.logger.info("✅ GitHub MCP server binary found")
 
             # Start the GitHub MCP server subprocess
-            self.logger.info(f"🚀 Starting GitHub MCP server subprocess...")
+            self.logger.info("🚀 Starting GitHub MCP server subprocess...")
 
             # Set up environment with GitHub token
             env = os.environ.copy()
@@ -114,7 +114,7 @@ class GitHubMCPIntegration(MCPIntegration):
             print("🤝 GITHUB MCP: Initializing MCP protocol connection...")
             self.logger.info("🤝 Initializing MCP protocol connection...")
             await self._initialize_mcp_connection()
-            
+
             print("🎉 GITHUB MCP: GitHub MCP integration connected successfully!")
             self.logger.info("🎉 GitHub MCP integration connected successfully!")
 

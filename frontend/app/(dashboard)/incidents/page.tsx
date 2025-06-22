@@ -52,7 +52,7 @@ import { toast } from 'sonner';
 import { apiClient, queryKeys } from '@/lib/api-client';
 import { useWebSocket } from '@/lib/hooks/use-websocket';
 import { useAgentLogs } from '@/lib/hooks/use-agent-logs';
-import { Incident, AIAction, TimelineEvent, Severity, IncidentStatus } from '@/lib/types';
+import { Incident, AIAction, TimelineEvent, Severity, IncidentStatus, AIMode } from '@/lib/types';
 import { format, formatDistanceToNow } from 'date-fns';
 import { AgentLogs } from '@/components/incidents/agent-logs';
 import { AgentStatusPanel } from '@/components/incidents/agent-status-panel';
@@ -71,6 +71,7 @@ const MOCK_INCIDENT_TYPES = [
 
 export default function IncidentsPage() {
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
+  const [selectedPendingAction, setSelectedPendingAction] = useState<any | null>(null);
   const [filterStatus, setFilterStatus] = useState<IncidentStatus | 'all'>('all');
   const [filterSeverity, setFilterSeverity] = useState<Severity | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -86,6 +87,25 @@ export default function IncidentsPage() {
   const [expandedIncident, setExpandedIncident] = useState<string | null>(null);
   const [showAgentLogs, setShowAgentLogs] = useState(true);
   const queryClient = useQueryClient();
+
+  // Fetch AI config to get current mode
+  const { data: aiConfigData } = useQuery({
+    queryKey: queryKeys.aiConfig,
+    queryFn: () => apiClient.getAIConfig(),
+    refetchInterval: 5000, // Refetch every 5 seconds
+  });
+  
+  const aiConfig = aiConfigData?.data;
+
+  // Fetch pending approvals if in APPROVAL mode
+  const { data: pendingApprovalsData } = useQuery({
+    queryKey: queryKeys.pendingApprovals,
+    queryFn: () => apiClient.getPendingApprovals(),
+    enabled: aiConfig?.mode === 'approval',
+    refetchInterval: 3000, // Refetch every 3 seconds in approval mode
+  });
+  
+  const pendingApprovals = pendingApprovalsData?.data || [];
 
   // Define the 5 chaos services from the script
   const chaosServices = [
@@ -537,7 +557,7 @@ export default function IncidentsPage() {
             <>
               <Bomb className="h-8 w-8 mr-4 animate-bounce" />
               <Flame className="h-6 w-6 mr-2" />
-              FUCK INFRA
+              NUKE INFRA
               <Flame className="h-6 w-6 ml-2" />
               <Skull className="h-8 w-8 ml-4 animate-bounce" />
             </>
@@ -548,9 +568,42 @@ export default function IncidentsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Incident Management</h1>
-          <p className="text-gray-600 mt-1">Monitor and resolve incidents with AI assistance</p>
+          <p className="text-gray-600 mt-1">Dream easy while AI takes your on-call duty - Monitor and resolve incidents automatically</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* AI Mode Indicator */}
+          {aiConfig && (
+            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium ${
+              aiConfig.mode === 'yolo' ? 'bg-red-100 text-red-700 border border-red-300' :
+              aiConfig.mode === 'approval' ? 'bg-blue-100 text-blue-700 border border-blue-300' :
+              'bg-green-100 text-green-700 border border-green-300'
+            }`}>
+              {aiConfig.mode === 'yolo' && (
+                <>
+                  <Zap className="h-4 w-4" />
+                  YOLO MODE
+                  <Badge variant="destructive" className="ml-2">AUTO-EXECUTE</Badge>
+                </>
+              )}
+              {aiConfig.mode === 'approval' && (
+                <>
+                  <Shield className="h-4 w-4" />
+                  APPROVAL MODE
+                  {pendingApprovals.length > 0 && (
+                    <Badge variant="secondary" className="ml-2">
+                      {pendingApprovals.length} pending
+                    </Badge>
+                  )}
+                </>
+              )}
+              {aiConfig.mode === 'plan' && (
+                <>
+                  <Activity className="h-4 w-4" />
+                  PLAN MODE
+                </>
+              )}
+            </div>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -569,12 +622,116 @@ export default function IncidentsPage() {
         currentProgress={currentProgress}
       />
 
+      {/* Pending Approvals Panel - Show only in APPROVAL mode */}
+      {aiConfig?.mode === 'approval' && pendingApprovals.length > 0 && (
+        <Card className="border-yellow-200 bg-yellow-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-yellow-800">
+              <Shield className="h-5 w-5" />
+              Pending AI Actions Require Approval
+            </CardTitle>
+            <CardDescription className="text-yellow-700">
+              Review and approve or reject AI-suggested actions
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {pendingApprovals.map((approval: any) => (
+              <div key={approval.id} className="bg-white border border-yellow-200 rounded-lg p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge variant="outline" className={getSeverityColor(approval.risk_level || 'medium')}>
+                        {approval.risk_level || 'medium'} risk
+                      </Badge>
+                      <Badge variant="outline" className="bg-blue-100 text-blue-700">
+                        {approval.action_type || 'remediation'}
+                      </Badge>
+                      {approval.integration && (
+                        <Badge variant="outline">
+                          <Terminal className="h-3 w-3 mr-1" />
+                          {approval.integration}
+                        </Badge>
+                      )}
+                    </div>
+                    <h4 className="font-medium text-gray-900 mb-1">{approval.description}</h4>
+                    {approval.command && (
+                      <div className="mt-2 bg-gray-900 text-gray-100 p-3 rounded-md font-mono text-sm">
+                        <code>{approval.command}</code>
+                      </div>
+                    )}
+                    <div className="mt-2 text-sm text-gray-600">
+                      <p>Incident: {approval.incident_id}</p>
+                      <p>Confidence: {(approval.confidence_score * 100).toFixed(0)}%</p>
+                      {approval.reason && <p className="mt-1">Reason: {approval.reason}</p>}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 ml-4">
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={async () => {
+                        try {
+                          await apiClient.approveAction(approval.id, 'Approved via dashboard');
+                          toast.success('Action approved and executing');
+                          queryClient.invalidateQueries({ queryKey: queryKeys.pendingApprovals });
+                        } catch (error) {
+                          toast.error('Failed to approve action');
+                        }
+                      }}
+                    >
+                      <CheckCircle className="h-4 w-4 mr-1" />
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        try {
+                          await apiClient.rejectAction(approval.id, 'Rejected via dashboard');
+                          toast.success('Action rejected');
+                          queryClient.invalidateQueries({ queryKey: queryKeys.pendingApprovals });
+                        } catch (error) {
+                          toast.error('Failed to reject action');
+                        }
+                      }}
+                    >
+                      <XCircle className="h-4 w-4 mr-1" />
+                      Reject
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setSelectedPendingAction(approval)}
+                    >
+                      <Eye className="h-4 w-4 mr-1" />
+                      Details
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* YOLO Mode Execution Indicator */}
+      {aiConfig?.mode === 'yolo' && activeIncidents.size > 0 && (
+        <Alert className="border-red-200 bg-red-50">
+          <Zap className="h-4 w-4 text-red-600" />
+          <AlertTitle className="text-red-800">YOLO Mode Active - Auto-Executing Commands</AlertTitle>
+          <AlertDescription className="text-red-700">
+            The AI agent is automatically executing remediation commands without approval. 
+            Commands are being executed with high confidence scores (≥60%).
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Two column layout for AI logs and incidents */}
       <div className={showAgentLogs ? "grid grid-cols-1 lg:grid-cols-3 gap-6 overflow-hidden" : ""}>
         {/* AI Agent Logs Section - takes 2/3 width */}
         {showAgentLogs && (
-          <div className="lg:col-span-2 min-w-0 overflow-hidden">
-            <AgentLogs incidentId={selectedIncident?.id} className="overflow-hidden" />
+          <div className="lg:col-span-2 min-w-0 overflow-hidden max-w-full">
+            <AgentLogs incidentId={selectedIncident?.id} className="overflow-hidden max-w-full" />
           </div>
         )}
         
@@ -945,6 +1102,120 @@ export default function IncidentsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Pending Action Details Dialog */}
+      <Dialog open={!!selectedPendingAction} onOpenChange={(open) => !open && setSelectedPendingAction(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Pending Action Details
+            </DialogTitle>
+            <DialogDescription>
+              Review the full details of this AI-suggested action
+            </DialogDescription>
+          </DialogHeader>
+          {selectedPendingAction && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Action Type</p>
+                  <p className="text-base">{selectedPendingAction.action_type || 'remediation'}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Risk Level</p>
+                  <Badge className={getSeverityColor(selectedPendingAction.risk_level || 'medium')}>
+                    {selectedPendingAction.risk_level || 'medium'}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Confidence Score</p>
+                  <p className="text-base">{(selectedPendingAction.confidence_score * 100).toFixed(0)}%</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Integration</p>
+                  <p className="text-base">{selectedPendingAction.integration || 'kubernetes'}</p>
+                </div>
+              </div>
+              
+              <div>
+                <p className="text-sm font-medium text-gray-500 mb-2">Description</p>
+                <p className="text-base">{selectedPendingAction.description}</p>
+              </div>
+              
+              {selectedPendingAction.command && (
+                <div>
+                  <p className="text-sm font-medium text-gray-500 mb-2">Command to Execute</p>
+                  <div className="bg-gray-900 text-gray-100 p-4 rounded-md font-mono text-sm">
+                    <code>{selectedPendingAction.command}</code>
+                  </div>
+                </div>
+              )}
+              
+              {selectedPendingAction.reason && (
+                <div>
+                  <p className="text-sm font-medium text-gray-500 mb-2">Reasoning</p>
+                  <p className="text-base">{selectedPendingAction.reason}</p>
+                </div>
+              )}
+              
+              {selectedPendingAction.expected_outcome && (
+                <div>
+                  <p className="text-sm font-medium text-gray-500 mb-2">Expected Outcome</p>
+                  <p className="text-base">{selectedPendingAction.expected_outcome}</p>
+                </div>
+              )}
+              
+              {selectedPendingAction.rollback_plan && (
+                <div>
+                  <p className="text-sm font-medium text-gray-500 mb-2">Rollback Plan</p>
+                  <p className="text-base">{selectedPendingAction.rollback_plan}</p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedPendingAction(null)}>
+              Close
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (selectedPendingAction) {
+                  try {
+                    await apiClient.rejectAction(selectedPendingAction.id, 'Rejected via details dialog');
+                    toast.success('Action rejected');
+                    queryClient.invalidateQueries({ queryKey: queryKeys.pendingApprovals });
+                    setSelectedPendingAction(null);
+                  } catch (error) {
+                    toast.error('Failed to reject action');
+                  }
+                }
+              }}
+            >
+              <XCircle className="h-4 w-4 mr-2" />
+              Reject Action
+            </Button>
+            <Button
+              onClick={async () => {
+                if (selectedPendingAction) {
+                  try {
+                    await apiClient.approveAction(selectedPendingAction.id, 'Approved via details dialog');
+                    toast.success('Action approved and executing');
+                    queryClient.invalidateQueries({ queryKey: queryKeys.pendingApprovals });
+                    setSelectedPendingAction(null);
+                  } catch (error) {
+                    toast.error('Failed to approve action');
+                  }
+                }
+              }}
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Approve & Execute
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Chaos Results Dialog */}
       <Dialog open={showChaosDialog} onOpenChange={setShowChaosDialog}>
         <DialogContent className="max-w-3xl">
@@ -1026,7 +1297,7 @@ export default function IncidentsPage() {
                       Check your monitoring systems and PagerDuty for alerts.
                     </>
                   ) : (
-                    'Infrastructure has been successfully compromised. Check your monitoring systems and PagerDuty for alerts. Your oncall agent should start analyzing and attempting to resolve these incidents automatically.'
+                    'Infrastructure has been successfully compromised. Check your monitoring systems and PagerDuty for alerts. Your DreamOps agent should start analyzing and attempting to resolve these incidents automatically.'
                   )}
                 </AlertDescription>
               </Alert>

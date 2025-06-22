@@ -6,8 +6,8 @@ import { SWRConfig } from 'swr';
 import { Providers } from '@/lib/providers';
 
 export const metadata: Metadata = {
-  title: 'Oncall AI Agent',
-  description: 'AI-powered incident resolution system for on-call engineers.'
+  title: 'DreamOps',
+  description: 'Dream easy while AI takes your on-call duty. AI-powered incident response and infrastructure management platform for DevOps teams.'
 };
 
 export const viewport: Viewport = {

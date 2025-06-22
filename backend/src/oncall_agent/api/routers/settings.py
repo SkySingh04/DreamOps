@@ -482,7 +482,7 @@ async def update_ai_settings(
     try:
         GLOBAL_SETTINGS.ai = settings
         logger.info("AI settings updated")
-        
+
         return SuccessResponse(
             success=True,
             message="AI settings updated successfully"
@@ -510,7 +510,7 @@ async def update_alert_settings(
     try:
         GLOBAL_SETTINGS.alerts = settings
         logger.info("Alert settings updated")
-        
+
         return SuccessResponse(
             success=True,
             message="Alert settings updated successfully"
@@ -538,7 +538,7 @@ async def update_security_settings(
     try:
         GLOBAL_SETTINGS.security = settings
         logger.info("Security settings updated")
-        
+
         return SuccessResponse(
             success=True,
             message="Security settings updated successfully"
@@ -577,9 +577,9 @@ async def update_api_key_settings(
             GLOBAL_SETTINGS.api_keys.webhook_secret = settings.webhook_secret
         if settings.webhook_url:
             GLOBAL_SETTINGS.api_keys.webhook_url = settings.webhook_url
-            
+
         logger.info("API key settings updated")
-        
+
         return SuccessResponse(
             success=True,
             message="API key settings updated successfully"
@@ -597,28 +597,28 @@ async def test_integration_connection(integration_name: str) -> IntegrationTestR
         # Get agent instance for real integration testing
         from src.oncall_agent.api.routers.integrations import get_agent_instance
         agent = await get_agent_instance()
-        
+
         if not agent:
             return IntegrationTestResult(
                 success=False,
                 message="Agent instance not available",
                 details={"error": "Agent not initialized"}
             )
-        
+
         if integration_name not in agent.mcp_integrations:
             return IntegrationTestResult(
                 success=False,
                 message=f"Integration '{integration_name}' not found",
                 details={"available": list(agent.mcp_integrations.keys())}
             )
-        
+
         # Test the actual integration
         integration = agent.mcp_integrations[integration_name]
         start_time = datetime.now()
-        
+
         is_healthy = await integration.health_check()
         latency = (datetime.now() - start_time).total_seconds() * 1000
-        
+
         if is_healthy:
             capabilities = integration.get_capabilities()
             return IntegrationTestResult(
@@ -637,7 +637,7 @@ async def test_integration_connection(integration_name: str) -> IntegrationTestR
                 details={"status": "disconnected"},
                 latency_ms=latency
             )
-            
+
     except Exception as e:
         logger.error(f"Error testing {integration_name} integration: {e}")
         return IntegrationTestResult(

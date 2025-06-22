@@ -6,12 +6,12 @@ export default async function PricingPage() {
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold text-gray-900 mb-4">Pricing</h1>
         <p className="text-xl text-gray-600">Stripe integration has been removed</p>
-        <p className="text-lg text-gray-500 mt-2">This is now a simplified OnCall Agent dashboard</p>
+        <p className="text-lg text-gray-500 mt-2">Dream easy while AI takes your on-call duty</p>
       </div>
       
       <div className="grid md:grid-cols-2 gap-8 max-w-xl mx-auto">
         <PricingCard
-          name="OnCall Agent"
+          name="DreamOps"
           price="Free"
           features={[
             'AI-Powered Incident Response',
