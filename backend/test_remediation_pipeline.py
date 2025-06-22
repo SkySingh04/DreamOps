@@ -45,7 +45,7 @@ async def test_oom_remediation():
     try:
         # Get current config
         config = get_config()
-        
+
         print("\n🤖 Testing in autonomous execution mode")
 
         result = await agent.handle_pager_alert(alert)

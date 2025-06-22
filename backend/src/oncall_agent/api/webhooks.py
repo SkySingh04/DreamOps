@@ -34,7 +34,7 @@ async def get_agent_trigger() -> OncallAgentTrigger:
     """Get or create the agent trigger instance."""
     global agent_trigger
     if agent_trigger is None:
-        agent_trigger = OncallAgentTrigger()
+        agent_trigger = OncallAgentTrigger(use_enhanced=True)
         await agent_trigger.initialize()
     return agent_trigger
 

@@ -34,7 +34,8 @@
       "Bash(npm run lint)",
       "Bash(chmod:*)",
       "Bash(npm install:*)",
-      "Bash(python test_kubectl_parsing.py)"
+      "Bash(python test_kubectl_parsing.py)",
+      "Bash(touch:*)"
     ],
     "deny": []
   }
