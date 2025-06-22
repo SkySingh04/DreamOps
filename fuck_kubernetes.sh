@@ -14,15 +14,58 @@ NC='\033[0m' # No Color
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+# Debug: Show environment info
+echo -e "${YELLOW}Debug: Running as user: $(whoami)${NC}"
+echo -e "${YELLOW}Debug: HOME=$HOME${NC}"
+echo -e "${YELLOW}Debug: KUBECONFIG=$KUBECONFIG${NC}"
+echo -e "${YELLOW}Debug: PATH=$PATH${NC}"
+echo -e "${YELLOW}Debug: AWS_PROFILE=$AWS_PROFILE${NC}"
+echo -e "${YELLOW}Debug: AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION${NC}"
+
 # Check if kubectl is available
 if ! command -v kubectl &> /dev/null; then
     echo -e "${RED}Error: kubectl command not found. Please install kubectl first.${NC}"
-    exit 1
+    echo -e "${YELLOW}Debug: Checking common kubectl locations...${NC}"
+    for loc in /usr/local/bin/kubectl /usr/bin/kubectl /opt/homebrew/bin/kubectl; do
+        if [ -f "$loc" ]; then
+            echo -e "${YELLOW}Found kubectl at: $loc${NC}"
+            export PATH="$(dirname $loc):$PATH"
+            break
+        fi
+    done
+    # Check again after updating PATH
+    if ! command -v kubectl &> /dev/null; then
+        exit 1
+    fi
+fi
+
+# Set default kubeconfig if not set
+if [ -z "$KUBECONFIG" ]; then
+    export KUBECONFIG="$HOME/.kube/config"
+    echo -e "${YELLOW}Debug: Using default KUBECONFIG=$KUBECONFIG${NC}"
+fi
+
+# Check if kubeconfig file exists
+if [ ! -f "$KUBECONFIG" ]; then
+    echo -e "${RED}Error: KUBECONFIG file not found at: $KUBECONFIG${NC}"
+    echo -e "${YELLOW}Debug: Looking for kubeconfig in common locations...${NC}"
+    for loc in "$HOME/.kube/config" "/etc/kubernetes/admin.conf"; do
+        if [ -f "$loc" ]; then
+            echo -e "${YELLOW}Found kubeconfig at: $loc${NC}"
+            export KUBECONFIG="$loc"
+            break
+        fi
+    done
 fi
 
 # Check if we have a valid kubernetes context
+echo -e "${YELLOW}Debug: Testing kubectl connection...${NC}"
 if ! kubectl cluster-info &> /dev/null; then
     echo -e "${RED}Error: No valid kubernetes cluster context found.${NC}"
+    echo -e "${YELLOW}Debug: Current context:${NC}"
+    kubectl config current-context 2>&1 || echo "No context set"
+    echo -e "${YELLOW}Debug: Available contexts:${NC}"
+    kubectl config get-contexts 2>&1 || echo "No contexts available"
     echo "Please ensure you have a running Kubernetes cluster (EKS, Kind, etc.)"
     exit 1
 fi

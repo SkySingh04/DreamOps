@@ -80,26 +80,71 @@ export async function POST(request: NextRequest) {
       if (!bashPath) {
         // Fallback to WSL or direct execution
         try {
+          const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+          const kubeconfigPath = process.env.KUBECONFIG || path.join(homeDir, '.kube', 'config');
+          
+          const awsCredsPath = path.join(homeDir, '.aws', 'credentials');
+          const awsConfigPath = path.join(homeDir, '.aws', 'config');
+          
           chaosProcess = spawn('wsl', ['bash', scriptPath, scriptParam], {
             cwd: path.dirname(scriptPath),
-            env: process.env
+            env: {
+              ...process.env,
+              KUBECONFIG: kubeconfigPath,
+              HOME: homeDir,
+              AWS_PROFILE: process.env.AWS_PROFILE || 'burner',
+              AWS_DEFAULT_REGION: process.env.AWS_DEFAULT_REGION || 'ap-south-1',
+              AWS_SHARED_CREDENTIALS_FILE: awsCredsPath,
+              AWS_CONFIG_FILE: awsConfigPath,
+              AWS_SDK_LOAD_CONFIG: '1'
+            }
           });
         } catch {
           throw new Error('No bash executable found. Please install Git Bash or WSL.');
         }
       } else {
+        const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+        const kubeconfigPath = process.env.KUBECONFIG || path.join(homeDir, '.kube', 'config');
+        
+        const awsCredsPath = path.join(homeDir, '.aws', 'credentials');
+        const awsConfigPath = path.join(homeDir, '.aws', 'config');
+        
         chaosProcess = spawn(bashPath, [scriptPath, scriptParam], {
           cwd: path.dirname(scriptPath),
-          env: process.env
+          env: {
+            ...process.env,
+            KUBECONFIG: kubeconfigPath,
+            HOME: homeDir,
+            AWS_PROFILE: process.env.AWS_PROFILE || 'burner',
+            AWS_DEFAULT_REGION: process.env.AWS_DEFAULT_REGION || 'ap-south-1',
+            AWS_SHARED_CREDENTIALS_FILE: awsCredsPath,
+            AWS_CONFIG_FILE: awsConfigPath,
+            AWS_SDK_LOAD_CONFIG: '1'
+          }
         });
       }
     } else {
       // Unix/Linux systems
+      const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+      const kubeconfigPath = process.env.KUBECONFIG || path.join(homeDir, '.kube', 'config');
+      
+      // Get AWS credentials path
+      const awsCredsPath = path.join(homeDir, '.aws', 'credentials');
+      const awsConfigPath = path.join(homeDir, '.aws', 'config');
+      
       chaosProcess = spawn('/bin/bash', [scriptPath, scriptParam], {
         cwd: path.dirname(scriptPath),
         env: {
           ...process.env,
-          PATH: '/usr/local/bin:/usr/bin:/bin',
+          PATH: '/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin',
+          KUBECONFIG: kubeconfigPath,
+          HOME: homeDir,
+          AWS_PROFILE: process.env.AWS_PROFILE || 'burner',
+          AWS_DEFAULT_REGION: process.env.AWS_DEFAULT_REGION || 'ap-south-1',
+          AWS_SHARED_CREDENTIALS_FILE: awsCredsPath,
+          AWS_CONFIG_FILE: awsConfigPath,
+          // Also pass AWS SDK config
+          AWS_SDK_LOAD_CONFIG: '1'
         }
       });
     }
