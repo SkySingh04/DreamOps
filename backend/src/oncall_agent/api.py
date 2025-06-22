@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 # Create FastAPI app
 app = FastAPI(
-    title="Oncall AI Agent API",
-    description="AI-powered oncall incident management",
+    title="DreamOps API",
+    description="Dream easy while AI takes your on-call duty. AI-powered incident response and infrastructure management.",
     version="1.0.0"
 )
 

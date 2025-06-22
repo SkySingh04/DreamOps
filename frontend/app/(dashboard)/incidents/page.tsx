@@ -568,7 +568,7 @@ export default function IncidentsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Incident Management</h1>
-          <p className="text-gray-600 mt-1">Monitor and resolve incidents with AI assistance</p>
+          <p className="text-gray-600 mt-1">Dream easy while AI takes your on-call duty - Monitor and resolve incidents automatically</p>
         </div>
         <div className="flex items-center gap-2">
           {/* AI Mode Indicator */}
@@ -715,7 +715,7 @@ export default function IncidentsPage() {
       )}
 
       {/* YOLO Mode Execution Indicator */}
-      {aiConfig?.mode === 'yolo' && activeIncidents.length > 0 && (
+      {aiConfig?.mode === 'yolo' && activeIncidents.size > 0 && (
         <Alert className="border-red-200 bg-red-50">
           <Zap className="h-4 w-4 text-red-600" />
           <AlertTitle className="text-red-800">YOLO Mode Active - Auto-Executing Commands</AlertTitle>
@@ -1297,7 +1297,7 @@ export default function IncidentsPage() {
                       Check your monitoring systems and PagerDuty for alerts.
                     </>
                   ) : (
-                    'Infrastructure has been successfully compromised. Check your monitoring systems and PagerDuty for alerts. Your oncall agent should start analyzing and attempting to resolve these incidents automatically.'
+                    'Infrastructure has been successfully compromised. Check your monitoring systems and PagerDuty for alerts. Your DreamOps agent should start analyzing and attempting to resolve these incidents automatically.'
                   )}
                 </AlertDescription>
               </Alert>

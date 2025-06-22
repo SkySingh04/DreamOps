@@ -259,9 +259,9 @@ class OncallAgent:
 
             # STEP 2: Create a comprehensive prompt for Claude
             prompt = f"""
-            You are an expert SRE/DevOps engineer helping to resolve an oncall incident. 
+            You are an expert SRE/DevOps engineer helping to resolve an oncall incident.
             Analyze this alert and the context from various monitoring tools to provide actionable recommendations.
-            
+
             🚨 ALERT DETAILS:
             - Alert ID: {alert.alert_id}
             - Service: {alert.service_name}
@@ -269,15 +269,15 @@ class OncallAgent:
             - Description: {alert.description}
             - Timestamp: {alert.timestamp}
             - Metadata: {alert.metadata}
-            
+
             {f"Kubernetes Alert Type: {k8s_alert_type}" if k8s_alert_type else ""}
             {f"Kubernetes Context: {k8s_context}" if k8s_context else ""}
             {f"GitHub Context: {github_context}" if github_context else ""}
             📊 CONTEXT FROM MONITORING TOOLS:
             {self._format_context_for_prompt(all_context)}
-            
+
             Based on the alert and the context gathered from our monitoring tools, please provide:
-            
+
             1. 🎯 IMMEDIATE ACTIONS (What to do RIGHT NOW - be specific with commands)
             2. 🔍 ROOT CAUSE ANALYSIS (What likely caused this based on the context)
             3. 💥 IMPACT ASSESSMENT (Who/what is affected and how severely)
@@ -285,10 +285,10 @@ class OncallAgent:
             5. 📊 MONITORING (What metrics/logs to watch during resolution)
             6. 🚀 AUTOMATION OPPORTUNITIES (Can this be auto-remediated? How?)
             7. 📝 FOLLOW-UP ACTIONS (What to do after the incident is resolved)
-            
+
             Be specific and actionable. Include exact commands, dashboard links, and clear steps.
             If you see patterns in the monitoring data that suggest a specific issue, highlight them.
-            
+
             {"For this Kubernetes issue, also suggest specific kubectl commands or automated fixes." if k8s_alert_type else ""}
             """
 
@@ -481,8 +481,17 @@ class OncallAgent:
 
                                 self.logger.info(f"🏃 Executing remediation command: {cmd}")
 
-                                # Extract the kubectl command (remove 'kubectl ' prefix)
-                                kubectl_cmd = cmd.replace('kubectl ', '').replace('k ', '')
+                                # Parse kubectl command properly
+                                import shlex
+                                try:
+                                    # Parse the command, handling quoted strings
+                                    cmd_parts = shlex.split(cmd)
+                                    # Remove kubectl prefix if present
+                                    if cmd_parts and cmd_parts[0] in ['kubectl', 'k']:
+                                        cmd_parts = cmd_parts[1:]
+                                except ValueError:
+                                    self.logger.warning(f"⚠️  Failed to parse command: {cmd}")
+                                    continue
 
                                 try:
                                     # Send action to dashboard before execution
@@ -492,11 +501,37 @@ class OncallAgent:
                                         incident_id=incident_id
                                     )
 
-                                    exec_result = await self.k8s_integration.execute_kubectl_command(
-                                        kubectl_cmd,
-                                        dry_run=False,
-                                        auto_approve=True
-                                    )
+                                    # Check if k8s_integration expects list or string
+                                    if hasattr(self.k8s_integration, 'execute_kubectl_command'):
+                                        # Get method signature to determine parameter type
+                                        import inspect
+                                        sig = inspect.signature(self.k8s_integration.execute_kubectl_command)
+                                        if 'command' in sig.parameters:
+                                            # Check if it's typed as list
+                                            param_type = sig.parameters['command'].annotation
+                                            if 'list' in str(param_type):
+                                                exec_result = await self.k8s_integration.execute_kubectl_command(
+                                                    cmd_parts,
+                                                    dry_run=False,
+                                                    auto_approve=True
+                                                )
+                                            else:
+                                                # Pass as string (join back)
+                                                exec_result = await self.k8s_integration.execute_kubectl_command(
+                                                    ' '.join(cmd_parts),
+                                                    dry_run=False,
+                                                    auto_approve=True
+                                                )
+                                        else:
+                                            # Default to list format
+                                            exec_result = await self.k8s_integration.execute_kubectl_command(
+                                                cmd_parts,
+                                                dry_run=False,
+                                                auto_approve=True
+                                            )
+                                    else:
+                                        self.logger.error("K8s integration doesn't have execute_kubectl_command method")
+                                        continue
 
                                     if exec_result.get('success'):
                                         self.logger.info(f"✅ Remediation command succeeded: {cmd}")

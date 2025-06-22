@@ -1,6 +1,6 @@
-# Oncall AI Agent
+# DreamOps
 
-An intelligent AI-powered oncall agent that automatically triages and resolves incidents using Claude AI and Model Context Protocol (MCP) integrations. The agent can debug Kubernetes issues, analyze logs, and suggest remediation steps.
+An intelligent AI-powered incident response and infrastructure management platform that automatically triages and resolves incidents using Claude AI and Model Context Protocol (MCP) integrations. The platform can debug Kubernetes issues, analyze logs, and suggest remediation steps. Dream easy while AI takes your on-call duty.
 
 ## 🚀 Features
 
@@ -425,7 +425,7 @@ aws secretsmanager create-secret \
 
 # Store Kubernetes config (if using K8s integration)
 aws secretsmanager create-secret \
-  --name oncall-agent/k8s-config \
+  --name dreamops/k8s-config \
   --secret-string file://~/.kube/config
 ```
 
@@ -454,8 +454,8 @@ environment  = "production"
 aws_region   = "us-east-1"
 
 # Replace with your secret ARNs from Step 1
-anthropic_api_key_arn = "arn:aws:secretsmanager:us-east-1:YOUR_ACCOUNT:secret:oncall-agent/anthropic-api-key-XXXXX"
-k8s_config_secret_arn = "arn:aws:secretsmanager:us-east-1:YOUR_ACCOUNT:secret:oncall-agent/k8s-config-XXXXX"
+anthropic_api_key_arn = "arn:aws:secretsmanager:us-east-1:YOUR_ACCOUNT:secret:dreamops/anthropic-api-key-XXXXX"
+k8s_config_secret_arn = "arn:aws:secretsmanager:us-east-1:YOUR_ACCOUNT:secret:dreamops/k8s-config-XXXXX"
 
 alarm_email = "your-email@example.com"
 ```
@@ -1101,7 +1101,7 @@ CORS_ORIGINS=["http://localhost:3000"]
 
 ### Kind Setup for Local Testing
 
-This guide helps you set up a local Kubernetes cluster using Kind to test the PagerDuty to Oncall Agent integration end-to-end.
+This guide helps you set up a local Kubernetes cluster using Kind to test the PagerDuty to DreamOps integration end-to-end.
 
 #### Prerequisites
 
@@ -1119,10 +1119,10 @@ This guide helps you set up a local Kubernetes cluster using Kind to test the Pa
 kind create cluster --config kind-config.yaml --name oncall-agent
 
 # Export the kubeconfig
-kind get kubeconfig --name oncall-agent > oncall-agent-kubeconfig
+kind get kubeconfig --name dreamops > dreamops-kubeconfig
 
 # Verify cluster is running
-kubectl cluster-info --context kind-oncall-agent
+kubectl cluster-info --context kind-dreamops
 ```
 
 2. **Configure WSL Environment**
@@ -1241,7 +1241,7 @@ When you're done testing:
 kubectl delete namespace demo-apps
 
 # Delete the Kind cluster (run on Windows)
-kind delete cluster --name oncall-agent
+kind delete cluster --name dreamops
 ```
 
 #### Troubleshooting

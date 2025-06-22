@@ -26,7 +26,7 @@ class OncallAgent:
     """AI agent for handling oncall incidents using AGNO framework."""
     
     def __init__(self):
-        """Initialize the oncall agent with configuration."""
+        """Initialize the DreamOps agent with configuration."""
         self.config = get_config()
         self.logger = logging.getLogger(__name__)
         self.mcp_integrations: Dict[str, MCPIntegration] = {}
@@ -286,7 +286,7 @@ class OncallAgent:
 {analysis}
 
 ---
-*This issue was automatically created by the oncall agent.*
+                *This issue was automatically created by DreamOps.*
             """
             
             # Create the issue
@@ -307,7 +307,7 @@ class OncallAgent:
 
     async def shutdown(self) -> None:
         """Shutdown the agent and disconnect integrations."""
-        self.logger.info("Shutting down oncall agent")
+        self.logger.info("Shutting down DreamOps agent")
         for name, integration in self.mcp_integrations.items():
             try:
                 await integration.disconnect()

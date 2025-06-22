@@ -1,5 +1,6 @@
 {
-  "name": "oncall-ai-agent-frontend",
+  "name": "dreamops-frontend",
+  "description": "Dream easy while AI takes your on-call duty - Frontend for DreamOps incident management platform",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",

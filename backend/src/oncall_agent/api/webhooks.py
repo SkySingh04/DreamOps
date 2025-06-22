@@ -66,7 +66,7 @@ async def pagerduty_webhook(
     """
     Handle PagerDuty webhook events.
     
-    Processes incident.triggered events and automatically triggers the oncall agent.
+    Processes incident.triggered events and automatically triggers the DreamOps agent.
     """
     logger.info("=" * 80)
     logger.info("📨 PAGERDUTY WEBHOOK RECEIVED!")
