@@ -13,8 +13,8 @@ on:
 
 env:
   AWS_REGION: ap-south-1
-  S3_BUCKET: oncall-agent-frontend-production
-  CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+  AMPLIFY_APP_ID: ${{ secrets.AMPLIFY_APP_ID }}
+  AMPLIFY_BRANCH: main
 
 jobs:
   test:
@@ -83,11 +83,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Build application
-        env:
-          NEXT_PUBLIC_API_URL: ${{ secrets.REACT_APP_API_URL }}
-        run: pnpm build
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -95,22 +90,43 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy to S3
+      - name: Deploy to AWS Amplify
         run: |
-          aws s3 sync out/ s3://${{ env.S3_BUCKET }}/ --delete
+          # Create deployment
+          JOB_ID=$(aws amplify start-deployment \
+            --app-id ${{ env.AMPLIFY_APP_ID }} \
+            --branch-name ${{ env.AMPLIFY_BRANCH }} \
+            --query 'jobSummary.jobId' \
+            --output text)
+          
+          echo "Deployment started with Job ID: $JOB_ID"
+          
+          # Wait for deployment to complete
+          while true; do
+            STATUS=$(aws amplify get-job \
+              --app-id ${{ env.AMPLIFY_APP_ID }} \
+              --branch-name ${{ env.AMPLIFY_BRANCH }} \
+              --job-id $JOB_ID \
+              --query 'job.summary.status' \
+              --output text)
+            
+            echo "Deployment status: $STATUS"
+            
+            if [ "$STATUS" = "SUCCEED" ]; then
+              echo "✅ Deployment successful!"
+              break
+            elif [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "CANCELLED" ]; then
+              echo "❌ Deployment failed with status: $STATUS"
+              exit 1
+            fi
+            
+            sleep 30
+          done
 
-      - name: Invalidate CloudFront
+      - name: Get Amplify App URL
         run: |
-          aws cloudfront create-invalidation \
-            --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} \
-            --paths "/*"
-
-      - name: Notify deployment status
-        if: always()
-        run: |
-          if [ "${{ job.status }}" == "success" ]; then
-            echo "✅ Frontend deployment successful!"
-            echo "🌐 Access your app at: https://$(aws cloudfront get-distribution --id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} --query 'Distribution.DomainName' --output text)"
-          else
-            echo "❌ Frontend deployment failed!"
-          fi
+          APP_URL=$(aws amplify get-app \
+            --app-id ${{ env.AMPLIFY_APP_ID }} \
+            --query 'app.defaultDomain' \
+            --output text)
+          echo "🌐 Access your app at: https://${{ env.AMPLIFY_BRANCH }}.$APP_URL"
