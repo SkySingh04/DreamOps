@@ -27,6 +27,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Save, Key, Bell, Brain, Shield, CheckCircle, XCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient, queryKeys } from '@/lib/api-client';
+import { APIKeysSection } from '@/components/settings/api-keys-section';
 
 interface AISettings {
   model: string;
@@ -472,42 +473,21 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* API Keys */}
+        {/* API Keys - Using new BYOK component */}
+        <APIKeysSection />
+
+        {/* Webhook Settings */}
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
               <Key className="h-5 w-5" />
-              <CardTitle>API Keys</CardTitle>
+              <CardTitle>Webhook Settings</CardTitle>
             </div>
             <CardDescription>
-              Manage your API keys and authentication
+              Configure webhook URL and authentication
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="anthropic-key">Anthropic API Key</Label>
-              <div className="flex gap-2 mt-2">
-                <div className="relative flex-1">
-                  <Input
-                    id="anthropic-key"
-                    type={showAPIKeys ? "text" : "password"}
-                    value={localAPIKeySettings.anthropic_api_key}
-                    onChange={(e) => setLocalAPIKeySettings({...localAPIKeySettings, anthropic_api_key: e.target.value})}
-                    placeholder="sk-ant-api03-..."
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
-                    onClick={() => setShowAPIKeys(!showAPIKeys)}
-                  >
-                    {showAPIKeys ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-            </div>
-
             <div>
               <Label htmlFor="webhook-url">Webhook URL</Label>
               <div className="flex gap-2 mt-2">

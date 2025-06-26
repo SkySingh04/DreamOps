@@ -16,6 +16,7 @@ from src.oncall_agent.api.routers import (
     agent_logs,
     agent_router,
     analytics_router,
+    api_keys,
     dashboard_router,
     incidents_router,
     integrations_router,
@@ -176,6 +177,7 @@ app.include_router(analytics_router, prefix="/api/v1")
 app.include_router(security_router, prefix="/api/v1")
 app.include_router(monitoring_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
+app.include_router(api_keys.router)
 
 # Conditionally include webhook router
 if config.pagerduty_enabled:
