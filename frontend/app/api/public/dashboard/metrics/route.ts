@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDashboardMetrics } from '@/lib/db/dashboard-queries';
-import { db } from '@/lib/db/drizzle';
+import { getDb } from '@/lib/db';
 import { teams } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 
 // Public endpoint for dashboard metrics - no auth required
 export async function GET(request: NextRequest) {
   try {
+    const db = await getDb();
     // Get default team
     const defaultTeam = await db.select().from(teams).where(eq(teams.name, 'Default Team')).limit(1);
     
