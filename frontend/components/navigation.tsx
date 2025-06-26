@@ -66,7 +66,7 @@ export function Navigation() {
           <div className="flex items-center">
             <Link href="/" className="flex items-center">
               <CircleIcon className="h-8 w-8 text-orange-500" />
-              <span className="ml-2 text-xl font-semibold text-gray-900">Oncall AI</span>
+              <span className="ml-2 text-xl font-semibold text-gray-900">DreamOps</span>
             </Link>
           </div>
 

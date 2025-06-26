@@ -48,3 +48,7 @@ amplify-deploy.zip
 amplify-upload.tar.gz
 # Keep the deployment file for tracking
 !amplify-deploy-fixed.zip
+
+# Environment files
+.env.staging
+.env.production

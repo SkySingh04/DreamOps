@@ -215,7 +215,7 @@ export default function DashboardPage() {
     <section className="flex-1 p-4 lg:p-8 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Oncall AI Dashboard</h1>
+          <h1 className="text-2xl font-bold">DreamOps Dashboard</h1>
           <p className="text-gray-600 mt-1">
             Real-time incident monitoring and AI-powered resolution
           </p>
