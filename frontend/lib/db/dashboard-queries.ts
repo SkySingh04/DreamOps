@@ -1,4 +1,4 @@
-import { db } from './drizzle';
+import { getDb } from './drizzle';
 import { eq, desc, sql, and, gte, lt } from 'drizzle-orm';
 import { 
   incidents, 
@@ -38,6 +38,7 @@ export interface RecentAiAction {
 
 export async function getDashboardMetrics(teamId: number): Promise<DashboardMetrics> {
   try {
+    const db = await getDb();
     // Get active incidents count
     const activeIncidentsResult = await db
       .select({ count: sql<number>`count(*)` })
@@ -128,6 +129,7 @@ export async function getDashboardMetrics(teamId: number): Promise<DashboardMetr
 
 export async function getRecentIncidents(teamId: number, limit: number = 10): Promise<RecentIncident[]> {
   try {
+    const db = await getDb();
     const result = await db
       .select({
         id: incidents.id,
@@ -150,6 +152,7 @@ export async function getRecentIncidents(teamId: number, limit: number = 10): Pr
 
 export async function getRecentAiActions(teamId: number, limit: number = 10): Promise<RecentAiAction[]> {
   try {
+    const db = await getDb();
     const result = await db
       .select({
         id: aiActions.id,
@@ -179,6 +182,7 @@ export async function createIncident(teamId: number, incidentData: {
   metadata?: string;
 }): Promise<Incident | null> {
   try {
+    const db = await getDb();
     const [newIncident] = await db
       .insert(incidents)
       .values({
@@ -211,6 +215,7 @@ export async function createIncident(teamId: number, incidentData: {
 
 export async function recordMetric(teamId: number, metricType: string, value: string, metadata?: string): Promise<void> {
   try {
+    const db = await getDb();
     await db.insert(metrics).values({
       teamId,
       metricType,
@@ -230,6 +235,7 @@ export async function recordAiAction(teamId: number, actionData: {
   metadata?: string;
 }): Promise<AiAction | null> {
   try {
+    const db = await getDb();
     const [newAction] = await db.insert(aiActions).values({
       teamId,
       action: actionData.action,

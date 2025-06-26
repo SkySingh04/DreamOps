@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 import { and, eq, sql } from 'drizzle-orm';
-import { db } from '@/lib/db/drizzle';
+import { getDb } from '@/lib/db';
 import {
   User,
   users,
@@ -42,6 +42,7 @@ async function logActivity(
     action: type,
     ipAddress: ipAddress || ''
   };
+  const db = await getDb();
   await db.insert(activityLogs).values(newActivity);
 }
 
@@ -53,6 +54,7 @@ const signInSchema = z.object({
 export const signIn = validatedAction(signInSchema, async (data, formData) => {
   const { email, password } = data;
 
+  const db = await getDb();
   const userWithTeam = await db
     .select({
       user: users,
@@ -111,6 +113,7 @@ const signUpSchema = z.object({
 export const signUp = validatedAction(signUpSchema, async (data, formData) => {
   const { name, email, password, inviteId } = data;
 
+  const db = await getDb();
   const existingUser = await db
     .select()
     .from(users)
@@ -281,6 +284,7 @@ export const updatePassword = validatedActionWithUser(
     const newPasswordHash = await hashPassword(newPassword);
     const userWithTeam = await getUserWithTeam(user.id);
 
+    const db = await getDb();
     await Promise.all([
       db
         .update(users)
@@ -320,6 +324,7 @@ export const deleteAccount = validatedActionWithUser(
       ActivityType.DELETE_ACCOUNT
     );
 
+    const db = await getDb();
     // Soft delete
     await db
       .update(users)
@@ -356,6 +361,7 @@ export const updateAccount = validatedActionWithUser(
     const { name, email } = data;
     const userWithTeam = await getUserWithTeam(user.id);
 
+    const db = await getDb();
     await Promise.all([
       db.update(users).set({ name, email }).where(eq(users.id, user.id)),
       logActivity(userWithTeam?.teamId, user.id, ActivityType.UPDATE_ACCOUNT)
@@ -379,6 +385,7 @@ export const removeTeamMember = validatedActionWithUser(
       return { error: 'User is not part of a team' };
     }
 
+    const db = await getDb();
     await db
       .delete(teamMembers)
       .where(
@@ -413,6 +420,7 @@ export const inviteTeamMember = validatedActionWithUser(
       return { error: 'User is not part of a team' };
     }
 
+    const db = await getDb();
     const existingMember = await db
       .select()
       .from(users)

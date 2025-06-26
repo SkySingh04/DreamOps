@@ -189,3 +189,4 @@ terraform.rc
 
 aws/
 *.zip
+node_modules/

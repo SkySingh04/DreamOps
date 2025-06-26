@@ -460,6 +460,72 @@ class APIClient {
   async healthCheck(): Promise<APIResponse<{ status: string; checks: Record<string, any> }>> {
     return this.request<{ status: string; checks: Record<string, any> }>('/health');
   }
+
+  // Kubernetes-specific endpoints
+  async discoverKubernetesContexts(): Promise<APIResponse<{ contexts: any[] }>> {
+    return this.request<{ contexts: any[] }>('/api/v1/integrations/kubernetes/discover');
+  }
+
+  async testKubernetesConnection(context_name: string, namespace: string = 'default'): Promise<APIResponse<any>> {
+    return this.request<any>('/api/v1/integrations/kubernetes/test', {
+      method: 'POST',
+      body: JSON.stringify({ context_name, namespace }),
+    });
+  }
+
+  async getKubernetesConfigs(): Promise<APIResponse<{ configs: any[] }>> {
+    return this.request<{ configs: any[] }>('/api/v1/integrations/kubernetes/configs');
+  }
+
+  async saveKubernetesConfig(config: {
+    name: string;
+    context: string;
+    namespace: string;
+    enable_destructive: boolean;
+    kubeconfig_path?: string;
+  }): Promise<APIResponse<any>> {
+    return this.request<any>('/api/v1/integrations/kubernetes/configs', {
+      method: 'POST',
+      body: JSON.stringify(config),
+    });
+  }
+
+  async updateKubernetesConfig(
+    config_id: string,
+    updates: Partial<{
+      name: string;
+      context: string;
+      namespace: string;
+      enable_destructive: boolean;
+      enabled: boolean;
+    }>
+  ): Promise<APIResponse<any>> {
+    return this.request<any>(`/api/v1/integrations/kubernetes/configs/${config_id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async deleteKubernetesConfig(config_id: string): Promise<APIResponse<any>> {
+    return this.request<any>(`/api/v1/integrations/kubernetes/configs/${config_id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getKubernetesHealth(): Promise<APIResponse<any>> {
+    return this.request<any>('/api/v1/integrations/kubernetes/health');
+  }
+
+  async verifyKubernetesPermissions(context_name: string): Promise<APIResponse<any>> {
+    return this.request<any>('/api/v1/integrations/kubernetes/verify-permissions', {
+      method: 'POST',
+      body: JSON.stringify({ context_name }),
+    });
+  }
+
+  async getKubernetesClusterInfo(context_name: string): Promise<APIResponse<any>> {
+    return this.request<any>(`/api/v1/integrations/kubernetes/cluster-info?context_name=${context_name}`);
+  }
 }
 
 // Export singleton instance

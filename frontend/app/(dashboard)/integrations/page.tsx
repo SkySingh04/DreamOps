@@ -356,7 +356,13 @@ export default function IntegrationsPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleConfigure(integration)}
+                      onClick={() => {
+                        if (integration.id === 'kubernetes') {
+                          window.location.href = '/integrations/kubernetes';
+                        } else {
+                          handleConfigure(integration);
+                        }
+                      }}
                       className="flex-1"
                     >
                       <Settings className="h-4 w-4 mr-2" />

@@ -408,3 +408,259 @@ async def get_available_integrations() -> JSONResponse:
     ]
 
     return JSONResponse(content={"integrations": available})
+
+
+# Kubernetes-specific endpoints
+@router.get("/kubernetes/discover")
+async def discover_kubernetes_contexts() -> JSONResponse:
+    """Discover available Kubernetes contexts from kubeconfig."""
+    try:
+        from src.oncall_agent.mcp_integrations.kubernetes_enhanced import (
+            EnhancedKubernetesMCPIntegration,
+        )
+
+        # Create temporary integration instance for discovery
+        k8s_integration = EnhancedKubernetesMCPIntegration()
+        contexts = await k8s_integration.discover_contexts()
+
+        return JSONResponse(content={"contexts": contexts})
+    except Exception as e:
+        logger.error(f"Error discovering Kubernetes contexts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/kubernetes/test")
+async def test_kubernetes_connection(
+    context_name: str = Body(..., embed=True),
+    namespace: str = Body("default", embed=True)
+) -> JSONResponse:
+    """Test connection to a specific Kubernetes cluster."""
+    try:
+        from src.oncall_agent.mcp_integrations.kubernetes_enhanced import (
+            EnhancedKubernetesMCPIntegration,
+        )
+
+        # Create temporary integration instance for testing
+        k8s_integration = EnhancedKubernetesMCPIntegration()
+        test_result = await k8s_integration.test_connection(context_name, namespace)
+
+        return JSONResponse(content=test_result)
+    except Exception as e:
+        logger.error(f"Error testing Kubernetes connection: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/kubernetes/configs")
+async def list_kubernetes_configs() -> JSONResponse:
+    """List saved Kubernetes configurations."""
+    # In a real implementation, this would fetch from a database
+    # For now, return mock data or current config
+    configs = []
+
+    if "kubernetes" in INTEGRATION_CONFIGS:
+        k8s_config = INTEGRATION_CONFIGS["kubernetes"]
+        configs.append({
+            "id": "default",
+            "name": "Default Cluster",
+            "context": k8s_config.config.get("cluster", "unknown"),
+            "namespace": k8s_config.config.get("namespace", "default"),
+            "enabled": k8s_config.enabled,
+            "created_at": datetime.now(UTC).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat()
+        })
+
+    return JSONResponse(content={"configs": configs})
+
+
+@router.post("/kubernetes/configs")
+async def save_kubernetes_config(
+    name: str = Body(...),
+    context: str = Body(...),
+    namespace: str = Body("default"),
+    enable_destructive: bool = Body(False),
+    kubeconfig_path: str = Body(None)
+) -> JSONResponse:
+    """Save a new Kubernetes configuration."""
+    try:
+        # In a real implementation, this would save to a database
+        # For now, update the in-memory config
+        config_id = f"k8s-{datetime.now().timestamp()}"
+
+        INTEGRATION_CONFIGS["kubernetes"] = IntegrationConfig(
+            enabled=True,
+            config={
+                "id": config_id,
+                "name": name,
+                "context": context,
+                "namespace": namespace,
+                "enable_destructive": enable_destructive,
+                "kubeconfig_path": kubeconfig_path or "~/.kube/config"
+            }
+        )
+
+        # If agent is available, reconnect with new config
+        agent = await get_agent_instance()
+        if agent and "kubernetes" in agent.mcp_integrations:
+            k8s = agent.mcp_integrations["kubernetes"]
+            await k8s.disconnect()
+            # Update with new config
+            k8s.context_name = context
+            k8s.namespace = namespace
+            k8s.enable_destructive = enable_destructive
+            await k8s.connect()
+
+        return JSONResponse(content={
+            "success": True,
+            "config_id": config_id,
+            "message": "Kubernetes configuration saved successfully"
+        })
+    except Exception as e:
+        logger.error(f"Error saving Kubernetes config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/kubernetes/configs/{config_id}")
+async def update_kubernetes_config(
+    config_id: str = Path(...),
+    name: str = Body(None),
+    context: str = Body(None),
+    namespace: str = Body(None),
+    enable_destructive: bool = Body(None),
+    enabled: bool = Body(None)
+) -> JSONResponse:
+    """Update an existing Kubernetes configuration."""
+    try:
+        # In a real implementation, this would update in database
+        if "kubernetes" not in INTEGRATION_CONFIGS:
+            raise HTTPException(status_code=404, detail="Kubernetes configuration not found")
+
+        k8s_config = INTEGRATION_CONFIGS["kubernetes"]
+
+        # Update fields if provided
+        if name is not None:
+            k8s_config.config["name"] = name
+        if context is not None:
+            k8s_config.config["context"] = context
+        if namespace is not None:
+            k8s_config.config["namespace"] = namespace
+        if enable_destructive is not None:
+            k8s_config.config["enable_destructive"] = enable_destructive
+        if enabled is not None:
+            k8s_config.enabled = enabled
+
+        # Reconnect if agent is available
+        agent = await get_agent_instance()
+        if agent and "kubernetes" in agent.mcp_integrations:
+            k8s = agent.mcp_integrations["kubernetes"]
+            await k8s.disconnect()
+            if k8s_config.enabled:
+                k8s.context_name = k8s_config.config.get("context")
+                k8s.namespace = k8s_config.config.get("namespace", "default")
+                k8s.enable_destructive = k8s_config.config.get("enable_destructive", False)
+                await k8s.connect()
+
+        return JSONResponse(content={
+            "success": True,
+            "message": "Kubernetes configuration updated successfully"
+        })
+    except Exception as e:
+        logger.error(f"Error updating Kubernetes config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/kubernetes/configs/{config_id}")
+async def delete_kubernetes_config(config_id: str = Path(...)) -> JSONResponse:
+    """Delete a Kubernetes configuration."""
+    try:
+        # In a real implementation, this would delete from database
+        # For now, just disable it
+        if "kubernetes" in INTEGRATION_CONFIGS:
+            INTEGRATION_CONFIGS["kubernetes"].enabled = False
+
+            # Disconnect if agent is available
+            agent = await get_agent_instance()
+            if agent and "kubernetes" in agent.mcp_integrations:
+                await agent.mcp_integrations["kubernetes"].disconnect()
+
+        return JSONResponse(content={
+            "success": True,
+            "message": "Kubernetes configuration deleted successfully"
+        })
+    except Exception as e:
+        logger.error(f"Error deleting Kubernetes config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/kubernetes/health")
+async def get_kubernetes_health() -> JSONResponse:
+    """Get Kubernetes integration health status."""
+    try:
+        agent = await get_agent_instance()
+
+        if not agent or "kubernetes" not in agent.mcp_integrations:
+            return JSONResponse(content={
+                "status": "not_initialized",
+                "message": "Kubernetes integration not initialized"
+            })
+
+        k8s = agent.mcp_integrations["kubernetes"]
+        is_healthy = await k8s.health_check()
+
+        # Get connection info if using enhanced integration
+        connection_info = {}
+        if hasattr(k8s, 'get_connection_info'):
+            connection_info = k8s.get_connection_info()
+
+        return JSONResponse(content={
+            "status": "healthy" if is_healthy else "unhealthy",
+            "connected": k8s.connected,
+            "connection_time": k8s.connection_time.isoformat() if k8s.connection_time else None,
+            "connection_info": connection_info,
+            "capabilities": await k8s.get_capabilities() if is_healthy else []
+        })
+    except Exception as e:
+        logger.error(f"Error checking Kubernetes health: {e}")
+        return JSONResponse(content={
+            "status": "error",
+            "error": str(e)
+        })
+
+
+@router.post("/kubernetes/verify-permissions")
+async def verify_kubernetes_permissions(
+    context_name: str = Body(..., embed=True)
+) -> JSONResponse:
+    """Verify RBAC permissions for a Kubernetes context."""
+    try:
+        from src.oncall_agent.mcp_integrations.kubernetes_enhanced import (
+            EnhancedKubernetesMCPIntegration,
+        )
+
+        # Create temporary integration instance
+        k8s_integration = EnhancedKubernetesMCPIntegration()
+        permissions = await k8s_integration.verify_permissions(context_name)
+
+        return JSONResponse(content=permissions)
+    except Exception as e:
+        logger.error(f"Error verifying Kubernetes permissions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/kubernetes/cluster-info")
+async def get_kubernetes_cluster_info(
+    context_name: str = Query(...)
+) -> JSONResponse:
+    """Get detailed information about a Kubernetes cluster."""
+    try:
+        from src.oncall_agent.mcp_integrations.kubernetes_enhanced import (
+            EnhancedKubernetesMCPIntegration,
+        )
+
+        # Create temporary integration instance
+        k8s_integration = EnhancedKubernetesMCPIntegration()
+        cluster_info = await k8s_integration.get_cluster_info(context_name)
+
+        return JSONResponse(content=cluster_info)
+    except Exception as e:
+        logger.error(f"Error getting Kubernetes cluster info: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

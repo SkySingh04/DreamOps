@@ -1,0 +1,108 @@
+name: Prevent Extra Markdown Files
+
+on:
+  pull_request:
+    paths:
+      - '**.md'
+  push:
+    branches: [main, develop]
+    paths:
+      - '**.md'
+  workflow_dispatch:
+
+jobs:
+  check-markdown-files:
+    runs-on: ubuntu-latest
+    name: Prevent Extra Markdown Files
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for unauthorized markdown files
+        run: |
+          # Define allowed markdown files (whitelist)
+          ALLOWED_FILES=(
+            "./README.md"
+            "./CLAUDE.md"
+            "./docs/database-setup.md"
+            "./docs/deployment.md"
+            "./docs/mcp-integrations.md"
+            "./docs/pagerduty-integration.md"
+            "./docs/yolo-mode.md"
+            "./docs/technical-details.md"
+            "./docs/ci-cd.md"
+          )
+          
+          echo "🔍 Checking for unauthorized markdown files..."
+          
+          # Find all .md files (excluding build artifacts, dependencies, etc.)
+          FOUND_FILES=$(find . -name "*.md" -type f | \
+            grep -v node_modules | \
+            grep -v .git | \
+            grep -v .venv | \
+            grep -v .terraform | \
+            grep -v .pytest_cache | \
+            grep -v __pycache__ | \
+            sort)
+          
+          # Convert allowed files array to a format for comparison
+          printf '%s\n' "${ALLOWED_FILES[@]}" | sort > /tmp/allowed_files.txt
+          
+          # Compare found files with allowed files
+          echo "$FOUND_FILES" > /tmp/found_files.txt
+          
+          # Check if there are any files not in the whitelist
+          UNAUTHORIZED_FILES=$(comm -13 /tmp/allowed_files.txt /tmp/found_files.txt)
+          
+          if [ -n "$UNAUTHORIZED_FILES" ]; then
+            echo "❌ Extra markdown files detected - only README.md and CLAUDE.md are allowed:"
+            echo "$UNAUTHORIZED_FILES"
+            echo ""
+            echo "📋 Allowed markdown files:"
+            printf '%s\n' "${ALLOWED_FILES[@]}"
+            echo ""
+            echo "💡 Documentation is organized in these approved locations:"
+            echo "   • README.md - Main project documentation"
+            echo "   • CLAUDE.md - AI assistant instructions"
+            echo "   • docs/ - Organized technical documentation"
+            echo ""
+            echo "🔧 To fix this issue:"
+            echo "   1. Move content from extra files to appropriate docs/ files"
+            echo "   2. Delete the extra markdown files"
+            echo "   3. Only use approved documentation locations"
+            exit 1
+          else
+            echo "✅ All markdown files are authorized"
+            echo ""
+            echo "📁 Found authorized files:"
+            echo "$FOUND_FILES"
+          fi
+
+      - name: Check for changes to existing markdown files
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "📝 Checking changes to existing markdown files..."
+          
+          # Get list of changed files
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep '\.md$' || true)
+          
+          if [ -n "$CHANGED_FILES" ]; then
+            echo "📋 Modified markdown files in this PR:"
+            echo "$CHANGED_FILES"
+            
+            # Check if any new files were added
+            NEW_FILES=$(git diff --name-status origin/${{ github.base_ref }}...HEAD | grep '^A.*\.md$' | cut -f2 || true)
+            
+            if [ -n "$NEW_FILES" ]; then
+              echo ""
+              echo "➕ New markdown files detected:"
+              echo "$NEW_FILES"
+              echo ""
+              echo "⚠️  Please ensure these files are necessary and have been approved."
+            fi
+          else
+            echo "✅ No markdown files changed in this PR"
+          fi 

@@ -1,5 +1,5 @@
 // Stripe integration removed
-import { db } from './drizzle';
+import { getDb } from './drizzle';
 import { users, teams, teamMembers } from './schema';
 import { hashPassword } from '@/lib/auth/session-crypto';
 
@@ -8,6 +8,7 @@ async function seed() {
   const password = 'admin123';
   const passwordHash = await hashPassword(password);
 
+  const db = await getDb();
   const [user] = await db
     .insert(users)
     .values([

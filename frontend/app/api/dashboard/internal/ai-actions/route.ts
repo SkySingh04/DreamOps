@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { recordAiAction } from '@/lib/db/dashboard-queries';
-import { db } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { teams } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 
 // Internal API endpoint for backend agent - no auth required
 export async function POST(request: NextRequest) {
   try {
+    const db = await getDb();
     // Check for internal API key or specific header
     const internalKey = request.headers.get('x-internal-api-key');
     if (internalKey !== 'oncall-agent-internal') {
