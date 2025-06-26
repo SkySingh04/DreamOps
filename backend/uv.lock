@@ -338,61 +338,6 @@ wheels = [
 ]
 
 [[package]]
-name = "dreamops"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "agno" },
-    { name = "aiohttp" },
-    { name = "anthropic" },
-    { name = "asyncio" },
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "kubernetes" },
-    { name = "mcp" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "python-dotenv" },
-    { name = "sse-starlette" },
-    { name = "uvicorn", extra = ["standard"] },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "mypy" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "agno", specifier = ">=1.6.3" },
-    { name = "aiohttp", specifier = ">=3.12.13" },
-    { name = "anthropic", specifier = ">=0.54.0" },
-    { name = "asyncio", specifier = ">=3.4.3" },
-    { name = "fastapi", specifier = ">=0.115.13" },
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "kubernetes", specifier = ">=30.1.0" },
-    { name = "mcp", specifier = ">=1.0.0" },
-    { name = "pydantic", specifier = ">=2.11.7" },
-    { name = "pydantic-settings", specifier = ">=2.0.0" },
-    { name = "python-dotenv", specifier = ">=1.1.0" },
-    { name = "sse-starlette", specifier = ">=2.3.6" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.3" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "mypy", specifier = ">=1.16.1" },
-    { name = "pytest", specifier = ">=8.4.1" },
-    { name = "pytest-asyncio", specifier = ">=1.0.0" },
-    { name = "pytest-cov", specifier = ">=6.2.1" },
-    { name = "ruff", specifier = ">=0.12.0" },
-]
-
-[[package]]
 name = "durationpy"
 version = "0.10"
 source = { registry = "https://pypi.org/simple" }
@@ -893,6 +838,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
+    { name = "pyyaml" },
     { name = "sse-starlette" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -919,6 +865,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.11.7" },
     { name = "pydantic-settings", specifier = ">=2.0.0" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "sse-starlette", specifier = ">=2.3.6" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.3" },
 ]

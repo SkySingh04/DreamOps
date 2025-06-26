@@ -2,6 +2,20 @@
 
 This document provides comprehensive instructions for AI assistants (like Claude, GPT-4, etc.) on how to effectively work with this codebase.
 
+## Documentation Structure
+
+**IMPORTANT**: Before making any changes, read the relevant documentation in the `/docs` folder:
+
+- `docs/database-setup.md` - Database configuration for all environments
+- `docs/pagerduty-integration.md` - PagerDuty setup and webhook configuration  
+- `docs/yolo-mode.md` - Autonomous operation mode and safety mechanisms
+- `docs/deployment.md` - AWS deployment options (Terraform, Amplify)
+- `docs/mcp-integrations.md` - External service integrations and API usage
+- `docs/technical-details.md` - Architecture, implementation details, and fixes
+- `docs/ci-cd.md` - GitHub Actions workflows and deployment automation
+
+Always check these documentation files for the latest information before implementing changes.
+
 ## Project Overview
 
 DreamOps is an intelligent AI-powered incident response and infrastructure management platform built with:

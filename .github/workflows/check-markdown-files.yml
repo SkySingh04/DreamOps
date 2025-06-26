@@ -27,6 +27,13 @@ jobs:
           ALLOWED_FILES=(
             "./README.md"
             "./CLAUDE.md"
+            "./docs/database-setup.md"
+            "./docs/deployment.md"
+            "./docs/mcp-integrations.md"
+            "./docs/pagerduty-integration.md"
+            "./docs/yolo-mode.md"
+            "./docs/technical-details.md"
+            "./docs/ci-cd.md"
           )
           
           echo "🔍 Checking for unauthorized markdown files..."
@@ -57,14 +64,15 @@ jobs:
             echo "📋 Allowed markdown files:"
             printf '%s\n' "${ALLOWED_FILES[@]}"
             echo ""
-            echo "💡 All documentation has been consolidated into:"
+            echo "💡 Documentation is organized in these approved locations:"
             echo "   • README.md - Main project documentation"
             echo "   • CLAUDE.md - AI assistant instructions"
+            echo "   • docs/ - Organized technical documentation"
             echo ""
             echo "🔧 To fix this issue:"
-            echo "   1. Move content from extra files to README.md or CLAUDE.md"
+            echo "   1. Move content from extra files to appropriate docs/ files"
             echo "   2. Delete the extra markdown files"
-            echo "   3. Only README.md and CLAUDE.md should exist in the repository"
+            echo "   3. Only use approved documentation locations"
             exit 1
           else
             echo "✅ All markdown files are authorized"
