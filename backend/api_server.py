@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import signal
 import sys
 from contextlib import asynccontextmanager
@@ -68,9 +69,10 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+origins = config.cors_origins.split(",") if hasattr(config, 'cors_origins') else ["http://localhost:3000"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -215,11 +217,15 @@ def main():
     uvicorn_access = logging.getLogger("uvicorn.access")
     uvicorn_access.addFilter(WebSocketFilter())
 
+    # Get port from environment variable or use default
+    import os
+    port = int(os.environ.get("PORT", config.api_port))
+    
     # Run server
     uvicorn.run(
         "api_server:app",
-        host=config.api_host,
-        port=config.api_port,
+        host="0.0.0.0",  # Bind to all interfaces for Render
+        port=port,
         reload=config.api_reload,
         workers=config.api_workers if not config.api_reload else 1,
         log_level=config.api_log_level.lower(),

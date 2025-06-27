@@ -18,6 +18,8 @@ ENV/
 
 # Backend specific
 backend/.env
+backend/.env.*
+backend/*.env
 backend/.uv/
 backend/*.log
 backend/.mypy_cache/
@@ -52,8 +54,8 @@ backend/*.spec
 frontend/node_modules/
 frontend/.next/
 frontend/.env
-frontend/.env.local
-frontend/.env.production
+frontend/.env.*
+frontend/*.env
 frontend/.vercel
 frontend/out/
 frontend/*.log
@@ -165,6 +167,8 @@ Thumbs.db
 
 # Root level
 .env
+.env.*
+*.env
 *.log
 .cache/
 tmp/
