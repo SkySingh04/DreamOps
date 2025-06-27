@@ -48,7 +48,9 @@
       "Bash(node:*)",
       "Bash(go build:*)",
       "Bash(timeout 5 telnet:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(timeout 5 uv run:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }

@@ -24,6 +24,7 @@ from src.oncall_agent.api.routers import (
     monitoring_router,
     security_router,
     settings_router,
+    team_integrations,
 )
 from src.oncall_agent.config import get_config
 from src.oncall_agent.utils import get_logger, setup_logging
@@ -180,6 +181,7 @@ app.include_router(security_router, prefix="/api/v1")
 app.include_router(monitoring_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
 app.include_router(api_keys.router)
+app.include_router(team_integrations.router)  # Already has /api/v1 prefix
 
 # Conditionally include webhook router
 if config.pagerduty_enabled:

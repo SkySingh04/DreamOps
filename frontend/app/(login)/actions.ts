@@ -228,7 +228,8 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
     return createCheckoutSession({ team: createdTeam, priceId });
   }
 
-  redirect('/dashboard');
+  // Redirect new users to integrations setup
+  redirect('/auth/signup/integrations');
 });
 
 export async function signOut() {

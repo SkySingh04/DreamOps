@@ -1,7 +1,10 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { APIKeysSection } from '@/components/settings/api-keys-section';
 import {
   Card,
   CardContent,
@@ -27,7 +30,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Save, Key, Bell, Brain, Shield, CheckCircle, XCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient, queryKeys } from '@/lib/api-client';
-import { APIKeysSection } from '@/components/settings/api-keys-section';
 
 interface AISettings {
   model: string;
@@ -256,10 +258,28 @@ export default function SettingsPage() {
   return (
     <section className="flex-1 p-4 lg:p-8">
       <div className="mb-6">
-        <h1 className="text-lg lg:text-2xl font-medium mb-2">Agent Settings</h1>
+        <h1 className="text-lg lg:text-2xl font-medium mb-2">Settings</h1>
         <p className="text-muted-foreground">
           Configure your AI agent and incident response preferences
         </p>
+      </div>
+
+      {/* Settings Navigation */}
+      <div className="mb-6">
+        <nav className="flex space-x-4 border-b">
+          <Link
+            href="/settings"
+            className="pb-3 px-1 border-b-2 border-primary font-medium text-sm"
+          >
+            Agent Settings
+          </Link>
+          <Link
+            href="/settings/integrations"
+            className="pb-3 px-1 border-b-2 border-transparent text-sm text-muted-foreground hover:text-foreground hover:border-gray-300"
+          >
+            Integrations
+          </Link>
+        </nav>
       </div>
 
       <div className="space-y-6">
@@ -473,21 +493,42 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* API Keys - Using new BYOK component */}
-        <APIKeysSection />
-
-        {/* Webhook Settings */}
+        {/* API Keys */}
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
               <Key className="h-5 w-5" />
-              <CardTitle>Webhook Settings</CardTitle>
+              <CardTitle>API Keys</CardTitle>
             </div>
             <CardDescription>
-              Configure webhook URL and authentication
+              Manage your API keys and authentication
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="anthropic-key">Anthropic API Key</Label>
+              <div className="flex gap-2 mt-2">
+                <div className="relative flex-1">
+                  <Input
+                    id="anthropic-key"
+                    type={showAPIKeys ? "text" : "password"}
+                    value={localAPIKeySettings.anthropic_api_key}
+                    onChange={(e) => setLocalAPIKeySettings({...localAPIKeySettings, anthropic_api_key: e.target.value})}
+                    placeholder="sk-ant-api03-..."
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
+                    onClick={() => setShowAPIKeys(!showAPIKeys)}
+                  >
+                    {showAPIKeys ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
             <div>
               <Label htmlFor="webhook-url">Webhook URL</Label>
               <div className="flex gap-2 mt-2">
