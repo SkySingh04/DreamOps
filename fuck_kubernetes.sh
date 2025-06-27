@@ -386,13 +386,13 @@ trigger_alarms() {
     
     for alarm in "${alarms[@]}"; do
         # Get current state
-        local current_state=$(AWS_PROFILE=burner aws cloudwatch describe-alarms --alarm-names "$alarm" --query "MetricAlarms[0].StateValue" --output text 2>/dev/null || echo "NOT_FOUND")
+        local current_state=$(AWS_PROFILE=default aws cloudwatch describe-alarms --alarm-names "$alarm" --query "MetricAlarms[0].StateValue" --output text 2>/dev/null || echo "NOT_FOUND")
         
         if [ "$current_state" == "ALARM" ]; then
             echo -e "  📍 ${alarm} is in ALARM state - forcing re-trigger..."
             
             # Set to OK temporarily
-            AWS_PROFILE=burner aws cloudwatch set-alarm-state \
+            AWS_PROFILE=default aws cloudwatch set-alarm-state \
                 --alarm-name "$alarm" \
                 --state-value OK \
                 --state-reason "Testing: Forcing re-trigger" 2>/dev/null || true
@@ -400,7 +400,7 @@ trigger_alarms() {
             sleep 2
             
             # Set back to ALARM to trigger SNS
-            AWS_PROFILE=burner aws cloudwatch set-alarm-state \
+            AWS_PROFILE=default aws cloudwatch set-alarm-state \
                 --alarm-name "$alarm" \
                 --state-value ALARM \
                 --state-reason "Testing: Re-triggering alarm" 2>/dev/null || true
@@ -410,7 +410,7 @@ trigger_alarms() {
             echo -e "  ⏭️  ${alarm} is in OK state - checking if it should be ALARM..."
             # Force evaluation by setting to alarm if there are issues
             if kubectl get pods -n $NAMESPACE 2>/dev/null | grep -E "Error|CrashLoop|ImagePull|OOM" >/dev/null; then
-                AWS_PROFILE=burner aws cloudwatch set-alarm-state \
+                AWS_PROFILE=default aws cloudwatch set-alarm-state \
                     --alarm-name "$alarm" \
                     --state-value ALARM \
                     --state-reason "Testing: Found pod issues" 2>/dev/null || true

@@ -50,7 +50,8 @@
       "Bash(timeout 5 telnet:*)",
       "Bash(python:*)",
       "Bash(timeout 5 uv run:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(npm rebuild:*)"
     ],
     "deny": []
   }
