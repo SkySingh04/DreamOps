@@ -56,6 +56,31 @@ class APIClient {
     }
   }
 
+  // Generic HTTP methods for flexibility
+  async get<T = any>(endpoint: string): Promise<APIResponse<T>> {
+    return this.request<T>(endpoint);
+  }
+
+  async post<T = any>(endpoint: string, body?: any): Promise<APIResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'POST',
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  }
+
+  async put<T = any>(endpoint: string, body?: any): Promise<APIResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'PUT',
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  }
+
+  async delete<T = any>(endpoint: string): Promise<APIResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'DELETE',
+    });
+  }
+
   // Dashboard endpoints
   async getDashboardMetrics(): Promise<APIResponse<DashboardMetrics>> {
     return this.request<DashboardMetrics>('/api/v1/dashboard/metrics');
