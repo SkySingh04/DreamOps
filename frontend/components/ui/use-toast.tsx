@@ -35,6 +35,3 @@ export function toast({ title, description, variant = "default", action }: Toast
 export function useToast() {
   return { toast }
 }
-
-// Also export toast directly for non-hook usage
-export { toast }
