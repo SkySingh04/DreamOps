@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { AlertTriangle, Key, CheckCircle } from 'lucide-react';
 
 interface KeyStatusToastProps {
-  primaryKeyExhausted: boolean;
+  primaryKeyExhausted?: boolean;
   hasWorkingKeys: boolean;
   primaryKey?: any;
   activeKeys: any[];

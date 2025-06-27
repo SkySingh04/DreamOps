@@ -47,7 +47,8 @@
       "Bash(npx drizzle-kit:*)",
       "Bash(node:*)",
       "Bash(go build:*)",
-      "Bash(timeout 5 telnet:*)"
+      "Bash(timeout 5 telnet:*)",
+      "Bash(python:*)"
     ],
     "deny": []
   }

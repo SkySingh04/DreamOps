@@ -5,6 +5,7 @@ import {
   text,
   timestamp,
   integer,
+  boolean,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -126,6 +127,27 @@ export const aiActions = pgTable('ai_actions', {
   metadata: text('metadata'), // JSON string for additional data
 });
 
+export const apiKeys = pgTable('api_keys', {
+  id: serial('id').primaryKey(),
+  teamId: integer('team_id')
+    .notNull()
+    .references(() => teams.id),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id),
+  provider: varchar('provider', { length: 20 }).notNull(), // 'anthropic', 'openai'
+  name: varchar('name', { length: 100 }).notNull(),
+  keyMasked: varchar('key_masked', { length: 20 }).notNull(), // last 4 chars: "sk-...1234"
+  keyHash: text('key_hash').notNull(), // encrypted/hashed full key
+  isPrimary: boolean('is_primary').notNull().default(false),
+  status: varchar('status', { length: 20 }).notNull().default('active'), // 'active', 'exhausted', 'invalid'
+  errorCount: integer('error_count').notNull().default(0),
+  lastError: text('last_error'),
+  lastUsedAt: timestamp('last_used_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
 export const teamsRelations = relations(teams, ({ many }) => ({
   teamMembers: many(teamMembers),
   activityLogs: many(activityLogs),
@@ -133,6 +155,7 @@ export const teamsRelations = relations(teams, ({ many }) => ({
   incidents: many(incidents),
   metrics: many(metrics),
   aiActions: many(aiActions),
+  apiKeys: many(apiKeys),
 }));
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -142,6 +165,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   resolvedIncidents: many(incidents, { relationName: 'resolvedIncidents' }),
   incidentLogs: many(incidentLogs),
   approvedAiActions: many(aiActions),
+  apiKeys: many(apiKeys),
 }));
 
 export const invitationsRelations = relations(invitations, ({ one }) => ({
@@ -229,6 +253,17 @@ export const aiActionsRelations = relations(aiActions, ({ one }) => ({
   }),
 }));
 
+export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
+  team: one(teams, {
+    fields: [apiKeys.teamId],
+    references: [teams.id],
+  }),
+  user: one(users, {
+    fields: [apiKeys.userId],
+    references: [users.id],
+  }),
+}));
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Team = typeof teams.$inferSelect;
@@ -247,6 +282,8 @@ export type Metric = typeof metrics.$inferSelect;
 export type NewMetric = typeof metrics.$inferInsert;
 export type AiAction = typeof aiActions.$inferSelect;
 export type NewAiAction = typeof aiActions.$inferInsert;
+export type ApiKey = typeof apiKeys.$inferSelect;
+export type NewApiKey = typeof apiKeys.$inferInsert;
 export type TeamDataWithMembers = Team & {
   teamMembers: (TeamMember & {
     user: Pick<User, 'id' | 'name' | 'email'>;

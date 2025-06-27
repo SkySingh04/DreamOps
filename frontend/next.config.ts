@@ -17,9 +17,23 @@ const nextConfig: NextConfig = {
   },
   async rewrites() {
     return [
+      // Note: API key management is handled by frontend database, not backend
+      // This excludes /api/v1/api-keys/* from being proxied to backend
       {
-        source: '/api/v1/:path*',
-        destination: 'http://localhost:8000/api/v1/:path*', // Backend API server
+        source: '/api/v1/alerts/:path*',
+        destination: 'http://localhost:8000/api/v1/alerts/:path*', // Backend API server
+      },
+      {
+        source: '/api/v1/integrations/:path*',
+        destination: 'http://localhost:8000/api/v1/integrations/:path*', // Backend API server
+      },
+      {
+        source: '/api/v1/webhook/:path*',
+        destination: 'http://localhost:8000/api/v1/webhook/:path*', // Backend API server
+      },
+      {
+        source: '/api/v1/settings/:path*',
+        destination: 'http://localhost:8000/api/v1/settings/:path*', // Backend API server
       },
     ];
   },
