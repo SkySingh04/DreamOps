@@ -111,26 +111,72 @@ export async function getTeamForUser() {
   }
 
   const db = await getDb();
-  const result = await db.query.teamMembers.findFirst({
-    where: eq(teamMembers.userId, user.id),
-    with: {
-      team: {
-        with: {
-          teamMembers: {
-            with: {
-              user: {
-                columns: {
-                  id: true,
-                  name: true,
-                  email: true
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  });
+  const result = await db
+    .select({
+      team: teams,
+    })
+    .from(teamMembers)
+    .leftJoin(teams, eq(teamMembers.teamId, teams.id))
+    .where(eq(teamMembers.userId, user.id))
+    .limit(1);
 
-  return result?.team || null;
+  if (result.length === 0) {
+    return null;
+  }
+
+  // Get team members separately
+  const teamId = result[0].team?.id;
+  if (!teamId) {
+    return null;
+  }
+
+  const teamMembersData = await db
+    .select({
+      id: teamMembers.id,
+      userId: teamMembers.userId,
+      teamId: teamMembers.teamId,
+      role: teamMembers.role,
+      joinedAt: teamMembers.joinedAt,
+      user: {
+        id: users.id,
+        name: users.name,
+        email: users.email,
+      },
+    })
+    .from(teamMembers)
+    .leftJoin(users, eq(teamMembers.userId, users.id))
+    .where(eq(teamMembers.teamId, teamId));
+
+  const team = result[0].team;
+  if (!team) {
+    return null;
+  }
+
+  return {
+    id: team.id,
+    name: team.name,
+    createdAt: team.createdAt,
+    updatedAt: team.updatedAt,
+    stripeCustomerId: team.stripeCustomerId,
+    stripeSubscriptionId: team.stripeSubscriptionId,
+    stripeProductId: team.stripeProductId,
+    planName: team.planName,
+    subscriptionStatus: team.subscriptionStatus,
+    teamMembers: teamMembersData.map(tm => ({
+      id: tm.id,
+      userId: tm.userId,
+      teamId: tm.teamId,
+      role: tm.role,
+      joinedAt: tm.joinedAt,
+      user: tm.user ? {
+        id: tm.user.id,
+        name: tm.user.name || '',
+        email: tm.user.email,
+      } : {
+        id: 0,
+        name: '',
+        email: '',
+      },
+    })),
+  };
 }
