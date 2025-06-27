@@ -67,9 +67,9 @@ async function checkWSLDNS() {
   
   // Test Neon hostnames with different DNS servers
   const testHosts = [
-    'ep-wild-cherry-a8lnti87-pooler.eastus2.azure.neon.tech',
-    'ep-super-mouse-a8tffxbm-pooler.eastus2.azure.neon.tech',
-    'ep-rough-sound-a8uzg9ns-pooler.eastus2.azure.neon.tech'
+    'ep-square-glade-a8zt9f77-pooler.eastus2.azure.neon.tech',
+    'ep-bold-mode-a8z7ya0k-pooler.eastus2.azure.neon.tech',
+    'ep-round-term-a8xc3zwk-pooler.eastus2.azure.neon.tech'
   ];
   
   const dnsServers = [
