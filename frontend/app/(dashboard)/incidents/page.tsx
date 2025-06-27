@@ -228,7 +228,7 @@ export default function IncidentsPage() {
   });
 
   // Execute individual service chaos
-  const executeServiceChaos = async (serviceId: string, retries = 2): Promise<{ success: boolean; results: string[]; error?: string }> => {
+  const executeServiceChaos = async (serviceId: string, retries = 2): Promise<{ success: boolean; results: string[]; error?: string; mock?: boolean }> => {
     const service = chaosServices.find(s => s.id === serviceId);
     if (!service) throw new Error(`Service ${serviceId} not found`);
 
@@ -250,7 +250,8 @@ export default function IncidentsPage() {
 
         return {
           success: true,
-          results: data.results || [`✅ ${service.name} successfully nuked!`]
+          results: data.results || [`✅ ${service.name} successfully nuked!`],
+          mock: data.mock || false
         };
 
       } catch (error) {
@@ -309,6 +310,7 @@ export default function IncidentsPage() {
         let successCount = 0;
         let failureCount = 0;
         const allResults: string[] = [];
+        let hasMockResponse = false;
 
         for (let i = 0; i < chaosServices.length; i++) {
           const currentService = chaosServices[i];
@@ -326,6 +328,7 @@ export default function IncidentsPage() {
           
           if (result.success) {
             successCount++;
+            if (result.mock) hasMockResponse = true;
             setServiceStatuses(prev => ({ ...prev, [currentService.id]: 'success' }));
             setChaosResults(prev => [
               ...prev, 
@@ -361,8 +364,11 @@ export default function IncidentsPage() {
           ...allResults
         ]);
 
-        toast.success(`Infrastructure chaos deployed! 💥`, {
-          description: `${successCount}/${chaosServices.length} services successfully nuked`,
+        const mockMessage = hasMockResponse ? ' (mock responses - chaos disabled)' : '';
+        toast.success(`Infrastructure chaos deployed! 💥${mockMessage}`, {
+          description: hasMockResponse 
+            ? 'Mock chaos responses - no infrastructure harmed'
+            : `${successCount}/${chaosServices.length} services successfully nuked`,
         });
 
       } else if (service) {
@@ -387,8 +393,9 @@ export default function IncidentsPage() {
             ...result.results
           ]);
           
-          toast.success(`${service.name} successfully nuked! 💥`, {
-            description: 'Service chaos deployed successfully',
+          const mockMessage = result.mock ? ' (mock response - chaos disabled)' : '';
+          toast.success(`${service.name} successfully nuked! 💥${mockMessage}`, {
+            description: result.mock ? 'Mock chaos response - no infrastructure harmed' : 'Service chaos deployed successfully',
           });
         } else {
           setServiceStatuses({ [service.id]: 'error' });
@@ -540,29 +547,36 @@ export default function IncidentsPage() {
     <section className="flex-1 p-4 lg:p-8 space-y-6">
       {/* Prominent FUCK INFRA Button - Top Center */}
       <div className="flex justify-center mb-8">
-        <Button 
-          onClick={() => setShowServiceSelector(true)}
-          className="bg-gradient-to-r from-red-600 via-red-700 to-red-800 hover:from-red-700 hover:via-red-800 hover:to-red-900 text-white border-red-600 shadow-2xl hover:shadow-3xl transform hover:scale-110 transition-all duration-300 font-bold text-3xl px-12 py-6 h-auto rounded-xl border-4 border-red-500 animate-pulse"
-          disabled={chaosLoading}
-          size="lg"
-        >
-          {chaosLoading ? (
-            <>
-              <Loader2 className="h-8 w-8 mr-4 animate-spin" />
-              <Flame className="h-6 w-6 mr-2 animate-bounce" />
-              NUKING INFRA...
-              <Flame className="h-6 w-6 ml-2 animate-bounce" />
-            </>
-          ) : (
-            <>
-              <Bomb className="h-8 w-8 mr-4 animate-bounce" />
-              <Flame className="h-6 w-6 mr-2" />
-              NUKE INFRA
-              <Flame className="h-6 w-6 ml-2" />
-              <Skull className="h-8 w-8 ml-4 animate-bounce" />
-            </>
+        <div className="flex flex-col items-center gap-2">
+          <Button 
+            onClick={() => setShowServiceSelector(true)}
+            className="bg-gradient-to-r from-red-600 via-red-700 to-red-800 hover:from-red-700 hover:via-red-800 hover:to-red-900 text-white border-red-600 shadow-2xl hover:shadow-3xl transform hover:scale-110 transition-all duration-300 font-bold text-3xl px-12 py-6 h-auto rounded-xl border-4 border-red-500 animate-pulse"
+            disabled={chaosLoading}
+            size="lg"
+          >
+            {chaosLoading ? (
+              <>
+                <Loader2 className="h-8 w-8 mr-4 animate-spin" />
+                <Flame className="h-6 w-6 mr-2 animate-bounce" />
+                NUKING INFRA...
+                <Flame className="h-6 w-6 ml-2 animate-bounce" />
+              </>
+            ) : (
+              <>
+                <Bomb className="h-8 w-8 mr-4 animate-bounce" />
+                <Flame className="h-6 w-6 mr-2" />
+                NUKE INFRA
+                <Flame className="h-6 w-6 ml-2" />
+                <Skull className="h-8 w-8 ml-4 animate-bounce" />
+              </>
+            )}
+          </Button>
+          {process.env.NODE_ENV === 'development' && (
+            <p className="text-xs text-gray-500">
+              Chaos engineering is in safe mode for local development
+            </p>
           )}
-        </Button>
+        </div>
       </div>
 
       <div className="flex items-center justify-between">
