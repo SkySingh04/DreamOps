@@ -64,9 +64,10 @@ function deriveApiKeyFromHash(hash: string): string {
 // POST /api/v1/api-keys/[id]/validate - Validate an API key with the provider
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const user = await getUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -89,7 +90,7 @@ export async function POST(
       .from(apiKeys)
       .where(
         and(
-          eq(apiKeys.id, parseInt(params.id)),
+          eq(apiKeys.id, parseInt(id)),
           eq(apiKeys.teamId, teamId)
         )
       )
@@ -118,7 +119,7 @@ export async function POST(
           lastUsedAt: new Date(),
           updatedAt: new Date(),
         })
-        .where(eq(apiKeys.id, parseInt(params.id)));
+        .where(eq(apiKeys.id, parseInt(id)));
 
       return NextResponse.json(validation);
     } catch (error) {

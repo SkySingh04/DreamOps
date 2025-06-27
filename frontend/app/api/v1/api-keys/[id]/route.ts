@@ -23,9 +23,10 @@ async function getUserTeamId(userId: number): Promise<number | null> {
 // GET /api/v1/api-keys/[id] - Get a specific API key
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const user = await getUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -54,7 +55,7 @@ export async function GET(
       .from(apiKeys)
       .where(
         and(
-          eq(apiKeys.id, parseInt(params.id)),
+          eq(apiKeys.id, parseInt(id)),
           eq(apiKeys.teamId, teamId)
         )
       )
@@ -77,9 +78,10 @@ export async function GET(
 // PUT /api/v1/api-keys/[id] - Update an API key
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const user = await getUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -101,7 +103,7 @@ export async function PUT(
       .from(apiKeys)
       .where(
         and(
-          eq(apiKeys.id, parseInt(params.id)),
+          eq(apiKeys.id, parseInt(id)),
           eq(apiKeys.teamId, teamId)
         )
       )
@@ -127,7 +129,7 @@ export async function PUT(
     const [updatedKey] = await db
       .update(apiKeys)
       .set(updateData)
-      .where(eq(apiKeys.id, parseInt(params.id)))
+      .where(eq(apiKeys.id, parseInt(id)))
       .returning({
         id: apiKeys.id,
         provider: apiKeys.provider,
@@ -155,9 +157,10 @@ export async function PUT(
 // DELETE /api/v1/api-keys/[id] - Delete an API key
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const user = await getUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -189,7 +192,7 @@ export async function DELETE(
       .from(apiKeys)
       .where(
         and(
-          eq(apiKeys.id, parseInt(params.id)),
+          eq(apiKeys.id, parseInt(id)),
           eq(apiKeys.teamId, teamId)
         )
       )
@@ -202,7 +205,7 @@ export async function DELETE(
     // Delete the key
     await db
       .delete(apiKeys)
-      .where(eq(apiKeys.id, parseInt(params.id)));
+      .where(eq(apiKeys.id, parseInt(id)));
 
     // If we deleted the primary key, make another key primary
     if (existingKey.isPrimary) {
