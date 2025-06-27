@@ -1,0 +1,102 @@
+services:
+  # Backend Service (FastAPI)
+  - type: web
+    name: dreamops-backend-staging
+    env: python
+    repo: https://github.com/Incharajayaram/DreamOps
+    branch: staging
+    buildCommand: "cd backend && pip install -r requirements.txt"
+    startCommand: "cd backend && python api_server.py"
+    rootDir: ./
+    envVars:
+      # Core Configuration
+      - key: ANTHROPIC_API_KEY
+        sync: false  # Add this in Render dashboard
+      - key: CLAUDE_MODEL
+        value: claude-3-5-sonnet-20241022
+      - key: LOG_LEVEL
+        value: INFO
+      - key: ENVIRONMENT
+        value: staging
+      
+      # Database (from backend/.env.staging)
+      - key: DATABASE_URL
+        sync: false  # Add staging database URL in Render dashboard
+      
+      # API Configuration
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: API_PORT
+        fromRender: port
+      - key: API_RELOAD
+        value: false
+      - key: API_WORKERS
+        value: 1
+      - key: API_LOG_LEVEL
+        value: info
+      - key: CORS_ORIGINS
+        value: https://dreamops-frontend-staging.onrender.com
+      
+      # PagerDuty Integration
+      - key: PAGERDUTY_ENABLED
+        value: true
+      - key: PAGERDUTY_WEBHOOK_SECRET
+        sync: false  # Add in Render dashboard
+      - key: PAGERDUTY_API_KEY
+        sync: false  # Add in Render dashboard
+      - key: PAGERDUTY_USER_EMAIL
+        sync: false  # Add in Render dashboard
+      
+      # Kubernetes (disabled for staging)
+      - key: K8S_ENABLED
+        value: false
+      
+      # MCP Settings
+      - key: MCP_MAX_RETRIES
+        value: 3
+      - key: MCP_TIMEOUT
+        value: 30
+
+  # Frontend Service (Next.js)
+  - type: web
+    name: dreamops-frontend-staging
+    env: node
+    repo: https://github.com/Incharajayaram/DreamOps
+    branch: staging
+    buildCommand: "cd frontend && npm install && npm run build:staging"
+    startCommand: "cd frontend && npm run start"
+    rootDir: ./
+    envVars:
+      # Database
+      - key: POSTGRES_URL
+        sync: false  # Add staging database URL in Render dashboard
+      - key: NEXT_PUBLIC_DATABASE_URL
+        sync: false  # Add staging database URL in Render dashboard
+      
+      # API Configuration
+      - key: NEXT_PUBLIC_API_URL
+        value: https://dreamops-backend-staging.onrender.com
+      - key: NEXT_PUBLIC_WS_URL
+        value: https://dreamops-backend-staging.onrender.com
+      - key: NODE_ENV
+        value: staging
+      - key: NEXT_PUBLIC_ENVIRONMENT
+        value: staging
+      - key: AUTH_SECRET
+        sync: false  # Add in Render dashboard
+      
+      # Base URL
+      - key: BASE_URL
+        value: https://dreamops-frontend-staging.onrender.com
+      
+      # Stripe (optional)
+      - key: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      
+      # Port
+      - key: PORT
+        fromRender: port

@@ -73,6 +73,7 @@ class Config(BaseSettings):
     api_reload: bool = Field(False, env="API_RELOAD")
     api_workers: int = Field(1, env="API_WORKERS")
     api_log_level: str = Field("info", env="API_LOG_LEVEL")
+    cors_origins: str = Field("http://localhost:3000", env="CORS_ORIGINS")
 
     # Webhook settings
     webhook_rate_limit: int = Field(100, env="WEBHOOK_RATE_LIMIT")  # requests per minute
