@@ -15,6 +15,13 @@
       "when": 1750528775247,
       "tag": "0001_short_slyde",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1750974372489,
+      "tag": "0002_smiling_swordsman",
+      "breakpoints": true
     }
   ]
 }

@@ -18,6 +18,7 @@
     "db:seed": "npx tsx lib/db/seed.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "drizzle:migrate": "drizzle-kit migrate",
     "db:migrate:local": "node scripts/db-migrate.js local",
     "db:migrate:staging": "node scripts/db-migrate.js staging",
     "db:migrate:production": "node scripts/db-migrate.js production",

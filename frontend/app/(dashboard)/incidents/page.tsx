@@ -228,7 +228,7 @@ export default function IncidentsPage() {
   });
 
   // Execute individual service chaos
-  const executeServiceChaos = async (serviceId: string, retries = 2): Promise<{ success: boolean; results: string[]; error?: string }> => {
+  const executeServiceChaos = async (serviceId: string, retries = 2): Promise<{ success: boolean; results: string[]; error?: string; mock?: boolean }> => {
     const service = chaosServices.find(s => s.id === serviceId);
     if (!service) throw new Error(`Service ${serviceId} not found`);
 
