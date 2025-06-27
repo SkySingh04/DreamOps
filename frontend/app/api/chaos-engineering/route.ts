@@ -14,6 +14,29 @@ async function getRequestBody(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Check if chaos engineering is enabled
+  const chaosEnabled = process.env.ENABLE_CHAOS_ENGINEERING === 'true';
+  
+  if (!chaosEnabled) {
+    console.log('🚫 Chaos engineering is disabled in this environment');
+    
+    // Return mock success response for local development
+    return NextResponse.json({
+      success: true,
+      message: 'Chaos engineering is disabled in this environment (mock response)',
+      results: [
+        '🚫 Chaos engineering is disabled',
+        '💡 Set ENABLE_CHAOS_ENGINEERING=true to enable',
+        '✅ Returning mock success for local development',
+        '📋 No actual infrastructure was harmed'
+      ],
+      service: 'mock',
+      services_affected: 0,
+      timestamp: new Date().toISOString(),
+      mock: true
+    });
+  }
+
   try {
     // Get request parameters
     const { service, action = 'all' } = await getRequestBody(request);
@@ -286,9 +309,33 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('💥 CHAOS ENGINEERING FAILED:', error);
     
+    // Check for specific Kubernetes connection errors
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const isKubernetesError = errorMessage.includes('kubectl') || 
+                             errorMessage.includes('kubernetes') || 
+                             errorMessage.includes('No valid kubernetes cluster context');
+    
+    if (isKubernetesError) {
+      return NextResponse.json({
+        success: false,
+        error: 'Kubernetes cluster not accessible',
+        message: 'Cannot connect to Kubernetes cluster',
+        results: [
+          '❌ No valid Kubernetes cluster context found',
+          '📋 This feature requires a configured Kubernetes cluster',
+          '💡 For local development, set ENABLE_CHAOS_ENGINEERING=false',
+          '🔧 To use this feature:',
+          '   1. Configure kubectl with a valid cluster',
+          '   2. Set AWS credentials if using EKS',
+          '   3. Ensure KUBECONFIG points to valid config'
+        ],
+        timestamp: new Date().toISOString()
+      }, { status: 503 });
+    }
+    
     return NextResponse.json({
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: errorMessage,
       message: 'Failed to deploy infrastructure chaos',
       timestamp: new Date().toISOString()
     }, { status: 500 });
@@ -296,16 +343,27 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
+  const chaosEnabled = process.env.ENABLE_CHAOS_ENGINEERING === 'true';
+  
   return NextResponse.json({
     message: 'Chaos Engineering API',
     description: 'POST to this endpoint to trigger infrastructure chaos',
-    warning: '⚠️ This will intentionally break Kubernetes services for testing',
+    enabled: chaosEnabled,
+    warning: chaosEnabled 
+      ? '⚠️ This will intentionally break Kubernetes services for testing'
+      : '✅ Chaos engineering is disabled (safe mode)',
     services_targeted: [
       'Database service (connection failures)',
       'API gateway (timeout/503 errors)', 
       'Redis/cache service (memory issues)',
       'Worker service (pod crashes)',
       'Load balancer (routing failures)'
-    ]
+    ],
+    configuration: {
+      ENABLE_CHAOS_ENGINEERING: chaosEnabled,
+      note: chaosEnabled 
+        ? 'Chaos engineering is active - be careful!' 
+        : 'Set ENABLE_CHAOS_ENGINEERING=true to enable chaos features'
+    }
   });
 }
