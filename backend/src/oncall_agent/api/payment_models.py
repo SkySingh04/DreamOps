@@ -1,8 +1,9 @@
 """PhonePe Payment Models and Schemas"""
-from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any, Literal
 from datetime import datetime
 from enum import Enum
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field
 
 
 class PaymentStatus(str, Enum):
@@ -36,10 +37,10 @@ class PaymentRequest(BaseModel):
     user_id: str
     amount: int = Field(..., description="Amount in paise (INR smallest unit)")
     plan: SubscriptionPlan
-    payment_method: Optional[PaymentMethod] = None
-    mobile_number: Optional[str] = Field(None, pattern="^[6-9]\\d{9}$")
-    email: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    payment_method: PaymentMethod | None = None
+    mobile_number: str | None = Field(None, pattern="^[6-9]\\d{9}$")
+    email: str | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class PhonePePaymentRequest(BaseModel):
@@ -51,8 +52,8 @@ class PhonePePaymentRequest(BaseModel):
     redirectUrl: str
     redirectMode: Literal["POST", "GET", "REDIRECT"] = "REDIRECT"
     callbackUrl: str
-    mobileNumber: Optional[str] = None
-    paymentInstrument: Dict[str, Any] = Field(default={"type": "PAY_PAGE"})
+    mobileNumber: str | None = None
+    paymentInstrument: dict[str, Any] = Field(default={"type": "PAY_PAGE"})
 
 
 class PaymentResponse(BaseModel):
@@ -61,9 +62,9 @@ class PaymentResponse(BaseModel):
     payment_id: str
     transaction_id: str
     status: PaymentStatus
-    redirect_url: Optional[str] = None
-    message: Optional[str] = None
-    error: Optional[str] = None
+    redirect_url: str | None = None
+    message: str | None = None
+    error: str | None = None
 
 
 class PhonePeCallback(BaseModel):
@@ -71,7 +72,7 @@ class PhonePeCallback(BaseModel):
     success: bool
     code: str
     message: str
-    data: Optional[Dict[str, Any]] = None
+    data: dict[str, Any] | None = None
 
 
 class PaymentTransaction(BaseModel):
@@ -79,16 +80,16 @@ class PaymentTransaction(BaseModel):
     id: str
     user_id: str
     merchant_transaction_id: str
-    phonepe_transaction_id: Optional[str] = None
+    phonepe_transaction_id: str | None = None
     amount: int
     status: PaymentStatus
     plan: SubscriptionPlan
-    payment_method: Optional[PaymentMethod] = None
+    payment_method: PaymentMethod | None = None
     initiated_at: datetime
-    completed_at: Optional[datetime] = None
-    callback_data: Optional[Dict[str, Any]] = None
-    error_message: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    completed_at: datetime | None = None
+    callback_data: dict[str, Any] | None = None
+    error_message: str | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class SubscriptionUpdate(BaseModel):
@@ -97,19 +98,19 @@ class SubscriptionUpdate(BaseModel):
     plan: SubscriptionPlan
     transaction_id: str
     valid_from: datetime
-    valid_until: Optional[datetime] = None
+    valid_until: datetime | None = None
     is_active: bool = True
-    features: Optional[Dict[str, Any]] = None
+    features: dict[str, Any] | None = None
 
 
 class PaymentCheckStatusRequest(BaseModel):
     """Payment status check request"""
     merchant_transaction_id: str
-    
+
 
 class PaymentCheckStatusResponse(BaseModel):
     """Payment status check response"""
     success: bool
     payment_status: PaymentStatus
-    transaction_details: Optional[Dict[str, Any]] = None
-    message: Optional[str] = None
+    transaction_details: dict[str, Any] | None = None
+    message: str | None = None

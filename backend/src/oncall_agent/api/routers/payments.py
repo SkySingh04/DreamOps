@@ -1,18 +1,20 @@
 """PhonePe Payment API Router"""
-from fastapi import APIRouter, HTTPException, Request, BackgroundTasks, Depends, Body
-from fastapi.responses import RedirectResponse, JSONResponse
-from typing import Dict, Any, Optional
 import logging
-import httpx
-from ...services.phonepe_sdk_service import get_phonepe_sdk_service
-from ...services.phonepe_mock_service import get_phonepe_mock_service
-from ...config import get_config
-from ..payment_models import (
-    PaymentRequest, PaymentResponse, PaymentCheckStatusRequest,
-    PaymentCheckStatusResponse, PaymentStatus
-)
-from ..auth import get_current_user  # You'll need to implement authentication
 
+import httpx
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi.responses import JSONResponse, RedirectResponse
+
+from ...config import get_config
+from ...services.phonepe_mock_service import get_phonepe_mock_service
+from ...services.phonepe_sdk_service import get_phonepe_sdk_service
+from ..payment_models import (
+    PaymentCheckStatusRequest,
+    PaymentCheckStatusResponse,
+    PaymentRequest,
+    PaymentResponse,
+    PaymentStatus,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments", tags=["payments"])
@@ -21,7 +23,7 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 def get_payment_service():
     """Get the appropriate payment service based on environment"""
     import os
-    
+
     # Force mock service for development - check multiple environment indicators
     use_mock = (
         os.getenv("NODE_ENV") == "development" or
@@ -29,7 +31,7 @@ def get_payment_service():
         os.getenv("ENVIRONMENT") == "development" or
         os.getenv("USE_MOCK_PAYMENTS", "").lower() == "true"
     )
-    
+
     if use_mock:
         logger.info("Using PhonePe Mock Service for testing")
         return get_phonepe_mock_service()
@@ -41,26 +43,26 @@ def get_payment_service():
 @router.post("/initiate", response_model=PaymentResponse)
 async def initiate_payment(
     request: Request,
-    current_user: Optional[Dict] = None  # Make optional for testing
+    current_user: dict | None = None  # Make optional for testing
 ):
     """Initiate a new payment with PhonePe"""
     try:
         # Get JSON body directly
         body = await request.json()
         payment_request = PaymentRequest(**body)
-        
+
         # For testing, allow without authentication
         if current_user and payment_request.user_id != str(current_user.get("id", "")):
             raise HTTPException(status_code=403, detail="Unauthorized user access")
-        
+
         phonepe_service = get_payment_service()
         response = await phonepe_service.initiate_payment(payment_request)
-        
+
         if not response.success:
             raise HTTPException(status_code=400, detail=response.error)
-        
+
         return response
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -77,25 +79,25 @@ async def payment_callback(
     try:
         # Get request body
         body = await request.json()
-        
+
         phonepe_service = get_payment_service()
         result = await phonepe_service.validate_callback(
             username="test_username",
-            password="test_password", 
+            password="test_password",
             authorization_header=request.headers.get("authorization", ""),
             callback_body=str(body)
         )
-        
+
         if result["success"]:
             # Extract payment details
             transaction_id = result.get("transaction_id")
             payment_details = result.get("payment_details", {})
             amount = payment_details.get("amount", 0) / 100  # Convert from paise
-            
+
             # Parse user_id from transaction_id or metadata
             # In production, this would be stored properly
             user_id = "1"  # Default for testing
-            
+
             # Determine plan based on amount
             plan_id = "free"
             if amount == 999:
@@ -104,7 +106,7 @@ async def payment_callback(
                 plan_id = "pro"
             elif amount == 9999:
                 plan_id = "enterprise"
-            
+
             # Upgrade the user plan
             background_tasks.add_task(
                 upgrade_user_plan_async,
@@ -112,20 +114,20 @@ async def payment_callback(
                 plan_id=plan_id,
                 transaction_id=transaction_id
             )
-            
+
             # Send notification
             background_tasks.add_task(
                 send_payment_notification,
                 transaction_id=transaction_id,
                 status="success"
             )
-        
+
         # PhonePe expects 200 OK response
         return JSONResponse(
             status_code=200,
             content={"success": True}
         )
-    
+
     except Exception as e:
         logger.error(f"Error processing payment callback: {e}")
         # Still return 200 to PhonePe to avoid retries
@@ -144,10 +146,10 @@ async def payment_redirect(
     """Handle PhonePe redirect after payment"""
     try:
         phonepe_service = get_payment_service()
-        
+
         # Check payment status
         status_response = await phonepe_service.check_payment_status(transaction_id)
-        
+
         # Redirect to appropriate frontend page
         if status_response.success and status_response.payment_status == PaymentStatus.SUCCESS:
             return RedirectResponse(
@@ -159,7 +161,7 @@ async def payment_redirect(
                 url=f"/payment/failed?transaction_id={transaction_id}&reason={status_response.message}",
                 status_code=302
             )
-    
+
     except Exception as e:
         logger.error(f"Error handling payment redirect: {e}")
         return RedirectResponse(
@@ -171,7 +173,7 @@ async def payment_redirect(
 @router.post("/status", response_model=PaymentCheckStatusResponse)
 async def check_payment_status(
     status_request: PaymentCheckStatusRequest,
-    current_user: Optional[Dict] = None  # Make optional for testing
+    current_user: dict | None = None  # Make optional for testing
 ):
     """Check payment status from PhonePe"""
     try:
@@ -179,9 +181,9 @@ async def check_payment_status(
         response = await phonepe_service.check_payment_status(
             status_request.merchant_transaction_id
         )
-        
+
         return response
-    
+
     except Exception as e:
         logger.error(f"Error checking payment status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -266,7 +268,7 @@ async def get_subscription_plans():
             }
         }
     }
-    
+
     return plans
 
 
@@ -280,17 +282,17 @@ async def test_mock_payment():
             amount=99900,  # ₹999 in paise
             plan="STARTER"
         )
-        
+
         mock_service = get_phonepe_mock_service()
         response = await mock_service.initiate_payment(test_payment)
-        
+
         return {
             "success": True,
             "message": "Test payment created successfully",
             "payment_details": response,
             "instructions": "This is a mock payment for testing. Use the returned payment_id to check status."
         }
-        
+
     except Exception as e:
         logger.error(f"Error creating test payment: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -302,7 +304,7 @@ async def complete_mock_payment(payment_id: str):
     try:
         mock_service = get_phonepe_mock_service()
         success = mock_service.complete_mock_payment(payment_id)
-        
+
         if success:
             return {
                 "success": True,
@@ -311,7 +313,7 @@ async def complete_mock_payment(payment_id: str):
             }
         else:
             raise HTTPException(status_code=404, detail="Payment not found")
-            
+
     except HTTPException:
         raise
     except Exception as e:
@@ -325,13 +327,13 @@ async def get_mock_transactions():
     try:
         mock_service = get_phonepe_mock_service()
         transactions = mock_service.get_all_mock_transactions()
-        
+
         return {
             "success": True,
             "transactions": transactions,
             "count": len(transactions)
         }
-        
+
     except Exception as e:
         logger.error(f"Error getting mock transactions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -362,14 +364,14 @@ async def upgrade_user_plan_async(user_id: str, plan_id: str, transaction_id: st
         # Make HTTP request to alert tracking service
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"http://localhost:8000/api/v1/alert-tracking/upgrade-plan",
+                "http://localhost:8000/api/v1/alert-tracking/upgrade-plan",
                 params={
                     "user_id": user_id,
                     "plan_id": plan_id,
                     "transaction_id": transaction_id
                 }
             )
-            
+
             if response.status_code == 200:
                 logger.info(f"Successfully upgraded user {user_id} to plan {plan_id}")
             else:

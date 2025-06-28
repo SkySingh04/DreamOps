@@ -91,6 +91,9 @@ export default function IncidentsPage() {
   const [alertUsageData, setAlertUsageData] = useState<any>(null);
   const queryClient = useQueryClient();
   const teamId = "team_123"; // In production, get from context/auth
+  
+  // Check if we're in dev mode
+  const isDevMode = process.env.NEXT_PUBLIC_DEV_MODE === 'true' || process.env.NODE_ENV === 'development';
 
   // Fetch AI config to get current mode
   const { data: aiConfigData } = useQuery({
@@ -280,6 +283,41 @@ export default function IncidentsPage() {
     },
   });
 
+  // Trigger PagerDuty alert for chaos action
+  const triggerPagerDutyAlert = async (serviceId?: string) => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/chaos/trigger-alert`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}` // Include auth token
+        },
+        body: JSON.stringify({ 
+          service: serviceId,
+          action: serviceId ? 'single' : 'all',
+          description: serviceId 
+            ? `Chaos engineering test: ${chaosServices.find(s => s.id === serviceId)?.name}`
+            : 'Chaos engineering test: All services nuked'
+        })
+      });
+
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        console.log('✅ PagerDuty alert triggered successfully');
+        toast.success('PagerDuty alert triggered!', {
+          description: 'The oncall agent should start responding to the incident soon.'
+        });
+      } else {
+        console.warn('⚠️ Failed to trigger PagerDuty alert:', data.message);
+        // Don't fail the chaos action if PagerDuty fails
+      }
+    } catch (error) {
+      console.error('❌ Error triggering PagerDuty alert:', error);
+      // Don't fail the chaos action if PagerDuty fails
+    }
+  };
+
   // Execute individual service chaos
   const executeServiceChaos = async (serviceId: string, retries = 2): Promise<{ success: boolean; results: string[]; error?: string }> => {
     const service = chaosServices.find(s => s.id === serviceId);
@@ -354,6 +392,10 @@ export default function IncidentsPage() {
         `🔥 Initializing ${service ? service.name : 'ALL SERVICES'} chaos...`, 
         '⚡ Connecting to Kubernetes cluster...'
       ]);
+      
+      // Trigger PagerDuty alert first
+      setChaosResults(prev => [...prev, '🚨 Triggering PagerDuty alert...']);
+      await triggerPagerDutyAlert(serviceId);
 
       if (isAllServices) {
         // Sequential execution for "nuke all" to prevent conflicts
@@ -591,32 +633,45 @@ export default function IncidentsPage() {
 
   return (
     <section className="flex-1 p-4 lg:p-8 space-y-6">
-      {/* Prominent FUCK INFRA Button - Top Center */}
-      <div className="flex justify-center mb-8">
-        <Button 
-          onClick={() => setShowServiceSelector(true)}
-          className="bg-gradient-to-r from-red-600 via-red-700 to-red-800 hover:from-red-700 hover:via-red-800 hover:to-red-900 text-white border-red-600 shadow-2xl hover:shadow-3xl transform hover:scale-110 transition-all duration-300 font-bold text-3xl px-12 py-6 h-auto rounded-xl border-4 border-red-500 animate-pulse"
-          disabled={chaosLoading}
-          size="lg"
-        >
-          {chaosLoading ? (
-            <>
-              <Loader2 className="h-8 w-8 mr-4 animate-spin" />
-              <Flame className="h-6 w-6 mr-2 animate-bounce" />
-              NUKING INFRA...
-              <Flame className="h-6 w-6 ml-2 animate-bounce" />
-            </>
-          ) : (
-            <>
-              <Bomb className="h-8 w-8 mr-4 animate-bounce" />
-              <Flame className="h-6 w-6 mr-2" />
-              NUKE INFRA
-              <Flame className="h-6 w-6 ml-2" />
-              <Skull className="h-8 w-8 ml-4 animate-bounce" />
-            </>
-          )}
-        </Button>
-      </div>
+      {/* Prominent FUCK INFRA Button - Top Center - Only show in dev mode */}
+      {isDevMode ? (
+        <div className="flex justify-center mb-8">
+          <Button 
+            onClick={() => setShowServiceSelector(true)}
+            className="bg-gradient-to-r from-red-600 via-red-700 to-red-800 hover:from-red-700 hover:via-red-800 hover:to-red-900 text-white border-red-600 shadow-2xl hover:shadow-3xl transform hover:scale-110 transition-all duration-300 font-bold text-3xl px-12 py-6 h-auto rounded-xl border-4 border-red-500 animate-pulse"
+            disabled={chaosLoading}
+            size="lg"
+          >
+            {chaosLoading ? (
+              <>
+                <Loader2 className="h-8 w-8 mr-4 animate-spin" />
+                <Flame className="h-6 w-6 mr-2 animate-bounce" />
+                NUKING INFRA...
+                <Flame className="h-6 w-6 ml-2 animate-bounce" />
+              </>
+            ) : (
+              <>
+                <Bomb className="h-8 w-8 mr-4 animate-bounce" />
+                <Flame className="h-6 w-6 mr-2" />
+                NUKE INFRA
+                <Flame className="h-6 w-6 ml-2" />
+                <Skull className="h-8 w-8 ml-4 animate-bounce" />
+              </>
+            )}
+          </Button>
+        </div>
+      ) : (
+        <div className="flex justify-center mb-8">
+          <Alert className="max-w-2xl border-yellow-200 bg-yellow-50">
+            <ShieldAlert className="h-4 w-4 text-yellow-600" />
+            <AlertTitle className="text-yellow-800">Chaos Engineering Disabled</AlertTitle>
+            <AlertDescription className="text-yellow-700">
+              The infrastructure nuke button is only available in development mode. 
+              Set NEXT_PUBLIC_DEV_MODE=true or NODE_ENV=development to enable chaos engineering features.
+            </AlertDescription>
+          </Alert>
+        </div>
+      )}
 
       <div className="flex items-center justify-between">
         <div>

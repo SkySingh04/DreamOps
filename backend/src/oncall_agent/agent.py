@@ -76,9 +76,9 @@ class OncallAgent:
             contexts = []
             if self.config.k8s_context and self.config.k8s_context != "default":
                 contexts = [self.config.k8s_context]
-            
+
             enable_destructive = self.config.get("k8s_enable_destructive_operations", False)
-            
+
             self.k8s_integration = KubernetesMCPOnlyIntegration(
                 contexts=contexts,
                 namespace=self.config.k8s_namespace,

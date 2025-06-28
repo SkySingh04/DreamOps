@@ -2,7 +2,6 @@
 
 import json
 import logging
-import subprocess
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any
@@ -39,7 +38,7 @@ class AgentExecutor:
         # Use MCP integration if available
         if self.k8s_integration:
             return await self.k8s_integration.execute_kubectl_command(
-                cmd, 
+                cmd,
                 dry_run=False,
                 auto_approve=auto_approve
             )

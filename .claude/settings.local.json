@@ -64,7 +64,10 @@
       "Bash(pnpm dev:*)",
       "Bash(npm --version)",
       "Bash(npm search:*)",
-      "Bash(mcp-server-kubernetes:*)"
+      "Bash(mcp-server-kubernetes:*)",
+      "Bash(pip index:*)",
+      "Bash(diff:*)",
+      "Bash(cp:*)"
     ],
     "deny": []
   }

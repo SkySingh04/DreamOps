@@ -585,10 +585,10 @@ class KubernetesMCPOnlyIntegration(MCPIntegration):
         """Discover available Kubernetes contexts using MCP server."""
         try:
             self.logger.info("Discovering Kubernetes contexts via MCP...")
-            
+
             # Use the kubernetes_list_contexts tool
             result = await self._call_mcp_tool('kubernetes_list_contexts', {})
-            
+
             if result.get('success'):
                 contexts = result.get('contexts', [])
                 self.logger.info(f"Discovered {len(contexts)} Kubernetes contexts")
@@ -596,7 +596,7 @@ class KubernetesMCPOnlyIntegration(MCPIntegration):
             else:
                 self.logger.error(f"Failed to discover contexts: {result.get('error')}")
                 return []
-                
+
         except Exception as e:
             self.logger.error(f"Error discovering contexts: {e}")
             return []

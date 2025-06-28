@@ -1,14 +1,14 @@
 """Authentication utilities for API"""
-from fastapi import HTTPException, Depends, Header
-from typing import Dict, Optional
 import logging
+
+from fastapi import Header
 
 logger = logging.getLogger(__name__)
 
 
 async def get_current_user(
-    authorization: Optional[str] = Header(None)
-) -> Dict[str, str]:
+    authorization: str | None = Header(None)
+) -> dict[str, str]:
     """
     Get current authenticated user from authorization header.
     This is a placeholder - implement based on your auth system.

@@ -1,28 +1,30 @@
 """Mock PhonePe Payment Router for Testing"""
-from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
-from typing import Dict, Any
+import logging
 import uuid
 from datetime import datetime
-from ..payment_models import PaymentResponse, PaymentStatus
-from ...config import get_config
+from typing import Any
+
 import httpx
-import logging
+from fastapi import APIRouter, Request
+from fastapi.responses import HTMLResponse
+
+from ...config import get_config
+from ..payment_models import PaymentResponse, PaymentStatus
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/mock-payments", tags=["mock-payments"])
 
 # In-memory storage for mock transactions
-MOCK_TRANSACTIONS: Dict[str, Dict[str, Any]] = {}
+MOCK_TRANSACTIONS: dict[str, dict[str, Any]] = {}
 
 @router.post("/initiate")
 async def mock_initiate_payment(request: Request):
     """Mock payment initiation for testing without PhonePe credentials"""
     body = await request.json()
-    
+
     # Store payment data for later retrieval
     transaction_id = f"MOCK_TXN_{uuid.uuid4().hex[:12].upper()}"
-    
+
     # Store transaction data in memory (in production, use database)
     MOCK_TRANSACTIONS[transaction_id] = {
         "user_id": body.get("user_id", "1"),
@@ -31,10 +33,10 @@ async def mock_initiate_payment(request: Request):
         "status": "initiated",
         "created_at": datetime.now().isoformat()
     }
-    
+
     # Simulate PhonePe redirect URL with all necessary params
     redirect_url = f"http://localhost:8000/api/v1/mock-payments/simulate?txn={transaction_id}&amount={body.get('amount', 0)}&user_id={body.get('user_id', '1')}&plan={body.get('plan', 'starter')}"
-    
+
     return PaymentResponse(
         success=True,
         payment_id=transaction_id,
@@ -51,7 +53,7 @@ async def simulate_payment_page(txn: str, amount: int):
     # Extract base URL from the redirect URL (e.g., http://localhost:3000)
     redirect_url = config.phonepe_redirect_url or "http://localhost:3000/payment/redirect"
     base_url = redirect_url.replace("/payment/redirect", "")
-    
+
     html_content = f"""
         <html>
         <head>
@@ -94,27 +96,27 @@ async def simulate_payment_page(txn: str, amount: int):
 async def mock_check_payment_status(request: Request):
     """Mock payment status check for testing"""
     body = await request.json()
-    
+
     # Extract transaction ID from either format
     transaction_id = body.get("merchant_transaction_id") or body.get("transactionId")
-    
+
     if not transaction_id:
         return {
             "success": False,
             "payment_status": PaymentStatus.FAILED,
             "message": "Transaction ID not provided"
         }
-    
+
     # For mock payments, check if transaction ID starts with MOCK_
     if transaction_id.startswith("MOCK_"):
         # Get transaction data from memory
         txn_data = MOCK_TRANSACTIONS.get(transaction_id, {})
-        
+
         # Use stored data or fallback to body/defaults
         team_id = txn_data.get("team_id") or body.get("team_id", "team_123")
         amount = txn_data.get("amount") or body.get("amount", 10000)
         plan = txn_data.get("plan") or body.get("plan", "starter")
-        
+
         # Determine plan based on amount or explicit plan
         plan_id = plan.lower()
         if plan_id not in ["starter", "pro", "enterprise"]:
@@ -125,12 +127,12 @@ async def mock_check_payment_status(request: Request):
                 plan_id = "pro"
             elif amount == 999900:  # ₹9999 in paise
                 plan_id = "enterprise"
-        
+
         # Auto-upgrade account for mock payments
         try:
             async with httpx.AsyncClient() as client:
                 upgrade_response = await client.post(
-                    f"http://localhost:8000/api/v1/alert-tracking/upgrade",
+                    "http://localhost:8000/api/v1/alert-tracking/upgrade",
                     json={
                         "team_id": team_id,
                         "plan_id": plan_id,
@@ -147,7 +149,7 @@ async def mock_check_payment_status(request: Request):
                     logger.error(f"Failed to upgrade team: {upgrade_response.status_code} - {upgrade_response.text}")
         except Exception as e:
             logger.error(f"Failed to upgrade team during mock payment: {e}")
-        
+
         # Simulate successful payment for mock transactions
         return {
             "success": True,

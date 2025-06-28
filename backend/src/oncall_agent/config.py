@@ -66,6 +66,7 @@ class Config(BaseSettings):
     pagerduty_api_key: str | None = Field(None, env="PAGERDUTY_API_KEY")
     pagerduty_enabled: bool = Field(True, env="PAGERDUTY_ENABLED")
     pagerduty_user_email: str = Field("oncall-agent@example.com", env="PAGERDUTY_USER_EMAIL")
+    pagerduty_events_integration_key: str | None = Field(None, env="PAGERDUTY_EVENTS_INTEGRATION_KEY")
 
     # API server settings
     api_host: str = Field("0.0.0.0", env="API_HOST")
@@ -98,7 +99,7 @@ class Config(BaseSettings):
     debug: bool = Field(False, env="DEBUG")
     aws_profile: str | None = Field(None, env="AWS_PROFILE")
     aws_default_region: str = Field("us-east-1", env="AWS_DEFAULT_REGION")
-    
+
     # PhonePe payment gateway settings
     phonepe_merchant_id: str | None = Field(None, env="PHONEPE_MERCHANT_ID")
     phonepe_salt_key: str | None = Field(None, env="PHONEPE_SALT_KEY")
@@ -106,7 +107,7 @@ class Config(BaseSettings):
     phonepe_base_url: str = Field("https://api.phonepe.com/apis/hermes", env="PHONEPE_BASE_URL")
     phonepe_redirect_url: str | None = Field(None, env="PHONEPE_REDIRECT_URL")
     phonepe_callback_url: str | None = Field(None, env="PHONEPE_CALLBACK_URL")
-    
+
     # General settings
     environment: str = Field("production", env="ENVIRONMENT")
 
@@ -130,7 +131,7 @@ def get_config() -> Config:
     if _config is None:
         # Load environment files in order of preference
         import os
-        
+
         # First try to load from environment-specific file
         node_env = os.getenv("NODE_ENV", "production")
         env_files = [
@@ -138,7 +139,7 @@ def get_config() -> Config:
             ".env.local",       # Local development
             ".env"              # Default fallback
         ]
-        
+
         for env_file in env_files:
             if load_dotenv(env_file):
                 print(f"Loaded config from {env_file}")
@@ -146,7 +147,7 @@ def get_config() -> Config:
         else:
             # Also try to load default .env
             load_dotenv()
-            
+
         _config = Config()
     return _config
 

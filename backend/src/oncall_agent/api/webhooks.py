@@ -5,9 +5,9 @@ import hmac
 from datetime import UTC, datetime
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
-import httpx
 
 from src.oncall_agent.api.log_streaming import log_stream_manager
 from src.oncall_agent.api.models import (
@@ -16,8 +16,8 @@ from src.oncall_agent.api.models import (
     PagerDutyWebhookPayload,
 )
 from src.oncall_agent.api.oncall_agent_trigger import OncallAgentTrigger
-from src.oncall_agent.api.routers.incidents import ANALYSIS_DB, INCIDENTS_DB
-from src.oncall_agent.api.schemas import AIAnalysis, Incident, IncidentStatus, Severity
+from src.oncall_agent.api.routers.incidents import INCIDENTS_DB
+from src.oncall_agent.api.schemas import Incident, IncidentStatus, Severity
 from src.oncall_agent.config import get_config
 from src.oncall_agent.utils import get_logger
 
@@ -201,14 +201,14 @@ async def pagerduty_webhook(
                 # Check alert usage - using user_id "1" for now (should be from incident context)
                 user_id = "1"  # Default user for webhook incidents
                 allowed, usage_data = await record_alert_usage(user_id, incident.id)
-                
+
                 if not allowed:
                     # Alert limit reached
                     logger.warning(f"Alert limit reached for user {user_id}, incident {incident.id} not processed")
-                    
+
                     # Send limit reached notification
                     await log_stream_manager.log_warning(
-                        f"⚠️ Alert limit reached for user. Upgrade required.",
+                        "⚠️ Alert limit reached for user. Upgrade required.",
                         incident_id=incident.id,
                         stage="alert_limit_reached",
                         metadata={
@@ -217,7 +217,7 @@ async def pagerduty_webhook(
                             "account_tier": usage_data.get("detail", {}).get("account_tier", "free")
                         }
                     )
-                    
+
                     return JSONResponse(
                         status_code=403,
                         content={
@@ -291,14 +291,14 @@ async def pagerduty_webhook(
                     # Check alert usage - using user_id "1" for now
                     user_id = "1"  # Default user for webhook incidents
                     allowed, usage_data = await record_alert_usage(user_id, incident.id)
-                    
+
                     if not allowed:
                         # Alert limit reached
                         logger.warning(f"Alert limit reached for user {user_id}, incident {incident.id} not processed")
-                        
+
                         # Send limit reached notification
                         await log_stream_manager.log_warning(
-                            f"⚠️ Alert limit reached for user. Upgrade required.",
+                            "⚠️ Alert limit reached for user. Upgrade required.",
                             incident_id=incident.id,
                             stage="alert_limit_reached",
                             metadata={
@@ -307,7 +307,7 @@ async def pagerduty_webhook(
                                 "account_tier": usage_data.get("detail", {}).get("account_tier", "free")
                             }
                         )
-                        
+
                         return JSONResponse(
                             status_code=403,
                             content={
@@ -351,7 +351,7 @@ async def pagerduty_webhook(
 
                     # Log the result
                     await log_stream_manager.log_success(
-                        f"✅ Incident processed successfully",
+                        "✅ Incident processed successfully",
                         incident_id=incident.id,
                         stage="agent_triggered",
                         progress=0.5,
@@ -375,14 +375,14 @@ async def pagerduty_webhook(
         raise
     except Exception as e:
         logger.error(f"Error processing webhook: {e}", exc_info=True)
-        
+
         # Log error to frontend
         await log_stream_manager.log_error(
             f"❌ Error processing webhook: {str(e)}",
             stage="webhook_error",
             metadata={"error": str(e)}
         )
-        
+
         raise HTTPException(status_code=500, detail=str(e))
 
 

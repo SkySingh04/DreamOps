@@ -1,9 +1,8 @@
 """Alert tracking and usage limits API router."""
 
 from datetime import datetime, timedelta
-from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from ...config import get_config
@@ -29,8 +28,8 @@ class RecordAlertRequest(BaseModel):
     """Request model for recording alert usage."""
     user_id: str
     alert_type: str
-    incident_id: Optional[str] = None
-    metadata: Optional[dict] = None
+    incident_id: str | None = None
+    metadata: dict | None = None
 
 
 class UpdateSubscriptionRequest(BaseModel):
@@ -55,7 +54,7 @@ SUBSCRIPTION_PLANS = {
 async def get_alert_usage(user_id: str):
     """Get alert usage for a user."""
     logger.info(f"Getting alert usage for user: {user_id}")
-    
+
     # Initialize user data if not exists
     if user_id not in USER_DATA:
         USER_DATA[user_id] = {
@@ -65,9 +64,9 @@ async def get_alert_usage(user_id: str):
             "billing_cycle_start": datetime.now().replace(day=1),
             "incidents_processed": set()  # Track processed incident IDs
         }
-    
+
     user_data = USER_DATA[user_id]
-    
+
     # Check if we need to reset monthly usage
     now = datetime.now()
     billing_start = user_data["billing_cycle_start"]
@@ -76,13 +75,13 @@ async def get_alert_usage(user_id: str):
         user_data["billing_cycle_start"] = now.replace(day=1)
         user_data["alerts_used"] = 0
         user_data["incidents_processed"] = set()
-    
+
     # Calculate billing cycle end (1 month from start)
     billing_cycle_end = user_data["billing_cycle_start"] + timedelta(days=30)
-    
+
     alerts_remaining = max(0, user_data["alerts_limit"] - user_data["alerts_used"])
     is_limit_reached = user_data["alerts_used"] >= user_data["alerts_limit"]
-    
+
     return AlertUsageResponse(
         alerts_used=user_data["alerts_used"],
         alerts_limit=user_data["alerts_limit"],
@@ -97,7 +96,7 @@ async def get_alert_usage(user_id: str):
 async def record_alert_usage(request: RecordAlertRequest):
     """Record alert usage for a user."""
     logger.info(f"Recording alert usage for user: {request.user_id}, type: {request.alert_type}, incident: {request.incident_id}")
-    
+
     # Initialize user data if not exists
     if request.user_id not in USER_DATA:
         USER_DATA[request.user_id] = {
@@ -107,9 +106,9 @@ async def record_alert_usage(request: RecordAlertRequest):
             "billing_cycle_start": datetime.now().replace(day=1),
             "incidents_processed": set()
         }
-    
+
     user_data = USER_DATA[request.user_id]
-    
+
     # Check if this incident was already processed
     if request.incident_id and request.incident_id in user_data["incidents_processed"]:
         logger.info(f"Incident {request.incident_id} already processed, skipping")
@@ -119,7 +118,7 @@ async def record_alert_usage(request: RecordAlertRequest):
             "alerts_remaining": max(0, user_data["alerts_limit"] - user_data["alerts_used"]),
             "already_processed": True
         }
-    
+
     # Check if limit reached
     if user_data["alerts_limit"] != -1 and user_data["alerts_used"] >= user_data["alerts_limit"]:
         raise HTTPException(
@@ -132,14 +131,14 @@ async def record_alert_usage(request: RecordAlertRequest):
                 "account_tier": user_data["account_tier"]
             }
         )
-    
+
     # Increment usage
     user_data["alerts_used"] += 1
     if request.incident_id:
         user_data["incidents_processed"].add(request.incident_id)
-    
+
     alerts_remaining = max(0, user_data["alerts_limit"] - user_data["alerts_used"]) if user_data["alerts_limit"] != -1 else -1
-    
+
     return {
         "success": True,
         "alerts_used": user_data["alerts_used"],
@@ -152,12 +151,12 @@ async def record_alert_usage(request: RecordAlertRequest):
 async def upgrade_subscription(user_id: str, plan_id: str, transaction_id: str):
     """Upgrade user subscription."""
     logger.info(f"Upgrading subscription for user: {user_id} to plan: {plan_id}")
-    
+
     if plan_id not in SUBSCRIPTION_PLANS:
         raise HTTPException(status_code=400, detail="Invalid plan ID")
-    
+
     plan = SUBSCRIPTION_PLANS[plan_id]
-    
+
     # Initialize user data if not exists
     if user_id not in USER_DATA:
         USER_DATA[user_id] = {
@@ -167,7 +166,7 @@ async def upgrade_subscription(user_id: str, plan_id: str, transaction_id: str):
             "billing_cycle_start": datetime.now().replace(day=1),
             "incidents_processed": set()
         }
-    
+
     # Update subscription
     USER_DATA[user_id].update({
         "account_tier": plan_id,
@@ -175,9 +174,9 @@ async def upgrade_subscription(user_id: str, plan_id: str, transaction_id: str):
         "last_payment_at": datetime.now(),
         "transaction_id": transaction_id
     })
-    
+
     logger.info(f"User {user_id} upgraded to {plan_id} plan with {plan['alerts_limit']} alerts")
-    
+
     return {
         "success": True,
         "new_tier": plan_id,

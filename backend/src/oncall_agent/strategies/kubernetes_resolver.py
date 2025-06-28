@@ -5,7 +5,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from src.oncall_agent.mcp_integrations.kubernetes_mcp_only import KubernetesMCPOnlyIntegration as KubernetesMCPIntegration
+from src.oncall_agent.mcp_integrations.kubernetes_mcp_only import (
+    KubernetesMCPOnlyIntegration as KubernetesMCPIntegration,
+)
 
 
 @dataclass

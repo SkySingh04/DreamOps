@@ -17,23 +17,24 @@ from src.oncall_agent.api.routers import (
     admin_integrations,
     agent_logs,
     agent_router,
+    alert_crud,
+    alert_tracking,
     analytics_router,
     api_keys,
     auth_setup,
+    chaos,
     dashboard_router,
     dev_config,
     firebase_auth,
     incidents_router,
     integrations_router,
+    mock_payments,
     monitoring_router,
+    payments_router,
     security_router,
     settings_router,
-    payments_router,
-    alert_tracking,
-    alert_crud,
     user_integrations,
 )
-from src.oncall_agent.api.routers import mock_payments
 from src.oncall_agent.config import get_config
 from src.oncall_agent.utils import get_logger, setup_logging
 
@@ -263,7 +264,7 @@ async def get_mcp_integrations():
                 }
             }
         }
-        
+
         # Try to get agent instance for real status
         try:
             from src.oncall_agent.api.webhooks import agent_trigger, get_agent_trigger
@@ -367,7 +368,8 @@ app.include_router(admin_integrations.router)  # Admin integration verification 
 # Include dev config router only in development mode
 if os.getenv("NODE_ENV") == "development":
     app.include_router(dev_config.router)
-    logger.info("Dev config routes registered (development mode)")
+    app.include_router(chaos.router, prefix="/api/v1")
+    logger.info("Dev config and chaos routes registered (development mode)")
 
 # Conditionally include webhook router
 if config.pagerduty_enabled:

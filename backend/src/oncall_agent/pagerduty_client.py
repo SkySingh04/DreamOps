@@ -1,6 +1,7 @@
 """PagerDuty API client for incident management."""
 
 import logging
+from typing import Any
 
 import aiohttp
 
@@ -179,6 +180,74 @@ class PagerDutyClient:
             logger.error(f"❌ Error adding note to incident {incident_id}: {e}")
             return False
 
+    async def trigger_event(
+        self,
+        summary: str,
+        severity: str = "critical",
+        source: str = "oncall-agent-chaos",
+        dedup_key: str | None = None,
+        custom_details: dict[str, Any] | None = None,
+        integration_key: str | None = None
+    ) -> dict[str, Any]:
+        """Trigger a PagerDuty event using Events API v2.
+        
+        Args:
+            summary: Brief description of the event
+            severity: One of 'critical', 'error', 'warning', 'info'
+            source: Source system that generated the event
+            dedup_key: Deduplication key to prevent duplicate incidents
+            custom_details: Additional details about the event
+            integration_key: Override the default integration key
+            
+        Returns:
+            API response containing event status and dedup_key
+        """
+        routing_key = integration_key or self.config.pagerduty_events_integration_key
+
+        if not routing_key:
+            logger.warning("PagerDuty Events Integration Key not configured - cannot trigger event")
+            return {"error": "No integration key configured"}
+
+        try:
+            if not self.session:
+                self.session = aiohttp.ClientSession()
+
+            url = "https://events.pagerduty.com/v2/enqueue"
+
+            payload = {
+                "routing_key": routing_key,
+                "event_action": "trigger",
+                "payload": {
+                    "summary": summary,
+                    "source": source,
+                    "severity": severity
+                }
+            }
+
+            if dedup_key:
+                payload["dedup_key"] = dedup_key
+
+            if custom_details:
+                payload["payload"]["custom_details"] = custom_details
+
+            headers = {
+                "Content-Type": "application/json"
+            }
+
+            async with self.session.post(url, json=payload, headers=headers) as response:
+                response_data = await response.json()
+
+                if response.status == 202:
+                    logger.info(f"✅ Successfully triggered PagerDuty event: {summary}")
+                    return response_data
+                else:
+                    logger.error(f"❌ Failed to trigger event: {response.status} - {response_data}")
+                    return {"error": f"Failed with status {response.status}", "details": response_data}
+
+        except Exception as e:
+            logger.error(f"❌ Error triggering PagerDuty event: {e}")
+            return {"error": str(e)}
+
 
 # Global instance for easy access
 pagerduty_client = PagerDutyClient()
@@ -197,3 +266,15 @@ async def acknowledge_pagerduty_incident(incident_id: str) -> bool:
     """Convenience function to acknowledge a PagerDuty incident."""
     async with PagerDutyClient() as client:
         return await client.acknowledge_incident(incident_id)
+
+
+async def trigger_pagerduty_event(
+    summary: str,
+    severity: str = "critical",
+    source: str = "oncall-agent-chaos",
+    dedup_key: str | None = None,
+    custom_details: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Convenience function to trigger a PagerDuty event."""
+    async with PagerDutyClient() as client:
+        return await client.trigger_event(summary, severity, source, dedup_key, custom_details)
