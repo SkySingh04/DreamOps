@@ -512,7 +512,7 @@ async def get_agent_capabilities() -> JSONResponse:
         for name, integration in agent.mcp_integrations.items():
             capabilities["integrations"][name] = {
                 "connected": await integration.health_check(),
-                "capabilities": integration.get_capabilities()
+                "capabilities": await integration.get_capabilities()
             }
 
         return JSONResponse(content=capabilities)

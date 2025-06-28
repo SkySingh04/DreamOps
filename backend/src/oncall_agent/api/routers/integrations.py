@@ -89,7 +89,20 @@ async def list_integrations() -> list[Integration]:
                 integration = agent.mcp_integrations[name]
                 is_healthy = await integration.health_check()
                 status = IntegrationStatus.CONNECTED if is_healthy else IntegrationStatus.ERROR
-                capabilities = integration.get_capabilities()
+                capabilities_dict = await integration.get_capabilities()
+                # Convert capabilities dict to list of strings
+                capabilities = []
+                if capabilities_dict:
+                    if isinstance(capabilities_dict, dict):
+                        # Extract all capability lists and flatten them
+                        for category, items in capabilities_dict.items():
+                            if isinstance(items, list):
+                                capabilities.extend(items)
+                        # If no capabilities found, use category names
+                        if not capabilities:
+                            capabilities = list(capabilities_dict.keys())
+                    elif isinstance(capabilities_dict, list):
+                        capabilities = capabilities_dict
 
                 health = IntegrationHealth(
                     name=name,
@@ -138,7 +151,20 @@ async def get_integration(
         integration = agent.mcp_integrations[integration_name]
         is_healthy = await integration.health_check()
         status = IntegrationStatus.CONNECTED if is_healthy else IntegrationStatus.ERROR
-        capabilities = integration.get_capabilities()
+        capabilities_dict = await integration.get_capabilities()
+        # Convert capabilities dict to list of strings
+        capabilities = []
+        if capabilities_dict:
+            if isinstance(capabilities_dict, dict):
+                # Extract all capability lists and flatten them
+                for category, items in capabilities_dict.items():
+                    if isinstance(items, list):
+                        capabilities.extend(items)
+                # If no capabilities found, use category names
+                if not capabilities:
+                    capabilities = list(capabilities_dict.keys())
+            elif isinstance(capabilities_dict, list):
+                capabilities = capabilities_dict
 
         health = IntegrationHealth(
             name=integration_name,

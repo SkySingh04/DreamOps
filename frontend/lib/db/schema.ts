@@ -199,33 +199,6 @@ export const integrationAuditLogs = pgTable('integration_audit_logs', {
   metadata: jsonb('metadata'), // Additional audit data
 });
 
-export const apiKeys = pgTable('api_keys', {
-  id: serial('id').primaryKey(),
-  teamId: integer('team_id')
-    .notNull()
-    .references(() => teams.id),
-  userId: integer('user_id')
-    .notNull()
-    .references(() => users.id),
-  provider: varchar('provider', { length: 20 }).notNull(),
-  name: varchar('name', { length: 100 }).notNull(),
-  keyMasked: varchar('key_masked', { length: 20 }).notNull(),
-  keyHash: text('key_hash').notNull(),
-  isPrimary: boolean('is_primary').notNull().default(false),
-  status: varchar('status', { length: 20 }).notNull().default('active'),
-  model: varchar('model', { length: 50 }),
-  isValidated: boolean('is_validated').notNull().default(false),
-  validatedAt: timestamp('validated_at'),
-  validationError: text('validation_error'),
-  rateLimitRemaining: integer('rate_limit_remaining'),
-  rateLimitResetAt: timestamp('rate_limit_reset_at'),
-  errorCount: integer('error_count').notNull().default(0),
-  lastError: text('last_error'),
-  lastUsedAt: timestamp('last_used_at'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
-});
-
 export const userSetupRequirements = pgTable('user_setup_requirements', {
   id: serial('id').primaryKey(),
   userId: integer('user_id')
@@ -404,17 +377,6 @@ export const integrationAuditLogsRelations = relations(integrationAuditLogs, ({ 
   }),
   performedBy: one(users, {
     fields: [integrationAuditLogs.performedBy],
-    references: [users.id],
-  }),
-}));
-
-export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
-  team: one(teams, {
-    fields: [apiKeys.teamId],
-    references: [teams.id],
-  }),
-  user: one(users, {
-    fields: [apiKeys.userId],
     references: [users.id],
   }),
 }));

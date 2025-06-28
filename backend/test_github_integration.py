@@ -161,7 +161,7 @@ async def test_standalone_github_mcp():
         logger.info(f"Commits result: {commits_result}")
 
         # Get capabilities
-        capabilities = github.get_capabilities()
+        capabilities = await github.get_capabilities()
         logger.info(f"\nAvailable capabilities: {capabilities}")
 
     except Exception as e:

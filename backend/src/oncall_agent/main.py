@@ -146,7 +146,7 @@ async def list_integrations():
     for name, integration in agent.mcp_integrations.items():
         integrations.append({
             "name": name,
-            "capabilities": integration.get_capabilities(),
+            "capabilities": await integration.get_capabilities(),
             "connected": await integration.health_check()
         })
 
@@ -168,7 +168,7 @@ async def check_integration_health(name: str):
     return {
         "name": name,
         "healthy": is_healthy,
-        "capabilities": integration.get_capabilities()
+        "capabilities": await integration.get_capabilities()
     }
 
 

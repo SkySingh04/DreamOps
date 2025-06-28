@@ -181,6 +181,43 @@ async def health_check():
     return health_status
 
 
+@app.get("/integrations")
+async def get_mcp_integrations():
+    """Get MCP integration status for frontend."""
+    try:
+        integrations = []
+        
+        # Try to get agent instance
+        try:
+            from src.oncall_agent.api.webhooks import agent_trigger
+            if agent_trigger and hasattr(agent_trigger, 'agent') and agent_trigger.agent:
+                agent = agent_trigger.agent
+                
+                # Get MCP integrations from agent
+                for name, integration in agent.mcp_integrations.items():
+                    try:
+                        is_healthy = await integration.health_check()
+                        integrations.append({
+                            "name": name,
+                            "capabilities": await integration.get_capabilities(),
+                            "connected": is_healthy
+                        })
+                    except Exception as e:
+                        logger.error(f"Error checking integration {name}: {e}")
+                        integrations.append({
+                            "name": name,
+                            "capabilities": [],
+                            "connected": False
+                        })
+        except Exception as e:
+            logger.error(f"Error getting agent instance: {e}")
+        
+        return {"integrations": integrations}
+    except Exception as e:
+        logger.error(f"Error getting MCP integrations: {e}")
+        return {"integrations": []}
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler."""

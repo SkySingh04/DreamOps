@@ -44,9 +44,9 @@ class APIClient {
     options: RequestInit = {}
   ): Promise<APIResponse<T>> {
     try {
-      const headers: HeadersInit = {
+      const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        ...options.headers,
+        ...(options.headers as Record<string, string> || {}),
       };
 
       // Add authorization header
@@ -60,7 +60,23 @@ class APIClient {
         headers,
       });
 
-      const data = await response.json();
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      let data;
+      
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        // If not JSON, get the text content for debugging
+        const textContent = await response.text();
+        console.error('Non-JSON response received:', {
+          status: response.status,
+          statusText: response.statusText,
+          contentType,
+          content: textContent.substring(0, 200) + '...'
+        });
+        throw new Error(`Expected JSON response but got ${contentType || 'unknown content type'}`);
+      }
 
       if (!response.ok) {
         console.error(`API Error ${response.status}:`, data);
@@ -293,30 +309,11 @@ class APIClient {
 
   // Integration endpoints
   async getIntegrations(): Promise<APIResponse<Integration[]>> {
-    return this.request<Integration[]>('/integrations');
+    return this.request<Integration[]>('/api/v1/integrations/');
   }
 
   async getMCPIntegrations(): Promise<APIResponse<{ integrations: Array<{ name: string; capabilities: string[]; connected: boolean }> }>> {
-    // Call the correct backend endpoint for real MCP integrations
-    const response = await this.request<Array<{ name: string; capabilities: string[]; status: string }>>('/api/v1/integrations/');
-    console.log('MCP Integrations Response:', response); // Debug log
-    
-    // Transform the response to match the expected format
-    if (response.status === 'success' && response.data) {
-      const transformedData = {
-        integrations: response.data.map((integration: any) => ({
-          name: integration.name,
-          capabilities: integration.capabilities || [],
-          connected: integration.status === 'connected'
-        }))
-      };
-      return {
-        status: 'success',
-        data: transformedData
-      };
-    }
-    
-    return response as any;
+    return this.request<{ integrations: Array<{ name: string; capabilities: string[]; connected: boolean }> }>('/api/v1/integrations/');
   }
 
   async getIntegration(id: string): Promise<APIResponse<Integration>> {
@@ -333,14 +330,14 @@ class APIClient {
     id: string,
     config: Record<string, any>
   ): Promise<APIResponse<Integration>> {
-    return this.request<Integration>(`/api/v1/integrations/${id}`, {
+    return this.request<Integration>(`/api/v1/integrations/${id}/config`, {
       method: 'PUT',
-      body: JSON.stringify({ config }),
+      body: JSON.stringify(config),
     });
   }
 
   async toggleIntegration(id: string, enabled: boolean): Promise<APIResponse<Integration>> {
-    return this.request<Integration>(`/api/v1/integrations/${id}`, {
+    return this.request<Integration>(`/api/v1/integrations/${id}/config`, {
       method: 'PUT',
       body: JSON.stringify({ enabled }),
     });
@@ -423,7 +420,9 @@ class APIClient {
     const response = await fetch(
       `${this.baseURL}/api/v1/analytics/export?format=${format}${queryParams ? `&${queryParams}` : ''}`,
       {
-        headers: this.headers,
+        headers: {
+          'Content-Type': 'application/json',
+        },
       }
     );
 
@@ -590,6 +589,8 @@ export const queryKeys = {
   incident: (id: string) => ['incident', id],
   incidentTimeline: (id: string) => ['incident', id, 'timeline'],
   integrations: ['integrations'],
+  mcpIntegrations: ['mcp-integrations'],
+  availableIntegrations: ['available-integrations'],
   integration: (id: string) => ['integration', id],
   aiConfig: ['ai-agent', 'config'],
   agentStatus: ['ai-agent', 'status'],
