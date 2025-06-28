@@ -11,16 +11,17 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { title, description, severity, source, sourceId, metadata } = body;
+    const { userId, title, description, severity, source, sourceId, metadata } = body;
 
-    if (!title || !severity || !source) {
+    if (!title || !severity || !source || !userId) {
       return NextResponse.json(
-        { error: 'Missing required fields: title, severity, source' },
+        { error: 'Missing required fields: userId, title, severity, source' },
         { status: 400 }
       );
     }
 
     const incident = await createIncident({
+      userId,
       title,
       description,
       severity,
