@@ -21,7 +21,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { CopyIcon, CheckCircle2, AlertCircle, Loader2, ExternalLink } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
-import { toast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 
 interface IntegrationSetupModalProps {
   integration: {
@@ -86,10 +86,7 @@ export function IntegrationSetupModal({
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast({
-      title: 'Copied to clipboard',
-      description: 'The text has been copied to your clipboard'
-    });
+    toast.success('Copied to clipboard');
   };
 
   const handleTest = async () => {
@@ -105,16 +102,9 @@ export function IntegrationSetupModal({
       setTestResult(response.data);
       
       if (response.data.success) {
-        toast({
-          title: 'Test Successful',
-          description: 'Connection test passed! You can now save this integration.'
-        });
+        toast.success('Connection test passed! You can now save this integration.');
       } else {
-        toast({
-          title: 'Test Failed',
-          description: response.data.error || 'Connection test failed',
-          variant: 'destructive'
-        });
+        toast.error(response.data.error || 'Connection test failed');
       }
     } catch (error: any) {
       setTestResult({
@@ -122,11 +112,7 @@ export function IntegrationSetupModal({
         error: error.response?.data?.detail || 'Failed to test connection'
       });
       
-      toast({
-        title: 'Test Failed',
-        description: 'Failed to test connection',
-        variant: 'destructive'
-      });
+      toast.error('Failed to test connection');
     } finally {
       setIsTesting(false);
     }
@@ -212,23 +198,25 @@ export function IntegrationSetupModal({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button 
-            variant="outline" 
-            onClick={handleTest}
-            disabled={isTesting}
-          >
-            {isTesting ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Testing...
-              </>
-            ) : (
-              'Test Connection'
-            )}
-          </Button>
+          {integration.type !== 'pagerduty' && (
+            <Button 
+              variant="outline" 
+              onClick={handleTest}
+              disabled={isTesting}
+            >
+              {isTesting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Testing...
+                </>
+              ) : (
+                'Test Connection'
+              )}
+            </Button>
+          )}
           <Button 
             onClick={handleSave}
-            disabled={!testResult?.success}
+            disabled={integration.type !== 'pagerduty' && !testResult?.success}
           >
             Save Integration
           </Button>
@@ -242,34 +230,77 @@ export function IntegrationSetupModal({
 function PagerDutyConfig({ config, onChange, requirements }: any) {
   return (
     <div className="space-y-4">
+      <Alert className="border-blue-200 bg-blue-50">
+        <AlertCircle className="h-4 w-4 text-blue-600" />
+        <AlertDescription className="text-blue-800">
+          <strong>Setup Instructions:</strong>
+          <ol className="mt-2 space-y-1 text-sm">
+            <li>1. Go to your PagerDuty account settings</li>
+            <li>2. Navigate to API Access → API Access Keys</li>
+            <li>3. Create a new API key with full access</li>
+            <li>4. Copy the API key below</li>
+          </ol>
+        </AlertDescription>
+      </Alert>
+
       <div>
-        <Label htmlFor="integration_url">Integration URL *</Label>
+        <Label htmlFor="api_key">API Key *</Label>
         <Input
-          id="integration_url"
-          type="url"
-          placeholder="https://events.pagerduty.com/integration/..."
-          value={config.integration_url || ''}
-          onChange={(e) => onChange('integration_url', e.target.value)}
+          id="api_key"
+          type="password"
+          placeholder="u+wtxR9ysxHtPM9xPL8Q..."
+          value={config.api_key || ''}
+          onChange={(e) => onChange('api_key', e.target.value)}
           className="font-mono text-sm"
         />
         <p className="text-sm text-muted-foreground mt-1">
-          The webhook URL from your PagerDuty service integration
+          Your PagerDuty API key for accessing incidents and services
         </p>
       </div>
 
       <div>
-        <Label htmlFor="webhook_secret">Webhook Secret (Optional)</Label>
+        <Label htmlFor="user_email">User Email *</Label>
+        <Input
+          id="user_email"
+          type="email"
+          placeholder="your-email@company.com"
+          value={config.user_email || ''}
+          onChange={(e) => onChange('user_email', e.target.value)}
+        />
+        <p className="text-sm text-muted-foreground mt-1">
+          The email address associated with your PagerDuty account
+        </p>
+      </div>
+
+      <div>
+        <Label htmlFor="webhook_secret">Webhook Secret *</Label>
         <Input
           id="webhook_secret"
           type="password"
-          placeholder="Enter webhook secret for signature verification"
+          placeholder="Enter a strong secret for webhook verification"
           value={config.webhook_secret || ''}
           onChange={(e) => onChange('webhook_secret', e.target.value)}
         />
         <p className="text-sm text-muted-foreground mt-1">
-          Optional: Used to verify webhook signatures for added security
+          A secret key for verifying PagerDuty webhook signatures
         </p>
       </div>
+
+      <Alert>
+        <AlertDescription>
+          <strong>Note:</strong> After saving, you'll need to configure a webhook in PagerDuty 
+          to send incidents to: <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">
+            {process.env.NEXT_PUBLIC_API_URL}/webhook/pagerduty
+          </code>
+        </AlertDescription>
+      </Alert>
+
+      <Alert className="border-green-200 bg-green-50">
+        <CheckCircle2 className="h-4 w-4 text-green-600" />
+        <AlertDescription className="text-green-800">
+          <strong>No test required:</strong> PagerDuty configuration will be validated when you receive your first webhook.
+        </AlertDescription>
+      </Alert>
     </div>
   );
 }
@@ -297,11 +328,7 @@ function KubernetesConfig({ config, onChange, requirements }: any) {
         onChange('namespaces', namespaces);
       }
     } catch (error) {
-      toast({
-        title: 'Discovery Failed',
-        description: 'Failed to discover Kubernetes contexts',
-        variant: 'destructive'
-      });
+      toast.error('Failed to discover Kubernetes contexts');
     } finally {
       setIsDiscovering(false);
     }
@@ -309,6 +336,22 @@ function KubernetesConfig({ config, onChange, requirements }: any) {
 
   return (
     <div className="space-y-4">
+      <Alert className="border-blue-200 bg-blue-50">
+        <AlertCircle className="h-4 w-4 text-blue-600" />
+        <AlertDescription className="text-blue-800">
+          <strong>Setup Instructions:</strong>
+          <ol className="mt-2 space-y-1 text-sm">
+            <li>1. Ensure kubectl is installed and configured</li>
+            <li>2. Run: <code className="bg-gray-100 px-1 rounded">kubectl config get-contexts</code></li>
+            <li>3. Click "Auto-discover" to find available clusters</li>
+            <li>4. Select the clusters you want to monitor</li>
+            <li>5. Ensure your kubectl has the following permissions:</li>
+            <li className="ml-4">• <code>get, list, watch</code> on pods, deployments, services</li>
+            <li className="ml-4">• <code>delete</code> on pods (for restart operations)</li>
+          </ol>
+        </AlertDescription>
+      </Alert>
+
       <div>
         <div className="flex justify-between items-center mb-2">
           <Label>Kubernetes Contexts</Label>
@@ -420,6 +463,20 @@ function KubernetesConfig({ config, onChange, requirements }: any) {
 function GitHubConfig({ config, onChange, requirements }: any) {
   return (
     <div className="space-y-4">
+      <Alert className="border-blue-200 bg-blue-50">
+        <AlertCircle className="h-4 w-4 text-blue-600" />
+        <AlertDescription className="text-blue-800">
+          <strong>Setup Instructions:</strong>
+          <ol className="mt-2 space-y-1 text-sm">
+            <li>1. Go to GitHub → Settings → Developer settings</li>
+            <li>2. Click "Personal access tokens" → "Tokens (classic)"</li>
+            <li>3. Click "Generate new token (classic)"</li>
+            <li>4. Select scopes: <code className="bg-gray-100 px-1 rounded">repo</code>, <code className="bg-gray-100 px-1 rounded">read:org</code></li>
+            <li>5. Generate token and copy it below</li>
+          </ol>
+        </AlertDescription>
+      </Alert>
+
       <div>
         <Label htmlFor="token">Personal Access Token *</Label>
         <Input
@@ -467,6 +524,21 @@ function GitHubConfig({ config, onChange, requirements }: any) {
 function NotionConfig({ config, onChange, requirements }: any) {
   return (
     <div className="space-y-4">
+      <Alert className="border-blue-200 bg-blue-50">
+        <AlertCircle className="h-4 w-4 text-blue-600" />
+        <AlertDescription className="text-blue-800">
+          <strong>Setup Instructions:</strong>
+          <ol className="mt-2 space-y-1 text-sm">
+            <li>1. Go to <a href="https://www.notion.so/my-integrations" target="_blank" className="underline">notion.so/my-integrations</a></li>
+            <li>2. Click "New integration"</li>
+            <li>3. Give it a name (e.g., "DreamOps")</li>
+            <li>4. Select the workspace to integrate</li>
+            <li>5. Copy the "Internal Integration Token"</li>
+            <li>6. Share your runbook pages with the integration</li>
+          </ol>
+        </AlertDescription>
+      </Alert>
+
       <div>
         <Label htmlFor="token">Integration Token *</Label>
         <Input
@@ -503,6 +575,21 @@ function NotionConfig({ config, onChange, requirements }: any) {
 function GrafanaConfig({ config, onChange, requirements }: any) {
   return (
     <div className="space-y-4">
+      <Alert className="border-blue-200 bg-blue-50">
+        <AlertCircle className="h-4 w-4 text-blue-600" />
+        <AlertDescription className="text-blue-800">
+          <strong>Setup Instructions:</strong>
+          <ol className="mt-2 space-y-1 text-sm">
+            <li>1. Log in to your Grafana instance</li>
+            <li>2. Go to Configuration → API Keys</li>
+            <li>3. Click "Add API key"</li>
+            <li>4. Name it "DreamOps" with "Viewer" role</li>
+            <li>5. Copy the generated API key</li>
+            <li>6. Note your Grafana URL (e.g., https://mycompany.grafana.net)</li>
+          </ol>
+        </AlertDescription>
+      </Alert>
+
       <div>
         <Label htmlFor="url">Grafana URL *</Label>
         <Input

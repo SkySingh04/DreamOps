@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { IntegrationSetupModal } from '@/components/integrations/integration-setup-modal';
 import { apiClient } from '@/lib/api-client';
-import { toast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 
 interface TeamIntegration {
@@ -136,11 +136,7 @@ export default function IntegrationsSettingsPage() {
       }
     } catch (error) {
       console.error('Failed to fetch integrations:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load integrations',
-        variant: 'destructive'
-      });
+      toast.error('Failed to load integrations');
     } finally {
       setIsLoading(false);
     }
@@ -202,19 +198,13 @@ export default function IntegrationsSettingsPage() {
 
       await fetchData();
 
-      toast({
-        title: response.data.success ? 'Test Successful' : 'Test Failed',
-        description: response.data.success 
-          ? `${getIntegrationMetadata(integration.integration_type).name} connection is working`
-          : response.data.error || 'Connection test failed',
-        variant: response.data.success ? 'default' : 'destructive'
-      });
+      if (response.data.success) {
+        toast.success(`${getIntegrationMetadata(integration.integration_type).name} connection is working`);
+      } else {
+        toast.error(response.data.error || 'Connection test failed');
+      }
     } catch (error) {
-      toast({
-        title: 'Test Failed',
-        description: 'Failed to test integration',
-        variant: 'destructive'
-      });
+      toast.error('Failed to test integration');
     }
   };
 
@@ -226,26 +216,15 @@ export default function IntegrationsSettingsPage() {
 
       await fetchData();
 
-      toast({
-        title: integration.is_enabled ? 'Integration Disabled' : 'Integration Enabled',
-        description: `${getIntegrationMetadata(integration.integration_type).name} has been ${integration.is_enabled ? 'disabled' : 'enabled'}`
-      });
+      toast.success(`${getIntegrationMetadata(integration.integration_type).name} has been ${integration.is_enabled ? 'disabled' : 'enabled'}`);
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to update integration',
-        variant: 'destructive'
-      });
+      toast.error('Failed to update integration');
     }
   };
 
   const handleRemove = async (integration: TeamIntegration) => {
     if (integration.is_required) {
-      toast({
-        title: 'Cannot Remove',
-        description: 'Required integrations cannot be removed',
-        variant: 'destructive'
-      });
+      toast.error('Required integrations cannot be removed');
       return;
     }
 
@@ -257,16 +236,9 @@ export default function IntegrationsSettingsPage() {
       await apiClient.delete(`/api/v1/teams/${teamId}/integrations/${integration.id}`);
       await fetchData();
       
-      toast({
-        title: 'Integration Removed',
-        description: `${getIntegrationMetadata(integration.integration_type).name} has been removed`
-      });
+      toast.success(`${getIntegrationMetadata(integration.integration_type).name} has been removed`);
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to remove integration',
-        variant: 'destructive'
-      });
+      toast.error('Failed to remove integration');
     }
   };
 
@@ -277,16 +249,9 @@ export default function IntegrationsSettingsPage() {
       const response = await apiClient.post(`/api/v1/teams/${teamId}/integrations/test-all`);
       await fetchData();
       
-      toast({
-        title: 'Test Complete',
-        description: `${response.data.summary.successful} of ${response.data.summary.total} integrations connected successfully`
-      });
+      toast.success(`${response.data.summary.successful} of ${response.data.summary.total} integrations connected successfully`);
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to test integrations',
-        variant: 'destructive'
-      });
+      toast.error('Failed to test integrations');
     } finally {
       setIsTestingAll(false);
     }

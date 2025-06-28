@@ -1,46 +1,38 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { signToken, verifyToken } from '@/lib/auth/session';
 
-const protectedRoutes = '/dashboard';
+const protectedRoutes = ['/dashboard', '/settings'];
+const setupRoutes = ['/auth/signup/llm-setup', '/auth/signup/integrations', '/auth/complete-setup', '/auth/signin/validate'];
+const publicRoutes = ['/sign-in', '/sign-up', '/', '/api'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const sessionCookie = request.cookies.get('session');
-  const isProtectedRoute = pathname.startsWith(protectedRoutes);
+  const firebaseToken = request.cookies.get('firebase-token');
+  
+  // Check if it's a protected route
+  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
+  const isSetupRoute = setupRoutes.some(route => pathname.startsWith(route));
+  const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route));
+  const isApiRoute = pathname.startsWith('/api');
 
-  if (isProtectedRoute && !sessionCookie) {
-    return NextResponse.redirect(new URL('/sign-in', request.url));
+  // Allow all API routes to pass through (they have their own auth)
+  if (isApiRoute) {
+    return NextResponse.next();
   }
 
-  let res = NextResponse.next();
-
-  if (sessionCookie && request.method === 'GET') {
-    try {
-      const parsed = await verifyToken(sessionCookie.value);
-      const expiresInOneDay = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-      res.cookies.set({
-        name: 'session',
-        value: await signToken({
-          ...parsed,
-          expires: expiresInOneDay.toISOString()
-        }),
-        httpOnly: true,
-        secure: true,
-        sameSite: 'lax',
-        expires: expiresInOneDay
-      });
-    } catch (error) {
-      console.error('Error updating session:', error);
-      res.cookies.delete('session');
-      if (isProtectedRoute) {
-        return NextResponse.redirect(new URL('/sign-in', request.url));
-      }
-    }
+  // If no auth token and trying to access protected or setup routes
+  if (!firebaseToken && (isProtectedRoute || isSetupRoute)) {
+    const signInUrl = new URL('/sign-in', request.url);
+    signInUrl.searchParams.set('redirect', pathname);
+    return NextResponse.redirect(signInUrl);
   }
 
-  return res;
+  // Redirect authenticated users away from sign-in/sign-up pages
+  if (firebaseToken && (pathname === '/sign-in' || pathname === '/sign-up')) {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+  
+  return NextResponse.next();
 }
 
 export const config = {

@@ -13,13 +13,20 @@ import { relations } from 'drizzle-orm';
 
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
+  firebaseUid: varchar('firebase_uid', { length: 128 }).unique(),
   name: varchar('name', { length: 100 }),
   email: varchar('email', { length: 255 }).notNull().unique(),
-  passwordHash: text('password_hash').notNull(),
+  passwordHash: text('password_hash'),
   role: varchar('role', { length: 20 }).notNull().default('member'),
+  llmProvider: varchar('llm_provider', { length: 20 }),
+  llmModel: varchar('llm_model', { length: 50 }),
+  isSetupComplete: boolean('is_setup_complete').notNull().default(false),
+  setupCompletedAt: timestamp('setup_completed_at'),
+  lastValidationAt: timestamp('last_validation_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
   deletedAt: timestamp('deleted_at'),
+  teamId: integer('team_id').references(() => teams.id),
 });
 
 export const teams = pgTable('teams', {
@@ -206,11 +213,43 @@ export const apiKeys = pgTable('api_keys', {
   keyHash: text('key_hash').notNull(),
   isPrimary: boolean('is_primary').notNull().default(false),
   status: varchar('status', { length: 20 }).notNull().default('active'),
+  model: varchar('model', { length: 50 }),
+  isValidated: boolean('is_validated').notNull().default(false),
+  validatedAt: timestamp('validated_at'),
+  validationError: text('validation_error'),
+  rateLimitRemaining: integer('rate_limit_remaining'),
+  rateLimitResetAt: timestamp('rate_limit_reset_at'),
   errorCount: integer('error_count').notNull().default(0),
   lastError: text('last_error'),
   lastUsedAt: timestamp('last_used_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const userSetupRequirements = pgTable('user_setup_requirements', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id),
+  requirementType: varchar('requirement_type', { length: 50 }).notNull(),
+  isCompleted: boolean('is_completed').notNull().default(false),
+  isRequired: boolean('is_required').notNull().default(true),
+  completedAt: timestamp('completed_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const setupValidationLogs = pgTable('setup_validation_logs', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id),
+  validationType: varchar('validation_type', { length: 50 }).notNull(),
+  validationTarget: varchar('validation_target', { length: 100 }).notNull(),
+  isSuccessful: boolean('is_successful').notNull(),
+  errorMessage: text('error_message'),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
 export const teamsRelations = relations(teams, ({ many }) => ({
@@ -236,6 +275,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   updatedIntegrations: many(teamIntegrations, { relationName: 'updatedIntegrations' }),
   integrationAuditLogs: many(integrationAuditLogs),
   apiKeys: many(apiKeys),
+  setupRequirements: many(userSetupRequirements),
+  setupValidationLogs: many(setupValidationLogs),
 }));
 
 export const invitationsRelations = relations(invitations, ({ one }) => ({
@@ -378,6 +419,20 @@ export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
   }),
 }));
 
+export const userSetupRequirementsRelations = relations(userSetupRequirements, ({ one }) => ({
+  user: one(users, {
+    fields: [userSetupRequirements.userId],
+    references: [users.id],
+  }),
+}));
+
+export const setupValidationLogsRelations = relations(setupValidationLogs, ({ one }) => ({
+  user: one(users, {
+    fields: [setupValidationLogs.userId],
+    references: [users.id],
+  }),
+}));
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Team = typeof teams.$inferSelect;
@@ -400,8 +455,12 @@ export type TeamIntegration = typeof teamIntegrations.$inferSelect;
 export type NewTeamIntegration = typeof teamIntegrations.$inferInsert;
 export type IntegrationAuditLog = typeof integrationAuditLogs.$inferSelect;
 export type NewIntegrationAuditLog = typeof integrationAuditLogs.$inferInsert;
-export type APIKey = typeof apiKeys.$inferSelect;
-export type NewAPIKey = typeof apiKeys.$inferInsert;
+export type ApiKey = typeof apiKeys.$inferSelect;
+export type NewApiKey = typeof apiKeys.$inferInsert;
+export type UserSetupRequirement = typeof userSetupRequirements.$inferSelect;
+export type NewUserSetupRequirement = typeof userSetupRequirements.$inferInsert;
+export type SetupValidationLog = typeof setupValidationLogs.$inferSelect;
+export type NewSetupValidationLog = typeof setupValidationLogs.$inferInsert;
 export type TeamDataWithMembers = Team & {
   teamMembers: (TeamMember & {
     user: Pick<User, 'id' | 'name' | 'email'>;
@@ -443,4 +502,19 @@ export enum IntegrationAuditAction {
   ENABLED = 'enabled',
   DISABLED = 'disabled',
   DELETED = 'deleted',
+}
+
+export enum SetupRequirementType {
+  LLM_CONFIG = 'llm_config',
+  PAGERDUTY = 'pagerduty',
+  KUBERNETES = 'kubernetes',
+  GITHUB = 'github',
+  NOTION = 'notion',
+  GRAFANA = 'grafana',
+  DATADOG = 'datadog',
+}
+
+export enum LLMProvider {
+  ANTHROPIC = 'anthropic',
+  OPENAI = 'openai',
 }

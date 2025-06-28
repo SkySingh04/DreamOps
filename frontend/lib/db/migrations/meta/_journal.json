@@ -22,6 +22,20 @@
       "when": 1750960662732,
       "tag": "0002_chunky_preak",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1751046466127,
+      "tag": "0003_crazy_venus",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1751049791486,
+      "tag": "0004_flimsy_turbo",
+      "breakpoints": true
     }
   ]
 }

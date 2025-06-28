@@ -8,8 +8,9 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { CheckCircle2, Circle, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
 import { IntegrationSetupModal } from '@/components/integrations/integration-setup-modal';
+import { toast } from 'sonner';
 import { apiClient } from '@/lib/api-client';
-import { toast } from '@/components/ui/use-toast';
+import { useAuth } from '@/lib/firebase/auth-context';
 
 interface Integration {
   type: string;
@@ -79,30 +80,42 @@ const INTEGRATIONS_DATA: Integration[] = [
 
 export default function IntegrationsSetupPage() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [integrations, setIntegrations] = useState<Integration[]>(INTEGRATIONS_DATA);
   const [selectedIntegration, setSelectedIntegration] = useState<Integration | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isTestingAll, setIsTestingAll] = useState(false);
   const [teamId, setTeamId] = useState<number | null>(null);
 
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/sign-in?redirect=/auth/signup/integrations');
+    }
+  }, [user, authLoading, router]);
+
   useEffect(() => {
     // Get team ID from user context
-    fetchUserTeam();
-  }, []);
+    if (user) {
+      fetchUserTeam();
+    }
+  }, [user]);
 
   const fetchUserTeam = async () => {
     try {
-      const response = await apiClient.get('/api/user');
-      if (response.data?.teamId) {
-        setTeamId(response.data.teamId);
+      const response = await apiClient.get('/api/v1/auth/me');
+      
+      if (response.status !== 'success') {
+        throw new Error(response.error?.message || 'Failed to fetch user info');
+      }
+      
+      const data = response.data;
+      if (data.user?.team_id) {
+        setTeamId(data.user.team_id);
       }
     } catch (error) {
       console.error('Failed to fetch user team:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load user information',
-        variant: 'destructive'
-      });
+      toast.error('Failed to load user information');
     }
   };
 
@@ -147,46 +160,55 @@ export default function IntegrationsSetupPage() {
     if (!selectedIntegration || !teamId) return;
 
     try {
-      // Update integration status
-      updateIntegrationStatus(selectedIntegration.type, 'testing');
-
-      // Test the integration
-      const testResult = await apiClient.post(
-        `/api/v1/integrations/test/${selectedIntegration.type}`,
-        { integration_type: selectedIntegration.type, config }
-      );
-
-      if (testResult.data.success) {
+      // For PagerDuty, skip testing and save directly
+      if (selectedIntegration.type === 'pagerduty') {
+        updateIntegrationStatus(selectedIntegration.type, 'connected', config);
+        
         // Save the integration
         await apiClient.post(`/api/v1/teams/${teamId}/integrations`, {
           integration_type: selectedIntegration.type,
           config,
           is_required: selectedIntegration.required
         });
-
-        updateIntegrationStatus(selectedIntegration.type, 'connected', config, testResult.data);
         
-        toast({
-          title: 'Success',
-          description: `${selectedIntegration.name} connected successfully!`
-        });
+        toast.success(`${selectedIntegration.name} configured successfully!`);
       } else {
-        updateIntegrationStatus(selectedIntegration.type, 'failed', config, testResult.data);
+        // Update integration status
+        updateIntegrationStatus(selectedIntegration.type, 'testing');
+
+        // Test the integration
+        const testResponse = await apiClient.post(
+          `/api/v1/integrations/test/${selectedIntegration.type}`,
+          { integration_type: selectedIntegration.type, config }
+        );
         
-        toast({
-          title: 'Connection Failed',
-          description: testResult.data.error || 'Failed to connect integration',
-          variant: 'destructive'
-        });
+        if (testResponse.status !== 'success') {
+          throw new Error(testResponse.error?.message || 'Test failed');
+        }
+        
+        const testResult = testResponse.data;
+
+        if (testResult.success) {
+          // Save the integration
+          await apiClient.post(`/api/v1/teams/${teamId}/integrations`, {
+            integration_type: selectedIntegration.type,
+            config,
+            is_required: selectedIntegration.required
+          });
+
+          updateIntegrationStatus(selectedIntegration.type, 'connected', config, testResult);
+          
+          toast.success(`${selectedIntegration.name} connected successfully!`);
+        } else {
+          updateIntegrationStatus(selectedIntegration.type, 'failed', config, testResult);
+        
+          toast.error(testResult.error || 'Failed to connect integration');
+        }
       }
     } catch (error: any) {
       updateIntegrationStatus(selectedIntegration.type, 'failed');
       
-      toast({
-        title: 'Error',
-        description: error.response?.data?.detail || 'Failed to save integration',
-        variant: 'destructive'
-      });
+      toast.error(error.message || 'Failed to save integration');
     }
 
     setIsModalOpen(false);
@@ -194,10 +216,7 @@ export default function IntegrationsSetupPage() {
 
   const handleSkip = (integration: Integration) => {
     updateIntegrationStatus(integration.type, 'skipped');
-    toast({
-      title: 'Skipped',
-      description: `You can set up ${integration.name} later from settings`
-    });
+    toast.info(`You can set up ${integration.name} later from settings`);
   };
 
   const updateIntegrationStatus = (
@@ -223,8 +242,14 @@ export default function IntegrationsSetupPage() {
     try {
       const response = await apiClient.post(`/api/v1/teams/${teamId}/integrations/test-all`);
       
+      if (response.status !== 'success') {
+        throw new Error(response.error?.message || 'Failed to test integrations');
+      }
+      
+      const data = response.data;
+      
       // Update statuses based on results
-      response.data.results.forEach((result: any) => {
+      data.results.forEach((result: any) => {
         const integration = integrations.find(i => i.type === result.integration_type);
         if (integration) {
           updateIntegrationStatus(
@@ -236,16 +261,9 @@ export default function IntegrationsSetupPage() {
         }
       });
 
-      toast({
-        title: 'Test Complete',
-        description: `${response.data.summary.successful} of ${response.data.summary.total} integrations connected`
-      });
+      toast.success(`${data.summary.successful} of ${data.summary.total} integrations connected`);
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to test integrations',
-        variant: 'destructive'
-      });
+      toast.error('Failed to test integrations');
     } finally {
       setIsTestingAll(false);
     }
@@ -259,6 +277,23 @@ export default function IntegrationsSetupPage() {
   const handleContinue = () => {
     router.push('/dashboard');
   };
+
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-indigo-600 mx-auto mb-4" />
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render the page if not authenticated
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">

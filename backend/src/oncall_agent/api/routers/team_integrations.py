@@ -12,6 +12,8 @@ from pydantic import BaseModel
 
 from src.oncall_agent.config import get_config
 from src.oncall_agent.utils import get_logger
+from src.oncall_agent.security.firebase_auth import get_current_firebase_user, FirebaseUser
+from .auth_setup import get_current_user
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["team-integrations"])
@@ -40,14 +42,14 @@ def decrypt_config(encrypted_config: str) -> dict[str, Any]:
     return decrypted
 
 
-async def get_current_user_id() -> int:
-    """Mock function to get current user ID. Replace with actual auth."""
-    return 1  # Mock user ID
+async def get_current_user_id(user: dict = Depends(get_current_user)) -> int:
+    """Get current user ID from authenticated user."""
+    return user["id"]
 
 
-async def get_current_team_id() -> int:
-    """Mock function to get current team ID. Replace with actual auth."""
-    return 1  # Mock team ID
+async def get_current_team_id(user: dict = Depends(get_current_user)) -> int:
+    """Get current team ID from authenticated user."""
+    return user["team_id"]
 
 
 class TeamIntegrationCreate(BaseModel):

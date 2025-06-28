@@ -64,8 +64,9 @@ function deriveApiKeyFromHash(hash: string): string {
 // POST /api/v1/api-keys/[id]/validate - Validate an API key with the provider
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  props: { params: Promise<{ id: string }> }
 ) {
+  const params = await props.params;
   try {
     const { id } = await params;
     const user = await getUser();

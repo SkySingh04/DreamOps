@@ -1,29 +1,80 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CircleIcon, Loader2 } from 'lucide-react';
-import { signIn, signUp } from './actions';
-import { ActionState } from '@/lib/auth/middleware';
+import { useAuth } from '@/lib/firebase/auth-context';
+import { FirebaseError } from 'firebase/app';
 
-export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
+export function FirebaseLogin({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
   const searchParams = useSearchParams();
   const redirect = searchParams?.get('redirect');
   const priceId = searchParams?.get('priceId');
   const inviteId = searchParams?.get('inviteId');
-  const [state, formAction, pending] = useActionState<ActionState, FormData>(
-    mode === 'signin' ? signIn : signUp,
-    { error: '' }
-  );
+  
+  const { signIn, signUp } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  
+  // Form data
+  const [email, setEmail] = useState('admin@oncall.ai');
+  const [password, setPassword] = useState('AdminPass123!');
+  const [name, setName] = useState('Admin');
 
-  // Default credentials
-  const defaultCredentials = mode === 'signin' 
-    ? { email: 'admin@oncall.ai', password: 'AdminPass123!' }
-    : { email: 'admin@oncall.ai', password: 'AdminPass123!' };
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      if (mode === 'signin') {
+        await signIn(email, password);
+      } else {
+        if (!name.trim()) {
+          setError('Name is required');
+          setLoading(false);
+          return;
+        }
+        await signUp(email, password, name);
+      }
+    } catch (err) {
+      console.error('Auth error:', err);
+      
+      // Handle Firebase auth errors
+      if (err instanceof FirebaseError) {
+        switch (err.code) {
+          case 'auth/user-not-found':
+            setError('No account found with this email address.');
+            break;
+          case 'auth/wrong-password':
+            setError('Incorrect password. Please try again.');
+            break;
+          case 'auth/email-already-in-use':
+            setError('An account already exists with this email address.');
+            break;
+          case 'auth/weak-password':
+            setError('Password should be at least 6 characters.');
+            break;
+          case 'auth/invalid-email':
+            setError('Please enter a valid email address.');
+            break;
+          case 'auth/too-many-requests':
+            setError('Too many failed attempts. Please try again later.');
+            break;
+          default:
+            setError(err.message || 'An error occurred. Please try again.');
+        }
+      } else {
+        setError('An unexpected error occurred. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-[100dvh] flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
@@ -43,12 +94,13 @@ export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
           <p className="text-sm text-blue-800">
             <strong>Demo Credentials:</strong>
             <br />
-            Email: {defaultCredentials.email}
+            Email: admin@oncall.ai
             <br />
-            Password: {defaultCredentials.password}
+            Password: AdminPass123!
           </p>
         </div>
-        <form className="space-y-6" action={formAction}>
+        
+        <form className="space-y-6" onSubmit={handleSubmit}>
           <input type="hidden" name="redirect" value={redirect || ''} />
           <input type="hidden" name="priceId" value={priceId || ''} />
           <input type="hidden" name="inviteId" value={inviteId || ''} />
@@ -71,7 +123,8 @@ export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
                   maxLength={100}
                   className="appearance-none rounded-full relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm"
                   placeholder="Enter your full name"
-                  defaultValue={state?.name || ''}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                 />
               </div>
             </div>
@@ -90,11 +143,12 @@ export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
                 name="email"
                 type="email"
                 autoComplete="email"
-                defaultValue={state?.email || defaultCredentials.email}
                 required
                 maxLength={50}
                 className="appearance-none rounded-full relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm"
                 placeholder="Enter your email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
           </div>
@@ -114,27 +168,28 @@ export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
                 autoComplete={
                   mode === 'signin' ? 'current-password' : 'new-password'
                 }
-                defaultValue={state?.password || defaultCredentials.password}
                 required
-                minLength={8}
+                minLength={6}
                 maxLength={100}
                 className="appearance-none rounded-full relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm"
                 placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
               />
             </div>
           </div>
 
-          {state?.error && (
-            <div className="text-red-500 text-sm">{state.error}</div>
+          {error && (
+            <div className="text-red-500 text-sm">{error}</div>
           )}
 
           <div>
             <Button
               type="submit"
               className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-full shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
-              disabled={pending}
+              disabled={loading}
             >
-              {pending ? (
+              {loading ? (
                 <>
                   <Loader2 className="animate-spin mr-2 h-4 w-4" />
                   Loading...

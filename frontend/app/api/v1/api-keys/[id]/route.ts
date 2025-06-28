@@ -23,8 +23,9 @@ async function getUserTeamId(userId: number): Promise<number | null> {
 // GET /api/v1/api-keys/[id] - Get a specific API key
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  props: { params: Promise<{ id: string }> }
 ) {
+  const params = await props.params;
   try {
     const { id } = await params;
     const user = await getUser();
@@ -78,8 +79,9 @@ export async function GET(
 // PUT /api/v1/api-keys/[id] - Update an API key
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  props: { params: Promise<{ id: string }> }
 ) {
+  const params = await props.params;
   try {
     const { id } = await params;
     const user = await getUser();
@@ -157,8 +159,9 @@ export async function PUT(
 // DELETE /api/v1/api-keys/[id] - Delete an API key
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  props: { params: Promise<{ id: string }> }
 ) {
+  const params = await props.params;
   try {
     const { id } = await params;
     const user = await getUser();

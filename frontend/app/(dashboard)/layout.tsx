@@ -1,6 +1,5 @@
 import { Suspense } from 'react';
 import { Navigation } from '@/components/navigation';
-import { OnboardingWrapper } from '@/components/onboarding/onboarding-wrapper';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -9,9 +8,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <Navigation />
       </Suspense>
       <main className="flex-1 bg-gray-50">
-        <OnboardingWrapper>
-          {children}
-        </OnboardingWrapper>
+        {children}
       </main>
     </section>
   );
