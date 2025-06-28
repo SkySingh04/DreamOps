@@ -84,6 +84,16 @@ class Config(BaseSettings):
     postgres_url: str | None = Field(None, env="POSTGRES_URL")
     neon_database_url: str | None = Field(None, env="NEON_DATABASE_URL")
 
+    # Grafana settings
+    grafana_enabled: bool = Field(False, env="GRAFANA_ENABLED")
+    grafana_url: str | None = Field(None, env="GRAFANA_URL")
+    grafana_api_key: str | None = Field(None, env="GRAFANA_API_KEY")
+    grafana_username: str | None = Field(None, env="GRAFANA_USERNAME")
+    grafana_password: str | None = Field(None, env="GRAFANA_PASSWORD")
+    grafana_mcp_server_path: str = Field("../../mcp-grafana/dist/mcp-grafana", env="GRAFANA_MCP_SERVER_PATH")
+    grafana_mcp_host: str = Field("localhost", env="GRAFANA_MCP_HOST")
+    grafana_mcp_port: int = Field(8082, env="GRAFANA_MCP_PORT")
+
     # Additional settings
     debug: bool = Field(False, env="DEBUG")
     aws_profile: str | None = Field(None, env="AWS_PROFILE")

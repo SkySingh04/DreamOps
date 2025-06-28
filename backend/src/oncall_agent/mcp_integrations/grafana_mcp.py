@@ -1,6 +1,8 @@
 """Grafana MCP integration for metrics and dashboards access."""
 
 import asyncio
+import json
+import os
 import subprocess
 from datetime import datetime
 from typing import Any
@@ -37,7 +39,7 @@ class GrafanaMCPIntegration(MCPIntegration):
         self.grafana_password = self.config.get("grafana_password")
 
         # MCP server configuration
-        self.mcp_server_path = self.config.get("mcp_server_path", "../../mcp-grafana/mcp-grafana")
+        self.mcp_server_path = self.config.get("mcp_server_path", "../../mcp-grafana/dist/mcp-grafana")
         self.server_host = self.config.get("server_host", "localhost")
         self.server_port = self.config.get("server_port", 8081)
         self.server_url = f"http://{self.server_host}:{self.server_port}"
@@ -69,7 +71,7 @@ class GrafanaMCPIntegration(MCPIntegration):
             # Start the Grafana MCP server process
             self.logger.info(f"Starting Grafana MCP server: {self.mcp_server_path}")
             self.process = subprocess.Popen(
-                [self.mcp_server_path],
+                [self.mcp_server_path, "stdio"],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -85,23 +87,14 @@ class GrafanaMCPIntegration(MCPIntegration):
                 stderr = self.process.stderr.read() if self.process.stderr else ""
                 raise ConnectionError(f"Grafana MCP server failed to start: {stderr}")
 
-            # Create HTTP client for API communication
-            self.client = httpx.AsyncClient(
-                base_url=self.server_url,
-                timeout=30.0
-            )
-
-            # Test connection
+            # Initialize MCP connection
             try:
-                response = await self.client.get("/health")
-                if response.status_code == 200:
-                    self.connected = True
-                    self.connection_time = datetime.now()
-                    self.logger.info("Connected to Grafana MCP server")
-                else:
-                    raise ConnectionError(f"MCP server health check failed: {response.status_code}")
-            except httpx.RequestError as e:
-                self.logger.warning(f"MCP server not responding, using direct mode: {e}")
+                await self._initialize_mcp_connection()
+                self.connected = True
+                self.connection_time = datetime.now()
+                self.logger.info("Connected to Grafana MCP server")
+            except Exception as e:
+                self.logger.warning(f"MCP server initialization failed, using direct mode: {e}")
                 # Fall back to direct Grafana API mode
                 await self._setup_direct_mode()
 
@@ -119,6 +112,10 @@ class GrafanaMCPIntegration(MCPIntegration):
         if self.grafana_api_key:
             headers["Authorization"] = f"Bearer {self.grafana_api_key}"
 
+        # Ensure grafana_url is not None
+        if not self.grafana_url:
+            raise ValueError("grafana_url is required for direct mode")
+
         self.client = httpx.AsyncClient(
             base_url=self.grafana_url,
             headers=headers,
@@ -133,6 +130,99 @@ class GrafanaMCPIntegration(MCPIntegration):
             self.logger.info("Connected to Grafana via direct API")
         else:
             raise ConnectionError(f"Direct Grafana API connection failed: {response.status_code}")
+
+    async def _initialize_mcp_connection(self) -> None:
+        """Initialize MCP connection via stdio."""
+        if not self.process or not self.process.stdout or not self.process.stdin:
+            raise ConnectionError("MCP process not properly initialized")
+
+        # Send initialization message
+        init_message = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {
+                    "name": "oncall-agent",
+                    "version": "1.0.0"
+                }
+            }
+        }
+
+        # Send initialization
+        init_json = json.dumps(init_message) + "\n"
+        self.process.stdin.write(init_json.encode())
+        self.process.stdin.flush()
+
+        # Wait for response
+        response = self.process.stdout.readline()
+        if not response:
+            raise ConnectionError("No response from MCP server")
+
+        response_data = json.loads(response.decode().strip())
+        if "error" in response_data:
+            raise ConnectionError(f"MCP initialization failed: {response_data['error']}")
+
+        # Send initialized notification
+        initialized_message = {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "initialized",
+            "params": {}
+        }
+
+        initialized_json = json.dumps(initialized_message) + "\n"
+        self.process.stdin.write(initialized_json.encode())
+        self.process.stdin.flush()
+
+        self.logger.info("MCP connection initialized successfully")
+
+    async def _call_mcp_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        """Call an MCP tool via stdio communication."""
+        if not self.process or self.process.poll() is not None:
+            raise RuntimeError("MCP server is not running")
+
+        if not self.process.stdin or not self.process.stdout:
+            raise RuntimeError("MCP process streams not available")
+
+        message_id = self._generate_message_id()
+        
+        # Create tool call message
+        tool_message = {
+            "jsonrpc": "2.0",
+            "id": message_id,
+            "method": "tools/call",
+            "params": {
+                "name": tool_name,
+                "arguments": arguments
+            }
+        }
+
+        # Send message
+        message_json = json.dumps(tool_message) + "\n"
+        self.process.stdin.write(message_json.encode())
+        self.process.stdin.flush()
+
+        # Read response
+        response_line = await asyncio.wait_for(
+            asyncio.create_task(asyncio.to_thread(self.process.stdout.readline)),
+            timeout=10.0
+        )
+        
+        if not response_line:
+            raise RuntimeError(f"No response for tool call: {tool_name}")
+
+        response = json.loads(response_line.decode().strip())
+        
+        if "error" in response:
+            raise RuntimeError(f"MCP tool error: {response['error']}")
+        
+        if "result" in response:
+            return response["result"]
+        
+        raise RuntimeError(f"Invalid response for tool call: {tool_name}")
 
     async def disconnect(self) -> None:
         """Disconnect from the Grafana MCP server."""
@@ -250,12 +340,37 @@ class GrafanaMCPIntegration(MCPIntegration):
     async def _fetch_dashboards(self, **kwargs) -> dict[str, Any]:
         """Fetch available dashboards."""
         try:
-            # Try MCP endpoint first, fall back to direct API
-            if self.server_url in str(self.client.base_url):
-                response = await self.client.get("/dashboards")
-            else:
-                response = await self.client.get("/api/search?type=dash-db")
+            # Use MCP if process is running
+            if self.process and self.process.poll() is None:
+                try:
+                    result = await self._call_mcp_tool("list_dashboards", {
+                        "query": kwargs.get("query", ""),
+                        "folder_id": kwargs.get("folder_id"),
+                        "tags": kwargs.get("tags", [])
+                    })
+                    
+                    # Extract dashboards from MCP response
+                    if isinstance(result, dict) and "content" in result:
+                        for content in result["content"]:
+                            if content.get("type") == "resource" and "resource" in content:
+                                resource = content["resource"]
+                                if "dashboards" in resource:
+                                    dashboards = resource["dashboards"]
+                                    return {
+                                        "dashboards": dashboards,
+                                        "count": len(dashboards) if isinstance(dashboards, list) else 0
+                                    }
+                    
+                    return {"dashboards": [], "count": 0}
+                    
+                except Exception as e:
+                    self.logger.warning(f"MCP call failed, falling back to direct API: {e}")
+            
+            # Fall back to direct API
+            if not self.client:
+                raise ConnectionError("Client not initialized")
 
+            response = await self.client.get("/api/search?type=dash-db")
             response.raise_for_status()
             dashboards = response.json()
 
@@ -270,6 +385,33 @@ class GrafanaMCPIntegration(MCPIntegration):
     async def _fetch_metrics(self, query: str = "", **kwargs) -> dict[str, Any]:
         """Fetch metrics data."""
         try:
+            # Use MCP if process is running
+            if self.process and self.process.poll() is None:
+                try:
+                    result = await self._call_mcp_tool("query_metrics", {
+                        "query": query,
+                        "start": kwargs.get("start", "-1h"),
+                        "end": kwargs.get("end", "now"),
+                        "step": kwargs.get("step", "15s")
+                    })
+                    
+                    # Extract metrics from MCP response
+                    if isinstance(result, dict) and "content" in result:
+                        for content in result["content"]:
+                            if content.get("type") == "resource" and "resource" in content:
+                                resource = content["resource"]
+                                if "metrics" in resource:
+                                    return resource["metrics"]
+                    
+                    return {}
+                    
+                except Exception as e:
+                    self.logger.warning(f"MCP call failed, falling back to direct API: {e}")
+            
+            # Fall back to direct API
+            if not self.client:
+                raise ConnectionError("Client not initialized")
+
             params = {
                 "query": query,
                 "start": kwargs.get("start", "-1h"),
@@ -277,11 +419,8 @@ class GrafanaMCPIntegration(MCPIntegration):
                 "step": kwargs.get("step", "15s")
             }
 
-            if self.server_url in str(self.client.base_url):
-                response = await self.client.get("/metrics", params=params)
-            else:
-                # Direct Prometheus query through Grafana
-                response = await self.client.get("/api/datasources/proxy/1/api/v1/query_range", params=params)
+            # Direct Prometheus query through Grafana
+            response = await self.client.get("/api/datasources/proxy/1/api/v1/query_range", params=params)
 
             response.raise_for_status()
             return response.json()
@@ -292,10 +431,31 @@ class GrafanaMCPIntegration(MCPIntegration):
     async def _fetch_alerts(self, **kwargs) -> dict[str, Any]:
         """Fetch current alerts."""
         try:
-            if self.server_url in str(self.client.base_url):
-                response = await self.client.get("/alerts")
-            else:
-                response = await self.client.get("/api/alerts")
+            # Use MCP if process is running
+            if self.process and self.process.poll() is None:
+                try:
+                    result = await self._call_mcp_tool("list_alerts", {
+                        "state": kwargs.get("state", "")
+                    })
+                    
+                    # Extract alerts from MCP response
+                    if isinstance(result, dict) and "content" in result:
+                        for content in result["content"]:
+                            if content.get("type") == "resource" and "resource" in content:
+                                resource = content["resource"]
+                                if "alerts" in resource:
+                                    return {"alerts": resource["alerts"]}
+                    
+                    return {"alerts": []}
+                    
+                except Exception as e:
+                    self.logger.warning(f"MCP call failed, falling back to direct API: {e}")
+            
+            # Fall back to direct API
+            if not self.client:
+                raise ConnectionError("Client not initialized")
+
+            response = await self.client.get("/api/alerts")
 
             response.raise_for_status()
             return response.json()
@@ -306,6 +466,9 @@ class GrafanaMCPIntegration(MCPIntegration):
     async def _fetch_datasources(self, **kwargs) -> dict[str, Any]:
         """Fetch available data sources."""
         try:
+            if not self.client:
+                raise ConnectionError("Client not initialized")
+
             if self.server_url in str(self.client.base_url):
                 response = await self.client.get("/datasources")
             else:
@@ -320,6 +483,9 @@ class GrafanaMCPIntegration(MCPIntegration):
     async def _search_grafana(self, query: str = "", **kwargs) -> dict[str, Any]:
         """Search Grafana for dashboards, panels, etc."""
         try:
+            if not self.client:
+                raise ConnectionError("Client not initialized")
+
             params = {"q": query}
 
             if self.server_url in str(self.client.base_url):
@@ -336,6 +502,9 @@ class GrafanaMCPIntegration(MCPIntegration):
     async def _create_dashboard(self, **params) -> dict[str, Any]:
         """Create a new dashboard."""
         try:
+            if not self.client:
+                raise ConnectionError("Client not initialized")
+
             dashboard_data = params.get("dashboard", {})
 
             if self.server_url in str(self.client.base_url):
@@ -356,6 +525,9 @@ class GrafanaMCPIntegration(MCPIntegration):
     async def _create_alert(self, **params) -> dict[str, Any]:
         """Create an alert rule."""
         try:
+            if not self.client:
+                raise ConnectionError("Client not initialized")
+
             alert_data = params.get("alert", {})
 
             if self.server_url in str(self.client.base_url):
@@ -372,6 +544,9 @@ class GrafanaMCPIntegration(MCPIntegration):
     async def _silence_alert(self, **params) -> dict[str, Any]:
         """Silence an alert."""
         try:
+            if not self.client:
+                raise ConnectionError("Client not initialized")
+
             alert_id = params.get("alert_id")
             duration = params.get("duration", "1h")
 
@@ -429,3 +604,11 @@ class GrafanaMCPIntegration(MCPIntegration):
         except Exception as e:
             self.logger.error(f"Failed to get incident metrics: {e}")
             return {"error": str(e)}
+
+    def _generate_message_id(self) -> int:
+        """Generate a unique message ID for MCP communication."""
+        if not hasattr(self, '_message_counter'):
+            self._message_counter = 2  # Start from 2 since we used 1 and 2 for init
+        else:
+            self._message_counter += 1
+        return self._message_counter
