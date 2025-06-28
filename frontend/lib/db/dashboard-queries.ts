@@ -158,6 +158,7 @@ export async function getRecentAiActions(limit: number = 10): Promise<RecentAiAc
 }
 
 export async function createIncident(incidentData: {
+  userId: number;
   title: string;
   description?: string;
   severity: string;
@@ -170,6 +171,7 @@ export async function createIncident(incidentData: {
     const [newIncident] = await db
       .insert(incidents)
       .values({
+        userId: incidentData.userId,
         title: incidentData.title,
         description: incidentData.description,
         severity: incidentData.severity,
