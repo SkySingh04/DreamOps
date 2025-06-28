@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
     }
 
     const incident = await createIncident({
+      userId: user.id,
       title,
       description,
       severity,
