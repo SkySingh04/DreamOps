@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { recordAiAction } from '@/lib/db/dashboard-queries';
-import { getDb } from '@/lib/db';
-import { teams } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
 
 // Internal API endpoint for backend agent - no auth required
 export async function POST(request: NextRequest) {
   try {
-    const db = await getDb();
     // Check for internal API key or specific header
     const internalKey = request.headers.get('x-internal-api-key');
     if (internalKey !== 'oncall-agent-internal') {
@@ -15,7 +11,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { action, description, incidentId, status, metadata, teamName = 'Default Team' } = body;
+    const { action, description, incidentId, status, metadata } = body;
 
     if (!action || !status) {
       return NextResponse.json(
@@ -24,22 +20,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get or create default team
-    let team = await db.select().from(teams).where(eq(teams.name, teamName)).limit(1);
-    
-    let teamId: number;
-    if (team.length === 0) {
-      // Create default team if not exists
-      const newTeam = await db.insert(teams).values({
-        name: teamName,
-        subscriptionStatus: 'trial',
-      }).returning();
-      teamId = newTeam[0].id;
-    } else {
-      teamId = team[0].id;
-    }
-
-    const aiAction = await recordAiAction(teamId, {
+    const aiAction = await recordAiAction({
       action,
       description,
       incidentId,

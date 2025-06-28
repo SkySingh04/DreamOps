@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createIncident } from '@/lib/db/dashboard-queries';
-import { getDb } from '@/lib/db';
-import { teams } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
 
 // Internal API endpoint for backend agent - no auth required
 export async function POST(request: NextRequest) {
   try {
-    const db = await getDb();
     // Check for internal API key or specific header
     const internalKey = request.headers.get('x-internal-api-key');
     if (internalKey !== 'oncall-agent-internal') {
@@ -15,7 +11,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { title, description, severity, source, sourceId, metadata, teamName = 'Default Team' } = body;
+    const { title, description, severity, source, sourceId, metadata } = body;
 
     if (!title || !severity || !source) {
       return NextResponse.json(
@@ -24,22 +20,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get or create default team
-    let team = await db.select().from(teams).where(eq(teams.name, teamName)).limit(1);
-    
-    let teamId: number;
-    if (team.length === 0) {
-      // Create default team if not exists
-      const newTeam = await db.insert(teams).values({
-        name: teamName,
-        subscriptionStatus: 'trial',
-      }).returning();
-      teamId = newTeam[0].id;
-    } else {
-      teamId = team[0].id;
-    }
-
-    const incident = await createIncident(teamId, {
+    const incident = await createIncident({
       title,
       description,
       severity,

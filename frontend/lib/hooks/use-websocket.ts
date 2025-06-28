@@ -12,11 +12,11 @@ export interface WebSocketMessage {
 export interface DashboardUpdate {
   type: 'metrics' | 'incident' | 'ai_action';
   data: any;
-  teamId: number;
+  userId: number;
 }
 
 interface UseWebSocketOptions {
-  teamId?: number;
+  userId?: number;
   onMetricsUpdate?: (metrics: any) => void;
   onIncidentUpdate?: (incident: any) => void;
   onAiActionUpdate?: (action: any) => void;
@@ -28,7 +28,7 @@ interface UseWebSocketOptions {
 
 export function useWebSocket(options: UseWebSocketOptions = {}) {
   const {
-    teamId,
+    userId,
     onMetricsUpdate,
     onIncidentUpdate,
     onAiActionUpdate,
@@ -46,7 +46,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     // Temporarily disable WebSocket to avoid connection errors
     if (true) return;
     
-    if (socketRef.current?.connected || !teamId) return;
+    if (socketRef.current?.connected || !userId) return;
 
     try {
       const socketURL = process.env.NODE_ENV === 'production' 
@@ -68,9 +68,9 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
         setIsConnected(true);
         onConnect?.();
         
-        // Join team room
-        if (teamId) {
-          socketRef.current?.emit('join-team', teamId);
+        // Join user room
+        if (userId) {
+          socketRef.current?.emit('join-user', userId);
         }
       });
 
@@ -104,18 +104,18 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     } catch (error) {
       onError?.(error as Error);
     }
-  }, [teamId, onConnect, onDisconnect, onError, onMetricsUpdate, onIncidentUpdate, onAiActionUpdate]);
+  }, [userId, onConnect, onDisconnect, onError, onMetricsUpdate, onIncidentUpdate, onAiActionUpdate]);
 
   const disconnect = useCallback(() => {
     if (socketRef.current) {
-      if (teamId) {
-        socketRef.current?.emit('leave-team', teamId);
+      if (userId) {
+        socketRef.current?.emit('leave-user', userId);
       }
       socketRef.current?.disconnect();
       socketRef.current = null;
       setIsConnected(false);
     }
-  }, [teamId]);
+  }, [userId]);
 
   const sendMessage = useCallback((event: string, data: any) => {
     if (socketRef.current?.connected) {

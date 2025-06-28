@@ -13,7 +13,7 @@ export type NextApiResponseServerIO = NextApiResponse & {
 export interface DashboardUpdate {
   type: 'metrics' | 'incident' | 'ai_action';
   data: any;
-  teamId: number;
+  userId: number;
 }
 
 export function initializeWebSocket(server: NetServer & { io?: SocketIOServer }): SocketIOServer {
@@ -32,16 +32,16 @@ export function initializeWebSocket(server: NetServer & { io?: SocketIOServer })
     io.on('connection', (socket) => {
       console.log('Client connected:', socket.id);
 
-      // Join team room for team-specific updates
-      socket.on('join-team', (teamId: number) => {
-        socket.join(`team-${teamId}`);
-        console.log(`Client ${socket.id} joined team ${teamId}`);
+      // Join user room for user-specific updates
+      socket.on('join-user', (userId: number) => {
+        socket.join(`user-${userId}`);
+        console.log(`Client ${socket.id} joined user ${userId}`);
       });
 
-      // Leave team room
-      socket.on('leave-team', (teamId: number) => {
-        socket.leave(`team-${teamId}`);
-        console.log(`Client ${socket.id} left team ${teamId}`);
+      // Leave user room
+      socket.on('leave-user', (userId: number) => {
+        socket.leave(`user-${userId}`);
+        console.log(`Client ${socket.id} left user ${userId}`);
       });
 
       socket.on('disconnect', () => {
@@ -55,30 +55,30 @@ export function initializeWebSocket(server: NetServer & { io?: SocketIOServer })
   return server.io;
 }
 
-export function broadcastToTeam(io: SocketIOServer, teamId: number, update: DashboardUpdate) {
-  io.to(`team-${teamId}`).emit('dashboard-update', update);
+export function broadcastToUser(io: SocketIOServer, userId: number, update: DashboardUpdate) {
+  io.to(`user-${userId}`).emit('dashboard-update', update);
 }
 
-export function broadcastMetricsUpdate(io: SocketIOServer, teamId: number, metrics: any) {
-  broadcastToTeam(io, teamId, {
+export function broadcastMetricsUpdate(io: SocketIOServer, userId: number, metrics: any) {
+  broadcastToUser(io, userId, {
     type: 'metrics',
     data: metrics,
-    teamId
+    userId
   });
 }
 
-export function broadcastIncidentUpdate(io: SocketIOServer, teamId: number, incident: any) {
-  broadcastToTeam(io, teamId, {
+export function broadcastIncidentUpdate(io: SocketIOServer, userId: number, incident: any) {
+  broadcastToUser(io, userId, {
     type: 'incident',
     data: incident,
-    teamId
+    userId
   });
 }
 
-export function broadcastAiActionUpdate(io: SocketIOServer, teamId: number, action: any) {
-  broadcastToTeam(io, teamId, {
+export function broadcastAiActionUpdate(io: SocketIOServer, userId: number, action: any) {
+  broadcastToUser(io, userId, {
     type: 'ai_action',
     data: action,
-    teamId
+    userId
   });
 }
