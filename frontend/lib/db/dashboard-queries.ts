@@ -198,10 +198,11 @@ export async function createIncident(incidentData: {
   }
 }
 
-export async function recordMetric(metricType: string, value: string, metadata?: string): Promise<void> {
+export async function recordMetric(userId: number, metricType: string, value: string, metadata?: string): Promise<void> {
   try {
     const db = await getDb();
     await db.insert(metrics).values({
+      userId,
       metricType,
       value,
       metadata,
@@ -212,6 +213,7 @@ export async function recordMetric(metricType: string, value: string, metadata?:
 }
 
 export async function recordAiAction(actionData: {
+  userId: number;
   action: string;
   description?: string;
   incidentId?: number;
@@ -221,6 +223,7 @@ export async function recordAiAction(actionData: {
   try {
     const db = await getDb();
     const [newAction] = await db.insert(aiActions).values({
+      userId: actionData.userId,
       action: actionData.action,
       description: actionData.description,
       incidentId: actionData.incidentId,

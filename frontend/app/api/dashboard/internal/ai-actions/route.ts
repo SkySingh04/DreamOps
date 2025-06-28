@@ -11,16 +11,17 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { action, description, incidentId, status, metadata } = body;
+    const { userId, action, description, incidentId, status, metadata } = body;
 
-    if (!action || !status) {
+    if (!userId || !action || !status) {
       return NextResponse.json(
-        { error: 'Missing required fields: action, status' },
+        { error: 'Missing required fields: userId, action, status' },
         { status: 400 }
       );
     }
 
     const aiAction = await recordAiAction({
+      userId,
       action,
       description,
       incidentId,

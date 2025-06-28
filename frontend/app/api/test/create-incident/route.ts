@@ -6,6 +6,7 @@ export async function POST(request: NextRequest) {
     console.log('Creating test incident...');
     
     const incident = await createIncident({
+      userId: 1, // Test user ID
       title: `Test Incident ${new Date().toLocaleTimeString()}`,
       description: 'This is a test incident created via API',
       severity: 'medium',
@@ -20,6 +21,7 @@ export async function POST(request: NextRequest) {
     if (incident) {
       // Also record an AI action
       await recordAiAction({
+        userId: 1, // Test user ID
         action: 'investigate',
         description: `Investigating test incident: ${incident.title}`,
         incidentId: incident.id,

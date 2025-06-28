@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
     }
 
     const aiAction = await recordAiAction({
+      userId: user.id,
       action,
       description,
       incidentId,
