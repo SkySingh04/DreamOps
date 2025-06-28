@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from src.oncall_agent.api import webhooks
 from src.oncall_agent.api.routers import (
+    admin_integrations,
     agent_logs,
     agent_router,
     analytics_router,
@@ -186,7 +187,7 @@ async def get_mcp_integrations():
     """Get MCP integration status for frontend."""
     try:
         integrations = []
-        
+
         # Define all available MCP integrations
         available_mcp_integrations = {
             "kubernetes_mcp": {
@@ -268,7 +269,7 @@ async def get_mcp_integrations():
                 # Initialize agent if not already done
                 trigger = await get_agent_trigger()
                 agent = trigger.agent
-                
+
             # Get real status from agent if available
             for mcp_name, mcp_info in available_mcp_integrations.items():
                 try:
@@ -316,7 +317,7 @@ async def get_mcp_integrations():
                     "connected": False,
                     "configured": False
                 })
-        
+
         return {"integrations": integrations}
     except Exception as e:
         logger.error(f"Error getting MCP integrations: {e}")
@@ -353,6 +354,7 @@ app.include_router(monitoring_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
 app.include_router(api_keys.router)
 app.include_router(user_integrations.router)  # Already has /api/v1 prefix
+app.include_router(admin_integrations.router)  # Admin integration verification routes
 
 # Include dev config router only in development mode
 if os.getenv("NODE_ENV") == "development":

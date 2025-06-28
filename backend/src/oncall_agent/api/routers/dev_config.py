@@ -1,7 +1,8 @@
 """Dev mode configuration endpoint for auto-fill functionality."""
 
 import os
-from typing import Dict, Any
+from typing import Any
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -10,8 +11,8 @@ router = APIRouter(prefix="/api/v1/dev", tags=["dev"])
 
 class DevConfigResponse(BaseModel):
     """Response model for dev configuration."""
-    llm_config: Dict[str, Any]
-    integrations: Dict[str, Dict[str, Any]]
+    llm_config: dict[str, Any]
+    integrations: dict[str, dict[str, Any]]
     is_dev_mode: bool
 
 
@@ -19,14 +20,14 @@ def mask_sensitive_value(key: str, value: str) -> str:
     """Mask sensitive values while keeping enough for dev identification."""
     if not value:
         return ""
-    
+
     # For API keys and tokens, show first 10 and last 4 characters
     if any(sensitive in key.lower() for sensitive in ['key', 'token', 'secret', 'password']):
         if len(value) > 20:
             return f"{value[:10]}...{value[-4:]}"
         elif len(value) > 10:
             return f"{value[:5]}...{value[-2:]}"
-    
+
     return value
 
 
@@ -48,7 +49,7 @@ async def get_dev_config():
             status_code=403,
             detail="This endpoint is only available in development mode"
         )
-    
+
     # Get LLM configuration - full values for dev mode
     llm_config = {
         "provider": "anthropic",  # Default provider
@@ -56,7 +57,7 @@ async def get_dev_config():
         "model": os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-20241022"),
         "key_name": "Development API Key"
     }
-    
+
     # Get integration configurations - full values for dev mode
     integrations = {
         "pagerduty": {
@@ -88,7 +89,7 @@ async def get_dev_config():
             "api_key": os.getenv("GRAFANA_MCP_API_KEY", ""),
         }
     }
-    
+
     return DevConfigResponse(
         llm_config=llm_config,
         integrations=integrations,
@@ -111,7 +112,7 @@ async def get_full_dev_config():
             status_code=403,
             detail="This endpoint is only available in development mode"
         )
-    
+
     # Additional check for local development
     api_host = os.getenv("API_HOST", "")
     if api_host not in ["localhost", "127.0.0.1", "0.0.0.0"]:
@@ -119,7 +120,7 @@ async def get_full_dev_config():
             status_code=403,
             detail="Full config is only available on localhost"
         )
-    
+
     # Return full configuration values
     return {
         "llm_config": {
