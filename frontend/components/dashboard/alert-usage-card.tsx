@@ -76,13 +76,22 @@ export function AlertUsageCard({ userId, teamId, className }: AlertUsageCardProp
     starter: "bg-blue-100 text-blue-800",
     pro: "bg-purple-100 text-purple-800",
     enterprise: "bg-amber-100 text-amber-800"
-  };
+  } as const;
 
   const tierIcons = {
     free: <AlertCircle className="h-4 w-4" />,
     starter: <Zap className="h-4 w-4" />,
     pro: <TrendingUp className="h-4 w-4" />,
     enterprise: <Zap className="h-4 w-4" />
+  } as const;
+
+  // Safely get tier values with fallback
+  const getTierColor = (tier: string) => {
+    return tierColors[tier as keyof typeof tierColors] || tierColors.free;
+  };
+
+  const getTierIcon = (tier: string) => {
+    return tierIcons[tier as keyof typeof tierIcons] || tierIcons.free;
   };
 
   return (
@@ -91,9 +100,9 @@ export function AlertUsageCard({ userId, teamId, className }: AlertUsageCardProp
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg font-medium">Alert Usage</CardTitle>
-            <Badge className={tierColors[usageData.account_tier] || tierColors.free}>
+            <Badge className={getTierColor(usageData.account_tier)}>
               <span className="flex items-center gap-1">
-                {tierIcons[usageData.account_tier]}
+                {getTierIcon(usageData.account_tier)}
                 {usageData.account_tier.charAt(0).toUpperCase() + usageData.account_tier.slice(1)}
               </span>
             </Badge>
