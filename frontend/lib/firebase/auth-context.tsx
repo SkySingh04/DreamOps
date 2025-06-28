@@ -29,6 +29,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
+    if (!auth) {
+      // Firebase not configured, set loading to false and skip auth
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       setLoading(false);
@@ -49,6 +55,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
+    if (!auth) {
+      throw new Error('Firebase authentication is not configured');
+    }
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const token = await userCredential.user.getIdToken();
@@ -106,6 +115,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, name: string) => {
+    if (!auth) {
+      throw new Error('Firebase authentication is not configured');
+    }
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
@@ -157,6 +169,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    if (!auth) {
+      // Just redirect if Firebase is not configured
+      router.push('/sign-in');
+      return;
+    }
     try {
       await firebaseSignOut(auth);
       router.push('/sign-in');
@@ -167,10 +184,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const refreshToken = async (): Promise<string | null> => {
-    if (user) {
-      return await user.getIdToken(true);
+    if (!auth || !user) {
+      return null;
     }
-    return null;
+    try {
+      return await user.getIdToken(true);
+    } catch (error) {
+      console.error('Error refreshing token:', error);
+      return null;
+    }
   };
 
   return (
