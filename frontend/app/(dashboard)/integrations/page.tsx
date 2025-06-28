@@ -60,8 +60,11 @@ interface ExtendedIntegration extends Integration {
 // Integration type definitions
 interface MCPIntegration {
   name: string;
-  capabilities: string[];
+  display_name?: string;
+  description?: string;
+  capabilities: Record<string, any> | string[];
   connected: boolean;
+  configured?: boolean;
 }
 
 interface IntegrationHealth {
@@ -154,27 +157,51 @@ export default function IntegrationsPage() {
 
   // Combine MCP and team integrations
   const allIntegrations: ExtendedIntegration[] = [
-    ...(teamIntegrationsData?.data || []).map((integration: Integration): ExtendedIntegration => ({
-      ...integration,
-      type: integration.id, // Use id as type for team integrations
-      capabilities: [], // Default empty capabilities for team integrations
-    })),
+    // Add MCP integrations only - these are the main integrations we want to show
+    // Team integrations are hidden to avoid duplicates since MCP integrations provide the same functionality
     ...mcpIntegrations.map((mcp: MCPIntegration): ExtendedIntegration => ({
-      id: mcp.name,
-      name: mcp.name.charAt(0).toUpperCase() + mcp.name.slice(1),
-      description: `${mcp.name.charAt(0).toUpperCase() + mcp.name.slice(1)} Integration`,
-      type: mcp.name,
-      status: mcp.connected ? 'connected' : 'disconnected',
+      id: mcp.name || 'unknown',
+      name: mcp.display_name || (mcp.name ? (mcp.name.charAt(0).toUpperCase() + mcp.name.slice(1)) : 'Unknown Integration'),
+      description: mcp.description || (mcp.name ? `${mcp.name.charAt(0).toUpperCase() + mcp.name.slice(1)} Integration` : 'Unknown Integration'),
+      type: mcp.name || 'unknown',
+      status: mcp.connected ? 'connected' : (mcp.configured === false ? 'not_configured' : 'disconnected'),
       enabled: mcp.connected,
-      capabilities: mcp.capabilities,
+      capabilities: Array.isArray(mcp.capabilities) ? mcp.capabilities : Object.keys(mcp.capabilities || {}),
       last_sync: new Date().toISOString(),
     })),
+    // Temporarily hide team integrations to avoid duplicates
+    // ...(teamIntegrationsData?.data || [])
+    //   .filter((integration: Integration) => {
+    //     // Create a mapping of MCP integration names to their base names
+    //     const mcpNameMapping: Record<string, string> = {};
+    //     mcpIntegrations.forEach((mcp: MCPIntegration) => {
+    //       const baseName = mcp.name.replace('_mcp', ''); // Remove _mcp suffix
+    //       mcpNameMapping[mcp.name] = baseName;
+    //       mcpNameMapping[baseName] = baseName;
+    //     });
+        
+    //     // Check if this team integration has an MCP equivalent
+    //     const teamIntegrationName = integration.id;
+    //     const hasMcpEquivalent = Object.values(mcpNameMapping).includes(teamIntegrationName) ||
+    //                             Object.keys(mcpNameMapping).includes(teamIntegrationName);
+        
+    //     // Debug logging
+    //     console.log(`Team integration: ${teamIntegrationName}, Has MCP equivalent: ${hasMcpEquivalent}`);
+        
+    //     return !hasMcpEquivalent;
+    //   })
+    //   .map((integration: Integration): ExtendedIntegration => ({
+    //     ...integration,
+    //     type: integration.id, // Use id as type for team integrations
+    //     capabilities: [], // Default empty capabilities for team integrations
+    //   })),
   ];
 
   // Calculate dynamic metrics
   const connectedCount = allIntegrations.filter(i => i.status === 'connected').length;
   const errorCount = allIntegrations.filter(i => i.status === 'error').length;
   const pendingCount = allIntegrations.filter(i => i.status === 'pending').length;
+  const notConfiguredCount = allIntegrations.filter(i => i.status === 'not_configured').length;
   const enabledCount = allIntegrations.filter(i => i.enabled).length;
   const totalCount = allIntegrations.length;
 
@@ -230,6 +257,8 @@ export default function IntegrationsPage() {
         return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'disconnected':
         return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'not_configured':
+        return 'bg-orange-100 text-orange-800 border-orange-200';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
     }
@@ -245,6 +274,8 @@ export default function IntegrationsPage() {
         return <AlertCircle className="h-5 w-5 text-yellow-600" />;
       case 'disconnected':
         return <Unlink className="h-5 w-5 text-gray-600" />;
+      case 'not_configured':
+        return <Settings className="h-5 w-5 text-orange-600" />;
       default:
         return <Unlink className="h-5 w-5 text-gray-600" />;
     }
@@ -260,6 +291,8 @@ export default function IntegrationsPage() {
         return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>;
       case 'disconnected':
         return <Badge className="bg-gray-100 text-gray-800">Disconnected</Badge>;
+      case 'not_configured':
+        return <Badge className="bg-orange-100 text-orange-800">Not Configured</Badge>;
       default:
         return <Badge className="bg-gray-100 text-gray-800">Unknown</Badge>;
     }
@@ -331,7 +364,7 @@ export default function IntegrationsPage() {
           <CardDescription>Overview of all integration statuses</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
             <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
               <div className="text-2xl font-bold text-green-600">
                 {connectedCount}
@@ -349,6 +382,12 @@ export default function IntegrationsPage() {
                 {pendingCount}
               </div>
               <div className="text-sm text-yellow-700">Pending</div>
+            </div>
+            <div className="text-center p-4 bg-orange-50 rounded-lg border border-orange-200">
+              <div className="text-2xl font-bold text-orange-600">
+                {notConfiguredCount}
+              </div>
+              <div className="text-sm text-orange-700">Not Configured</div>
             </div>
           </div>
         </CardContent>
@@ -371,7 +410,7 @@ export default function IntegrationsPage() {
                     <div>
                       <CardTitle className="text-lg">{integration.name}</CardTitle>
                       <p className="text-sm text-gray-500 mt-1">
-                        {integration.type.charAt(0).toUpperCase() + integration.type.slice(1)} Integration
+                        {integration.type ? (integration.type.charAt(0).toUpperCase() + integration.type.slice(1)) : 'Unknown'} Integration
                       </p>
                     </div>
                   </div>

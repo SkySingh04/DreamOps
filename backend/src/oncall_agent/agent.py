@@ -114,6 +114,11 @@ class OncallAgent:
                 "notion_version": self.config.notion_version
             })
             self.register_mcp_integration("notion", self.notion_integration)
+        else:
+            # Register placeholder for Notion
+            from .mcp_integrations.placeholder import PlaceholderMCPIntegration
+            self.notion_integration = PlaceholderMCPIntegration("notion", "Notion integration requires NOTION_TOKEN and NOTION_DATABASE_ID")
+            self.register_mcp_integration("notion", self.notion_integration)
 
         # Initialize Grafana integration if configured
         if self.config.grafana_url and (self.config.grafana_api_key or (self.config.grafana_username and self.config.grafana_password)):
@@ -127,6 +132,11 @@ class OncallAgent:
                 "server_port": self.config.grafana_mcp_port
             })
             self.register_mcp_integration("grafana", self.grafana_integration)
+        else:
+            # Register placeholder for Grafana
+            from .mcp_integrations.placeholder import PlaceholderMCPIntegration
+            self.grafana_integration = PlaceholderMCPIntegration("grafana", "Grafana integration requires GRAFANA_URL and GRAFANA_API_KEY")
+            self.register_mcp_integration("grafana", self.grafana_integration)
 
         # Initialize GitHub integration if configured
         if self.config.github_token:
@@ -136,6 +146,11 @@ class OncallAgent:
                 "server_host": self.config.github_mcp_host,
                 "server_port": self.config.github_mcp_port
             })
+            self.register_mcp_integration("github", self.github_integration)
+        else:
+            # Register placeholder for GitHub
+            from .mcp_integrations.placeholder import PlaceholderMCPIntegration
+            self.github_integration = PlaceholderMCPIntegration("github", "GitHub integration requires GITHUB_TOKEN")
             self.register_mcp_integration("github", self.github_integration)
 
     def register_mcp_integration(self, name: str, integration: MCPIntegration) -> None:

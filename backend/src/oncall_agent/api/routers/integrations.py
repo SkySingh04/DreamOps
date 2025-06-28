@@ -29,6 +29,22 @@ INTEGRATION_CONFIGS: dict[str, IntegrationConfig] = {
             "kubeconfig_path": "/etc/kubernetes/config"
         }
     ),
+    "kubernetes_mcp": IntegrationConfig(
+        enabled=True,
+        config={
+            "cluster": "production",
+            "namespace": "default",
+            "kubeconfig_path": "/etc/kubernetes/config"
+        }
+    ),
+    "notion": IntegrationConfig(
+        enabled=False,
+        config={
+            "token": "",
+            "database_id": "",
+            "version": "2022-06-28"
+        }
+    ),
     "github": IntegrationConfig(
         enabled=True,
         config={
@@ -129,6 +145,45 @@ async def list_integrations() -> list[Integration]:
     except Exception as e:
         logger.error(f"Error listing integrations: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/available")
+async def get_available_integrations() -> JSONResponse:
+    """Get list of available integrations that can be added."""
+    available = [
+        {
+            "name": "prometheus",
+            "description": "Prometheus monitoring and alerting",
+            "category": "monitoring",
+            "status": "available"
+        },
+        {
+            "name": "jira",
+            "description": "Jira issue tracking",
+            "category": "ticketing",
+            "status": "available"
+        },
+        {
+            "name": "opsgenie",
+            "description": "OpsGenie incident management",
+            "category": "incident_management",
+            "status": "coming_soon"
+        },
+        {
+            "name": "aws",
+            "description": "AWS services integration",
+            "category": "cloud",
+            "status": "available"
+        },
+        {
+            "name": "grafana",
+            "description": "Grafana dashboards and alerts",
+            "category": "monitoring",
+            "status": "available"
+        }
+    ]
+
+    return JSONResponse(content={"integrations": available})
 
 
 @router.get("/{integration_name}", response_model=Integration)
@@ -395,45 +450,6 @@ async def get_integration_logs(
         "logs": logs,
         "total": len(logs)
     })
-
-
-@router.get("/available")
-async def get_available_integrations() -> JSONResponse:
-    """Get list of available integrations that can be added."""
-    available = [
-        {
-            "name": "prometheus",
-            "description": "Prometheus monitoring and alerting",
-            "category": "monitoring",
-            "status": "available"
-        },
-        {
-            "name": "jira",
-            "description": "Jira issue tracking",
-            "category": "ticketing",
-            "status": "available"
-        },
-        {
-            "name": "opsgenie",
-            "description": "OpsGenie incident management",
-            "category": "incident_management",
-            "status": "coming_soon"
-        },
-        {
-            "name": "aws",
-            "description": "AWS services integration",
-            "category": "cloud",
-            "status": "available"
-        },
-        {
-            "name": "grafana",
-            "description": "Grafana dashboards and alerts",
-            "category": "monitoring",
-            "status": "available"
-        }
-    ]
-
-    return JSONResponse(content={"integrations": available})
 
 
 # Kubernetes-specific endpoints
