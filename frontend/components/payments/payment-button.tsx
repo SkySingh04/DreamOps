@@ -6,10 +6,12 @@ import { Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
 interface PaymentButtonProps {
-  planId: string;
-  planName: string;
-  amount: number;
+  planId?: string;
+  planName?: string;
+  amount?: number;
   teamId?: string;
+  userId?: string; // For new user-based model
+  currentPlan?: string; // For determining upgrade options
   className?: string;
 }
 
@@ -18,6 +20,8 @@ export function PaymentButton({
   planName,
   amount,
   teamId,
+  userId,
+  currentPlan,
   className
 }: PaymentButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
@@ -27,6 +31,21 @@ export function PaymentButton({
     setIsLoading(true);
 
     try {
+      // Determine if this is upgrade mode or specific plan mode
+      const isUpgradeMode = currentPlan && !planId;
+      
+      if (isUpgradeMode) {
+        // Redirect to pricing/upgrade page for plan selection
+        window.location.href = '/pricing';
+        setIsLoading(false);
+        return;
+      }
+
+      // Validate required props for specific plan payment
+      if (!planId || !planName || !amount) {
+        throw new Error("Missing required payment parameters");
+      }
+
       // Call backend API to initiate payment
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const useMockPayments = process.env.NEXT_PUBLIC_USE_MOCK_PAYMENTS === "true";
@@ -42,14 +61,14 @@ export function PaymentButton({
           // "Authorization": `Bearer ${token}`
         },
         body: JSON.stringify({
-          team_id: teamId || "team_123", // Replace with actual team ID
+          team_id: userId || teamId || "team_123", // Use userId first, fallback to teamId
           amount: amount * 100, // Convert to paise
           plan: planId.toUpperCase(),
           mobile_number: null, // Optional
           email: null, // Optional
           metadata: {
             plan_name: planName,
-            initiated_from: "pricing_page"
+            initiated_from: "dashboard_general"
           }
         })
       });
@@ -78,6 +97,14 @@ export function PaymentButton({
     }
   };
 
+  // Determine button text based on mode
+  const isUpgradeMode = currentPlan && !planId;
+  const buttonText = isUpgradeMode 
+    ? "Upgrade Plan" 
+    : amount 
+      ? `Pay ₹${amount}` 
+      : "Continue";
+
   return (
     <Button
       onClick={handlePayment}
@@ -88,10 +115,10 @@ export function PaymentButton({
       {isLoading ? (
         <>
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Processing...
+          {isUpgradeMode ? "Loading..." : "Processing..."}
         </>
       ) : (
-        `Pay ₹${amount}`
+        buttonText
       )}
     </Button>
   );
