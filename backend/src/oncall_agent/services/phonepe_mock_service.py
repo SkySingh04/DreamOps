@@ -47,7 +47,7 @@ class PhonePeMockService:
             self._transactions[merchant_order_id] = {
                 "merchant_order_id": merchant_order_id,
                 "phonepe_order_id": phonepe_order_id,
-                "team_id": payment_request.team_id,
+                "user_id": payment_request.user_id,
                 "amount": payment_request.amount,
                 "plan": payment_request.plan,
                 "status": PaymentStatus.INITIATED,

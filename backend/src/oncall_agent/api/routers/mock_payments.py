@@ -25,7 +25,7 @@ async def mock_initiate_payment(request: Request):
     
     # Store transaction data in memory (in production, use database)
     MOCK_TRANSACTIONS[transaction_id] = {
-        "team_id": body.get("team_id", "team_123"),
+        "user_id": body.get("user_id", "1"),
         "amount": body.get("amount", 0),
         "plan": body.get("plan", "starter"),
         "status": "initiated",
@@ -33,7 +33,7 @@ async def mock_initiate_payment(request: Request):
     }
     
     # Simulate PhonePe redirect URL with all necessary params
-    redirect_url = f"http://localhost:8000/api/v1/mock-payments/simulate?txn={transaction_id}&amount={body.get('amount', 0)}&team_id={body.get('team_id', 'team_123')}&plan={body.get('plan', 'starter')}"
+    redirect_url = f"http://localhost:8000/api/v1/mock-payments/simulate?txn={transaction_id}&amount={body.get('amount', 0)}&user_id={body.get('user_id', '1')}&plan={body.get('plan', 'starter')}"
     
     return PaymentResponse(
         success=True,

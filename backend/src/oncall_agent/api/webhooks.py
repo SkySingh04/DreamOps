@@ -58,14 +58,14 @@ def verify_pagerduty_signature(payload: bytes, signature: str, secret: str) -> b
     return hmac.compare_digest(expected, signature)
 
 
-async def record_alert_usage(team_id: str, incident_id: str, alert_type: str = "pagerduty"):
-    """Record alert usage for the team."""
+async def record_alert_usage(user_id: str, incident_id: str, alert_type: str = "pagerduty"):
+    """Record alert usage for the user."""
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 "http://localhost:8000/api/v1/alert-tracking/record",
                 json={
-                    "team_id": team_id,
+                    "user_id": user_id,
                     "alert_type": alert_type,
                     "incident_id": incident_id,
                     "metadata": {"source": "pagerduty_webhook"}
@@ -73,7 +73,7 @@ async def record_alert_usage(team_id: str, incident_id: str, alert_type: str = "
             )
             if response.status_code == 403:
                 # Alert limit reached
-                logger.warning(f"Alert limit reached for team {team_id}")
+                logger.warning(f"Alert limit reached for user {user_id}")
                 return False, response.json()
             elif response.status_code == 200:
                 data = response.json()
@@ -198,274 +198,205 @@ async def pagerduty_webhook(
                     html_url=incident_data.get('html_url', '')
                 )
 
-                logger.info(
-                    f"Processing V3 incident {incident.incident_number}: {incident.title} "
-                    f"(severity: {incident.urgency}, service: {incident.service.name if incident.service else 'unknown'})"
-                )
-
-                # Emit structured log for webhook received
-                await log_stream_manager.log_info(
-                    "📨 PAGERDUTY WEBHOOK RECEIVED!",
-                    incident_id=incident.id,
-                    stage="webhook_received",
-                    progress=0.1,
-                    metadata={
-                        "webhook_type": v3_payload.event.event_type,
-                        "service": incident.service.name if incident.service else "unknown",
-                        "urgency": incident.urgency,
-                        "title": incident.title
-                    }
-                )
-
-                # Store incident in our database
-                severity_map = {
-                    "low": Severity.LOW,
-                    "medium": Severity.MEDIUM,
-                    "high": Severity.HIGH,
-                    "critical": Severity.CRITICAL
-                }
-
-                # Create incident record
-                inc_record = Incident(
-                    id=incident.id,
-                    title=incident.title,
-                    description=incident.description or "",
-                    severity=severity_map.get(incident.urgency.lower(), Severity.HIGH),
-                    status=IncidentStatus.TRIGGERED,
-                    service_name=incident.service.name if incident.service else "unknown",
-                    alert_source="pagerduty",
-                    created_at=datetime.now(UTC),
-                    metadata={
-                        "incident_number": incident.incident_number,
-                        "html_url": incident.html_url,
-                        "webhook_event": v3_payload.event.event_type
-                    },
-                    timeline=[{
-                        "timestamp": datetime.now(UTC).isoformat(),
-                        "event": "incident_created",
-                        "description": "Incident triggered via PagerDuty webhook"
-                    }]
-                )
-
-                INCIDENTS_DB[incident.id] = inc_record
-
-                # Record alert usage for this incident
-                team_id = "team_123"  # TODO: Get actual team ID from incident or service
-                can_process, usage_data = await record_alert_usage(team_id, incident.id, "pagerduty")
+                # Check alert usage - using user_id "1" for now (should be from incident context)
+                user_id = "1"  # Default user for webhook incidents
+                allowed, usage_data = await record_alert_usage(user_id, incident.id)
                 
-                if not can_process:
+                if not allowed:
                     # Alert limit reached
-                    logger.warning(f"Alert limit reached for team {team_id}, skipping agent processing")
+                    logger.warning(f"Alert limit reached for user {user_id}, incident {incident.id} not processed")
+                    
+                    # Send limit reached notification
+                    await log_stream_manager.log_warning(
+                        f"⚠️ Alert limit reached for user. Upgrade required.",
+                        incident_id=incident.id,
+                        stage="alert_limit_reached",
+                        metadata={
+                            "alerts_used": usage_data.get("detail", {}).get("alerts_used", 0),
+                            "alerts_limit": usage_data.get("detail", {}).get("alerts_limit", 3),
+                            "account_tier": usage_data.get("detail", {}).get("account_tier", "free")
+                        }
+                    )
+                    
                     return JSONResponse(
                         status_code=403,
                         content={
-                            "status": "error",
+                            "status": "limit_reached",
                             "message": "Alert limit reached. Please upgrade your subscription.",
-                            "alert_usage": usage_data
+                            "usage": usage_data.get("detail", {})
                         }
                     )
 
-                # Process immediately
-                result = await trigger.trigger_oncall_agent(
-                    incident,
-                    {"webhook_event": v3_payload.event.event_type}
-                )
-
-                # Store the analysis result
-                if result.get("status") == "success" and result.get("agent_response"):
-                    agent_response = result["agent_response"]
-
-                    # Store full analysis data
-                    ANALYSIS_DB[incident.id] = {
-                        "incident_id": incident.id,
-                        "status": "analyzed",
-                        "analysis": agent_response.get("analysis", ""),
-                        "parsed_analysis": agent_response.get("parsed_analysis", {}),
-                        "confidence_score": agent_response.get("confidence_score", 0.85),
-                        "risk_level": agent_response.get("risk_level", "medium"),
-                        "context_gathered": agent_response.get("context_gathered", {}),
-                        "full_context": agent_response.get("full_context", {}),
-                        "timestamp": datetime.now(UTC).isoformat(),
-                        "processing_time": result.get("processing_time", 0)
+                # Process incident
+                await log_stream_manager.log_info(
+                    f"🔍 Processing incident: {incident.title}",
+                    incident_id=incident.id,
+                    stage="webhook_received",
+                    metadata={
+                        "service": incident.service.name if incident.service else "Unknown",
+                        "urgency": incident.urgency,
+                        "alerts_used": usage_data.get("alerts_used") if usage_data else None
                     }
-
-                    # Update incident with AI analysis
-                    inc_record.ai_analysis = AIAnalysis(
-                        summary=agent_response.get("parsed_analysis", {}).get("root_cause", ["Analysis processing"])[0] if agent_response.get("parsed_analysis", {}).get("root_cause") else "AI analysis completed",
-                        root_cause=" ".join(agent_response.get("parsed_analysis", {}).get("root_cause", [])),
-                        impact_assessment=" ".join(agent_response.get("parsed_analysis", {}).get("impact", [])),
-                        recommended_actions=[
-                            {
-                                "action": action,
-                                "reason": "AI recommended action",
-                                "priority": "high" if i < 2 else "medium"
-                            }
-                            for i, action in enumerate(agent_response.get("parsed_analysis", {}).get("immediate_actions", [])[:5])
-                        ],
-                        confidence_score=agent_response.get("confidence_score", 0.85),
-                        related_incidents=[],
-                        knowledge_base_references=[]
-                    )
-
-                    # Add to timeline
-                    inc_record.timeline.append({
-                        "timestamp": datetime.now(UTC).isoformat(),
-                        "event": "ai_analysis_complete",
-                        "description": f"AI analysis completed with {agent_response.get('confidence_score', 0.85)*100:.0f}% confidence",
-                        "automated": True
-                    })
-
-                    logger.info("\n" + "="*80)
-                    logger.info("🤖 AGENT ANALYSIS COMPLETE:")
-                    logger.info("="*80)
-                    analysis = agent_response.get("analysis", "")
-                    for line in analysis.split('\n'):
-                        if line.strip():
-                            logger.info(line)
-                    logger.info("="*80 + "\n")
-
-                    # Log context gathered
-                    if agent_response.get("context_gathered"):
-                        logger.info("📊 Context gathered from integrations:")
-                        for integration, success in agent_response["context_gathered"].items():
-                            logger.info(f"  - {integration}: {'✅ Success' if success else '❌ Failed'}")
-
-                results.append(result)
-            else:
-                logger.info(f"Ignoring non-incident event: {v3_payload.event.event_type}")
-                return JSONResponse(
-                    status_code=200,
-                    content={"status": "success", "message": f"Event type {v3_payload.event.event_type} acknowledged"}
                 )
+
+                # Store incident in memory
+                memory_incident = Incident(
+                    id=incident.id,
+                    title=incident.title,
+                    description=incident.description or "",
+                    severity=Severity.HIGH if incident.urgency == 'high' else Severity.MEDIUM,
+                    status=IncidentStatus.OPEN,
+                    source="pagerduty",
+                    source_id=incident.id,
+                    created_at=datetime.now(UTC),
+                    userId=1  # Default user ID
+                )
+                INCIDENTS_DB[incident.id] = memory_incident
+
+                # Process incident via agent
+                logger.info(f"🤖 Processing incident via agent: {incident.id}")
+                result = await trigger.process_incident_async(incident)
+                results.append(result)
+
+                # Log the result
+                logger.info(f"📊 Agent processing result: {result}")
+
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "status": "success",
+                    "event_type": v3_payload.event.event_type,
+                    "incidents_processed": len(results),
+                    "results": results
+                }
+            )
 
         else:
-            # Legacy V2 format
+            # Legacy webhook format
             payload = PagerDutyWebhookPayload(**payload_dict)
-
-            if not payload.messages:
-                return JSONResponse(
-                    status_code=200,
-                    content={"status": "success", "message": "No messages to process"}
-                )
-
-            logger.info(f"Received PagerDuty V2 webhook with {len(payload.messages)} messages")
-
-            # Get agent trigger
-            trigger = await get_agent_trigger()
+            logger.info(f"Received PagerDuty webhook with {len(payload.messages)} messages")
 
             # Process each message
             results = []
+            trigger = await get_agent_trigger()
+
             for message in payload.messages:
+                event = message.event
                 incident = message.incident
 
+                logger.info(f"Processing event: {event} for incident: {incident.incident_number}")
+
                 # Only process triggered incidents
-                if incident.status != "triggered":
-                    logger.info(f"Skipping incident {incident.id} with status {incident.status}")
-                    continue
+                if event == "incident.trigger":
+                    # Check alert usage - using user_id "1" for now
+                    user_id = "1"  # Default user for webhook incidents
+                    allowed, usage_data = await record_alert_usage(user_id, incident.id)
+                    
+                    if not allowed:
+                        # Alert limit reached
+                        logger.warning(f"Alert limit reached for user {user_id}, incident {incident.id} not processed")
+                        
+                        # Send limit reached notification
+                        await log_stream_manager.log_warning(
+                            f"⚠️ Alert limit reached for user. Upgrade required.",
+                            incident_id=incident.id,
+                            stage="alert_limit_reached",
+                            metadata={
+                                "alerts_used": usage_data.get("detail", {}).get("alerts_used", 0),
+                                "alerts_limit": usage_data.get("detail", {}).get("alerts_limit", 3),
+                                "account_tier": usage_data.get("detail", {}).get("account_tier", "free")
+                            }
+                        )
+                        
+                        return JSONResponse(
+                            status_code=403,
+                            content={
+                                "status": "limit_reached",
+                                "message": "Alert limit reached. Please upgrade your subscription.",
+                                "usage": usage_data.get("detail", {})
+                            }
+                        )
 
-                # Log incident details
-                logger.info(
-                    f"Processing incident {incident.incident_number}: {incident.title} "
-                    f"(severity: {incident.urgency}, service: {incident.service.name if incident.service else 'unknown'})"
-                )
-
-                # Trigger agent in background for faster webhook response
-                if len(payload.messages) > 1:
-                    # Multiple alerts - process in background
-                    background_tasks.add_task(
-                        trigger.trigger_oncall_agent,
-                        incident,
-                        {"webhook_event": "incident.triggered"}
+                    # Process incident
+                    await log_stream_manager.log_info(
+                        f"🔍 Processing incident: {incident.title}",
+                        incident_id=incident.id,
+                        stage="webhook_received",
+                        metadata={
+                            "service": incident.service.name if incident.service else "Unknown",
+                            "urgency": incident.urgency,
+                            "event": event,
+                            "alerts_used": usage_data.get("alerts_used") if usage_data else None
+                        }
                     )
-                    results.append({
-                        "incident_id": incident.id,
-                        "status": "queued",
-                        "message": "Incident queued for processing"
-                    })
-                else:
-                    # Single alert - process immediately
-                    result = await trigger.trigger_oncall_agent(
-                        incident,
-                        {"webhook_event": "incident.triggered"}
+
+                    # Store incident in memory
+                    memory_incident = Incident(
+                        id=incident.id,
+                        title=incident.title,
+                        description=incident.description or "",
+                        severity=Severity.HIGH if incident.urgency == 'high' else Severity.MEDIUM,
+                        status=IncidentStatus.OPEN,
+                        source="pagerduty",
+                        source_id=incident.id,
+                        created_at=datetime.now(UTC),
+                        userId=1  # Default user ID
                     )
+                    INCIDENTS_DB[incident.id] = memory_incident
 
-                    # Log the agent's analysis for visibility
-                    if result.get("status") == "success" and result.get("agent_response", {}).get("analysis"):
-                        logger.info("\n" + "="*80)
-                        logger.info("🤖 AGENT ANALYSIS COMPLETE:")
-                        logger.info("="*80)
-                        analysis = result["agent_response"]["analysis"]
-                        for line in analysis.split('\n'):
-                            if line.strip():
-                                logger.info(line)
-                        logger.info("="*80 + "\n")
-
-                        # Log context gathered
-                        if result.get("agent_response", {}).get("context_gathered"):
-                            logger.info("📊 Context gathered from integrations:")
-                            for integration, success in result["agent_response"]["context_gathered"].items():
-                                logger.info(f"  - {integration}: {'✅ Success' if success else '❌ Failed'}")
-
-                        # Log executed actions in YOLO mode
-                        if result.get("agent_response", {}).get("execution_mode") == "YOLO":
-                            logger.info("\n🚀 YOLO MODE - Automated Actions Executed:")
-
-                            # Log regular automated actions
-                            if result.get("agent_response", {}).get("executed_actions"):
-                                logger.info("📌 Automated actions:")
-                                for action in result["agent_response"]["executed_actions"]:
-                                    status_icon = "✅" if action['status'] == 'success' else "❌"
-                                    logger.info(f"  {status_icon} {action['action']}")
-
-                            # Log remediation commands
-                            if result.get("agent_response", {}).get("remediation_commands_executed"):
-                                logger.info("🔧 Remediation commands from Claude's analysis:")
-                                for cmd_result in result["agent_response"]["remediation_commands_executed"]:
-                                    status_icon = "✅" if cmd_result['status'] == 'success' else "❌"
-                                    logger.info(f"  {status_icon} {cmd_result['command']}")
-                                    if cmd_result['status'] != 'success' and 'error' in cmd_result:
-                                        logger.info(f"     Error: {cmd_result['error']}")
-
+                    # Process with agent
+                    logger.info(f"🤖 Triggering DreamOps agent for incident: {incident.id}")
+                    result = await trigger.process_incident_async(incident)
                     results.append(result)
 
-        # Return response
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "message": f"Processed {len(results)} incidents",
-                "results": results,
-                "queue_status": trigger.get_queue_status()
-            }
-        )
+                    # Log the result
+                    await log_stream_manager.log_success(
+                        f"✅ Incident processed successfully",
+                        incident_id=incident.id,
+                        stage="agent_triggered",
+                        progress=0.5,
+                        metadata={"agent_result": result}
+                    )
 
-    except ValueError as e:
-        logger.error(f"Invalid webhook payload: {e}")
-        raise HTTPException(status_code=400, detail=f"Invalid payload: {str(e)}")
+                    logger.info(f"✅ Agent triggered successfully: {result}")
+                else:
+                    logger.info(f"Skipping event {event} - only processing incident.trigger events")
+
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "status": "success",
+                    "message": f"Processed {len(results)} incidents",
+                    "results": results
+                }
+            )
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error processing webhook: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        
+        # Log error to frontend
+        await log_stream_manager.log_error(
+            f"❌ Error processing webhook: {str(e)}",
+            stage="webhook_error",
+            metadata={"error": str(e)}
+        )
+        
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/pagerduty/status")
 async def webhook_status() -> dict[str, Any]:
-    """Get webhook processing status."""
-    trigger = await get_agent_trigger()
+    """Get PagerDuty webhook configuration status."""
     return {
-        "status": "healthy",
-        "queue": trigger.get_queue_status(),
-        "webhook_secret_configured": bool(getattr(config, 'pagerduty_webhook_secret', None))
-    }
-
-
-@router.post("/pagerduty/test")
-async def test_webhook() -> dict[str, Any]:
-    """Test endpoint to verify webhook configuration."""
-    return {
-        "status": "success",
-        "message": "Webhook endpoint is configured correctly",
-        "config": {
-            "secret_configured": bool(getattr(config, 'pagerduty_webhook_secret', None)),
+        "webhook_enabled": config.pagerduty_enabled,
+        "secret_configured": bool(getattr(config, 'pagerduty_webhook_secret', None)),
+        "api_key_configured": bool(getattr(config, 'pagerduty_api_key', None)),
+        "user_email_configured": bool(getattr(config, 'pagerduty_user_email', None)),
+        "webhook_url": f"{config.api_host}:{config.api_port}/webhook/pagerduty",
+        "agent_status": {
+            "initialized": agent_trigger is not None,
             "agent_available": agent_trigger is not None
         }
     }

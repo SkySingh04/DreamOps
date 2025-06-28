@@ -1,10 +1,10 @@
 import { Suspense } from 'react';
-import { Login } from '../login';
+import { FirebaseLogin } from '../firebase-login';
 
 export default function SignInPage() {
   return (
     <Suspense>
-      <Login mode="signin" />
+      <FirebaseLogin mode="signin" />
     </Suspense>
   );
 }

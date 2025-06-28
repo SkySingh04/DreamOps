@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUser } from '@/lib/db/queries';
-import { getUserWithTeam } from '@/lib/db/queries';
 import { getRecentAiActions, recordAiAction } from '@/lib/db/dashboard-queries';
 
 export async function GET(request: NextRequest) {
@@ -10,15 +9,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userWithTeam = await getUserWithTeam(user.id);
-    if (!userWithTeam?.teamId) {
-      return NextResponse.json({ error: 'User not part of a team' }, { status: 400 });
-    }
-
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '10');
 
-    const aiActions = await getRecentAiActions(userWithTeam.teamId, limit);
+    const aiActions = await getRecentAiActions(limit);
     
     return NextResponse.json(aiActions);
   } catch (error) {
@@ -37,11 +31,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userWithTeam = await getUserWithTeam(user.id);
-    if (!userWithTeam?.teamId) {
-      return NextResponse.json({ error: 'User not part of a team' }, { status: 400 });
-    }
-
     const body = await request.json();
     const { action, description, incidentId, status, metadata } = body;
 
@@ -52,7 +41,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const aiAction = await recordAiAction(userWithTeam.teamId, {
+    const aiAction = await recordAiAction({
       action,
       description,
       incidentId,

@@ -47,7 +47,21 @@
       "Bash(npx drizzle-kit:*)",
       "Bash(node:*)",
       "Bash(go build:*)",
-      "Bash(timeout 5 telnet:*)"
+      "Bash(timeout 5 telnet:*)",
+      "Bash(python:*)",
+      "Bash(timeout 5 uv run:*)",
+      "Bash(git add:*)",
+      "Bash(npm rebuild:*)",
+      "Bash(POSTGRES_URL=\"postgresql://neondb_owner:npg_WhfBIC9YzJ2D@ep-square-glade-a8zt9f77-pooler.eastus2.azure.neon.tech/neondb?sslmode=require&channel_binding=require\" npx drizzle-kit push)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm db:generate:*)",
+      "Bash(pnpm db:migrate:local:*)",
+      "Bash(cat:*)",
+      "Bash(mkdir:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git rebase:*)",
+      "Bash(kill:*)",
+      "Bash(pnpm dev:*)"
     ],
     "deny": []
   }

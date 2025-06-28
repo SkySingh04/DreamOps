@@ -1,7 +1,10 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { APIKeysSection } from '@/components/settings/api-keys-section';
 import {
   Card,
   CardContent,
@@ -255,10 +258,28 @@ export default function SettingsPage() {
   return (
     <section className="flex-1 p-4 lg:p-8">
       <div className="mb-6">
-        <h1 className="text-lg lg:text-2xl font-medium mb-2">Agent Settings</h1>
+        <h1 className="text-lg lg:text-2xl font-medium mb-2">Settings</h1>
         <p className="text-muted-foreground">
           Configure your AI agent and incident response preferences
         </p>
+      </div>
+
+      {/* Settings Navigation */}
+      <div className="mb-6">
+        <nav className="flex space-x-4 border-b">
+          <Link
+            href="/settings"
+            className="pb-3 px-1 border-b-2 border-primary font-medium text-sm"
+          >
+            Agent Settings
+          </Link>
+          <Link
+            href="/settings/integrations"
+            className="pb-3 px-1 border-b-2 border-transparent text-sm text-muted-foreground hover:text-foreground hover:border-gray-300"
+          >
+            Integrations
+          </Link>
+        </nav>
       </div>
 
       <div className="space-y-6">

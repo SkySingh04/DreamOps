@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Card,
@@ -42,98 +42,141 @@ import {
   Terminal,
   Loader2,
   Info,
-  MessageSquare
+  MessageSquare,
+  Plus,
+  ExternalLink
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient, queryKeys } from '@/lib/api-client';
-import { Integration } from '@/lib/types';
+import { Integration, IntegrationStatus } from '@/lib/types';
 import { format } from 'date-fns';
 
-const INTEGRATION_CONFIGS = {
-  kubernetes: {
-    icon: Cloud,
-    color: 'blue',
-    fields: [
-      { key: 'cluster_endpoint', label: 'Cluster Endpoint', type: 'text', required: true },
-      { key: 'namespace', label: 'Default Namespace', type: 'text', default: 'default' },
-      { key: 'auth_method', label: 'Authentication Method', type: 'select', options: ['kubeconfig', 'service-account', 'oidc'] },
-      { key: 'enable_destructive', label: 'Enable Destructive Operations', type: 'boolean', default: false },
-    ],
-  },
-  pagerduty: {
-    icon: Bell,
-    color: 'red',
-    fields: [
-      { key: 'api_key', label: 'API Key', type: 'password', required: true },
-      { key: 'webhook_secret', label: 'Webhook Secret', type: 'password' },
-      { key: 'routing_key', label: 'Default Routing Key', type: 'text' },
-      { key: 'auto_acknowledge', label: 'Auto-acknowledge incidents', type: 'boolean', default: false },
-    ],
-  },
-  github: {
-    icon: GitBranch,
-    color: 'purple',
-    fields: [
-      { key: 'token', label: 'Personal Access Token', type: 'password', required: true },
-      { key: 'organization', label: 'Organization', type: 'text' },
-      { key: 'repository_filter', label: 'Repository Filter (regex)', type: 'text' },
-      { key: 'enable_issue_creation', label: 'Enable Issue Creation', type: 'boolean', default: true },
-    ],
-  },
-  grafana: {
-    icon: BarChart3,
-    color: 'green',
-    fields: [
-      { key: 'url', label: 'Grafana URL', type: 'text', required: true },
-      { key: 'api_key', label: 'API Key', type: 'password', required: true },
-      { key: 'default_dashboard', label: 'Default Dashboard UID', type: 'text' },
-      { key: 'alert_notification_channel', label: 'Alert Notification Channel', type: 'text' },
-    ],
-  },
-  datadog: {
-    icon: Database,
-    color: 'purple',
-    fields: [
-      { key: 'api_key', label: 'API Key', type: 'password', required: true },
-      { key: 'app_key', label: 'Application Key', type: 'password', required: true },
-      { key: 'site', label: 'Datadog Site', type: 'select', options: ['datadoghq.com', 'datadoghq.eu', 'ddog-gov.com'] },
-      { key: 'log_index', label: 'Log Index', type: 'text', default: 'main' },
-    ],
-  },
-  notion: {
-    icon: FileText,
-    color: 'gray',
-    fields: [
-      { key: 'token', label: 'Integration Token', type: 'password', required: true },
-      { key: 'database_id', label: 'Incident Database ID', type: 'text' },
-      { key: 'page_template_id', label: 'Page Template ID', type: 'text' },
-      { key: 'auto_document', label: 'Auto-document incidents', type: 'boolean', default: true },
-    ],
-  },
-  slack: {
-    icon: MessageSquare,
-    color: 'pink',
-    fields: [
-      { key: 'bot_token', label: 'Bot User OAuth Token', type: 'password', required: true },
-      { key: 'channel_id', label: 'Default Channel ID', type: 'text', required: true },
-      { key: 'webhook_url', label: 'Incoming Webhook URL', type: 'text' },
-      { key: 'notification_level', label: 'Notification Level', type: 'select', options: ['all', 'critical', 'high', 'custom'] },
-    ],
-  },
+// Extended Integration interface for the integrations page
+interface ExtendedIntegration extends Integration {
+  type: string;
+  capabilities: string[];
+}
+
+// Integration type definitions
+interface MCPIntegration {
+  name: string;
+  capabilities: string[];
+  connected: boolean;
+}
+
+interface IntegrationHealth {
+  name: string;
+  status: IntegrationStatus;
+  last_check: string;
+  metrics?: Record<string, any>;
+}
+
+interface AvailableIntegration {
+  type: string;
+  name: string;
+  description: string;
+  category: string;
+  required: boolean;
+  setup_difficulty: 'easy' | 'medium' | 'hard';
+  documentation_url: string;
+  status?: 'available' | 'coming_soon';
+}
+
+const INTEGRATION_ICONS: Record<string, React.ComponentType<any>> = {
+  kubernetes: Cloud,
+  github: GitBranch,
+  pagerduty: Bell,
+  datadog: Database,
+  grafana: BarChart3,
+  notion: FileText,
+  slack: MessageSquare,
+  prometheus: Activity,
+  jira: FileText,
+  opsgenie: Bell,
+  aws: Cloud,
+};
+
+const INTEGRATION_COLORS: Record<string, string> = {
+  kubernetes: 'blue',
+  github: 'purple',
+  pagerduty: 'red',
+  datadog: 'purple',
+  grafana: 'green',
+  notion: 'gray',
+  slack: 'pink',
+  prometheus: 'orange',
+  jira: 'blue',
+  opsgenie: 'red',
+  aws: 'orange',
 };
 
 export default function IntegrationsPage() {
-  const [selectedIntegration, setSelectedIntegration] = useState<Integration | null>(null);
-  const [showConfigDialog, setShowConfigDialog] = useState(false);
+  const [selectedIntegration, setSelectedIntegration] = useState<ExtendedIntegration | null>(null);
+  const [showAddDialog, setShowAddDialog] = useState(false);
   const [testingIntegration, setTestingIntegration] = useState<string | null>(null);
-  const [configValues, setConfigValues] = useState<Record<string, any>>({});
+  const [refreshing, setRefreshing] = useState(false);
   const queryClient = useQueryClient();
 
-  // Fetch integrations
-  const { data: integrationsData, isLoading } = useQuery({
+  // Fetch MCP integrations (real-time status)
+  const { data: mcpIntegrations = [], isLoading: mcpLoading } = useQuery({
+    queryKey: queryKeys.mcpIntegrations,
+    queryFn: async () => {
+      try {
+        const response = await apiClient.get('/integrations');
+        return response.data?.integrations || [];
+      } catch (error) {
+        console.error('Failed to fetch MCP integrations:', error);
+        return [];
+      }
+    },
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  // Fetch team integrations
+  const { data: teamIntegrationsData, isLoading: teamLoading } = useQuery({
     queryKey: queryKeys.integrations,
     queryFn: () => apiClient.getIntegrations(),
   });
+
+  // Fetch available integrations
+  const { data: availableIntegrations = [] } = useQuery({
+    queryKey: queryKeys.availableIntegrations,
+    queryFn: async () => {
+      try {
+        const response = await apiClient.get('/api/v1/integrations/available');
+        return response.data?.integrations || [];
+      } catch (error) {
+        console.error('Failed to fetch available integrations:', error);
+        return [];
+      }
+    },
+  });
+
+  // Combine MCP and team integrations
+  const allIntegrations: ExtendedIntegration[] = [
+    ...(teamIntegrationsData?.data || []).map((integration: Integration): ExtendedIntegration => ({
+      ...integration,
+      type: integration.id, // Use id as type for team integrations
+      capabilities: [], // Default empty capabilities for team integrations
+    })),
+    ...mcpIntegrations.map((mcp: MCPIntegration): ExtendedIntegration => ({
+      id: mcp.name,
+      name: mcp.name.charAt(0).toUpperCase() + mcp.name.slice(1),
+      description: `${mcp.name.charAt(0).toUpperCase() + mcp.name.slice(1)} Integration`,
+      type: mcp.name,
+      status: mcp.connected ? 'connected' : 'disconnected',
+      enabled: mcp.connected,
+      capabilities: mcp.capabilities,
+      last_sync: new Date().toISOString(),
+    })),
+  ];
+
+  // Calculate dynamic metrics
+  const connectedCount = allIntegrations.filter(i => i.status === 'connected').length;
+  const errorCount = allIntegrations.filter(i => i.status === 'error').length;
+  const pendingCount = allIntegrations.filter(i => i.status === 'pending').length;
+  const enabledCount = allIntegrations.filter(i => i.enabled).length;
+  const totalCount = allIntegrations.length;
 
   // Mutations
   const testIntegrationMutation = useMutation({
@@ -145,20 +188,11 @@ export default function IntegrationsPage() {
         toast.error(`${id} connection test failed: ${data.data?.message}`);
       }
       setTestingIntegration(null);
+      queryClient.invalidateQueries({ queryKey: queryKeys.integrations });
     },
     onError: () => {
       toast.error('Connection test failed');
       setTestingIntegration(null);
-    },
-  });
-
-  const updateConfigMutation = useMutation({
-    mutationFn: ({ id, config }: { id: string; config: Record<string, any> }) =>
-      apiClient.updateIntegrationConfig(id, config),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.integrations });
-      toast.success('Integration configuration updated');
-      setShowConfigDialog(false);
     },
   });
 
@@ -167,37 +201,37 @@ export default function IntegrationsPage() {
       apiClient.toggleIntegration(id, enabled),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.integrations });
+      toast.success('Integration status updated');
     },
   });
 
-  const integrations = integrationsData?.data || [];
-
-  // Add mock data for integrations not returned by API
-  const allIntegrations: Integration[] = [
-    ...integrations,
-    ...Object.entries(INTEGRATION_CONFIGS)
-      .filter(([id]) => !integrations.find(i => i.id === id))
-      .map(([id, config]) => ({
-        id,
-        name: id.charAt(0).toUpperCase() + id.slice(1),
-        description: `Connect to ${id.charAt(0).toUpperCase() + id.slice(1)} for enhanced monitoring`,
-        status: 'pending' as const,
-        enabled: false,
-      })),
-  ];
-
-  const getIntegrationConfig = (id: string) => INTEGRATION_CONFIGS[id as keyof typeof INTEGRATION_CONFIGS];
+  const refreshIntegrations = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.integrations }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.mcpIntegrations }),
+      ]);
+      toast.success('Integrations refreshed');
+    } catch (error) {
+      toast.error('Failed to refresh integrations');
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'connected':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-100 text-green-800 border-green-200';
       case 'error':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-100 text-red-800 border-red-200';
       case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'disconnected':
+        return 'bg-gray-100 text-gray-800 border-gray-200';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
@@ -212,7 +246,7 @@ export default function IntegrationsPage() {
       case 'disconnected':
         return <Unlink className="h-5 w-5 text-gray-600" />;
       default:
-        return null;
+        return <Unlink className="h-5 w-5 text-gray-600" />;
     }
   };
 
@@ -223,18 +257,12 @@ export default function IntegrationsPage() {
       case 'error':
         return <Badge className="bg-red-100 text-red-800">Error</Badge>;
       case 'pending':
-        return <Badge className="bg-yellow-100 text-yellow-800">Not Connected</Badge>;
+        return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>;
       case 'disconnected':
         return <Badge className="bg-gray-100 text-gray-800">Disconnected</Badge>;
       default:
-        return null;
+        return <Badge className="bg-gray-100 text-gray-800">Unknown</Badge>;
     }
-  };
-
-  const handleConfigure = (integration: Integration) => {
-    setSelectedIntegration(integration);
-    setConfigValues(integration.config || {});
-    setShowConfigDialog(true);
   };
 
   const handleTest = (integrationId: string) => {
@@ -242,14 +270,15 @@ export default function IntegrationsPage() {
     testIntegrationMutation.mutate(integrationId);
   };
 
-  const handleSaveConfig = () => {
-    if (selectedIntegration) {
-      updateConfigMutation.mutate({
-        id: selectedIntegration.id,
-        config: configValues,
-      });
+  const handleConfigure = (integration: ExtendedIntegration) => {
+    if (integration.type === 'kubernetes') {
+      window.location.href = '/integrations/kubernetes';
+    } else {
+      toast.info(`${integration.name} configuration coming soon`);
     }
   };
+
+  const isLoading = mcpLoading || teamLoading;
 
   if (isLoading) {
     return (
@@ -275,27 +304,75 @@ export default function IntegrationsPage() {
             Connect external services to enhance monitoring and incident response
           </p>
         </div>
-        <Button onClick={() => setShowConfigDialog(true)}>
-          <Settings className="h-4 w-4 mr-2" />
-          Add Integration
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={refreshIntegrations}
+            disabled={refreshing}
+          >
+            {refreshing ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Refresh
+          </Button>
+          <Button onClick={() => setShowAddDialog(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Integration
+          </Button>
+        </div>
       </div>
 
+      {/* Integration Health Summary */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Integration Health</CardTitle>
+          <CardDescription>Overview of all integration statuses</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
+              <div className="text-2xl font-bold text-green-600">
+                {connectedCount}
+              </div>
+              <div className="text-sm text-green-700">Connected</div>
+            </div>
+            <div className="text-center p-4 bg-red-50 rounded-lg border border-red-200">
+              <div className="text-2xl font-bold text-red-600">
+                {errorCount}
+              </div>
+              <div className="text-sm text-red-700">Errors</div>
+            </div>
+            <div className="text-center p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+              <div className="text-2xl font-bold text-yellow-600">
+                {pendingCount}
+              </div>
+              <div className="text-sm text-yellow-700">Pending</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Integrations Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {integrations.map((integration) => {
-          const config = getIntegrationConfig(integration.id);
-          const Icon = config?.icon;
+        {allIntegrations.map((integration) => {
+          const IconComponent = INTEGRATION_ICONS[integration.type] || Settings;
+          const color = INTEGRATION_COLORS[integration.type] || 'gray';
+          
           return (
             <Card key={integration.id} className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gray-100 rounded-lg">
-                      {Icon && <Icon size={24} />}
+                    <div className={`p-2 bg-${color}-100 rounded-lg`}>
+                      <IconComponent className={`h-6 w-6 text-${color}-600`} />
                     </div>
                     <div>
                       <CardTitle className="text-lg">{integration.name}</CardTitle>
-                      <p className="text-sm text-gray-500 mt-1">{integration.description}</p>
+                      <p className="text-sm text-gray-500 mt-1">
+                        {integration.type.charAt(0).toUpperCase() + integration.type.slice(1)} Integration
+                      </p>
                     </div>
                   </div>
                   {getStatusIcon(integration.status)}
@@ -306,13 +383,33 @@ export default function IntegrationsPage() {
                 <div className="space-y-4">
                   {/* Status and Last Sync */}
                   <div className="flex items-center justify-between">
-                    <Badge variant="outline" className={getStatusColor(integration.status)}>
-                      {integration.status}
-                    </Badge>
+                    {getStatusBadge(integration.status)}
                     <span className="text-xs text-gray-500">
-                      Last sync: {integration.last_sync}
+                      {integration.last_sync ? 
+                        `Last sync: ${format(new Date(integration.last_sync), 'MMM dd, HH:mm')}` : 
+                        'Never synced'
+                      }
                     </span>
                   </div>
+
+                  {/* Capabilities */}
+                  {integration.capabilities && integration.capabilities.length > 0 && (
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium text-gray-700">Capabilities:</Label>
+                      <div className="flex flex-wrap gap-1">
+                        {integration.capabilities.slice(0, 3).map((capability, index) => (
+                          <Badge key={index} variant="outline" className="text-xs">
+                            {capability}
+                          </Badge>
+                        ))}
+                        {integration.capabilities.length > 3 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{integration.capabilities.length - 3} more
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Error Message */}
                   {integration.error && (
@@ -327,7 +424,7 @@ export default function IntegrationsPage() {
                   {/* Metrics */}
                   {integration.metrics && Object.keys(integration.metrics).length > 0 && (
                     <div className="grid grid-cols-3 gap-2 text-center">
-                      {Object.entries(integration.metrics).map(([key, value]) => (
+                      {Object.entries(integration.metrics).slice(0, 3).map(([key, value]) => (
                         <div key={key} className="p-2 bg-gray-50 rounded">
                           <div className="text-lg font-semibold">{value as number}</div>
                           <div className="text-xs text-gray-500 capitalize">{key}</div>
@@ -356,13 +453,7 @@ export default function IntegrationsPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        if (integration.id === 'kubernetes') {
-                          window.location.href = '/integrations/kubernetes';
-                        } else {
-                          handleConfigure(integration);
-                        }
-                      }}
+                      onClick={() => handleConfigure(integration)}
                       className="flex-1"
                     >
                       <Settings className="h-4 w-4 mr-2" />
@@ -388,45 +479,9 @@ export default function IntegrationsPage() {
         })}
       </div>
 
-      {/* Integration Health Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Integration Health</CardTitle>
-          <CardDescription>Overview of all integration statuses</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-4">
-            <div className="text-center p-4 bg-green-50 rounded-lg">
-              <div className="text-2xl font-bold text-green-600">
-                {integrations.filter(i => i.status === 'connected').length}
-              </div>
-              <div className="text-sm text-green-700">Connected</div>
-            </div>
-            <div className="text-center p-4 bg-red-50 rounded-lg">
-              <div className="text-2xl font-bold text-red-600">
-                {integrations.filter(i => i.status === 'error').length}
-              </div>
-              <div className="text-sm text-red-700">Errors</div>
-            </div>
-            <div className="text-center p-4 bg-yellow-50 rounded-lg">
-              <div className="text-2xl font-bold text-yellow-600">
-                {integrations.filter(i => i.status === 'pending').length}
-              </div>
-              <div className="text-sm text-yellow-700">Pending</div>
-            </div>
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <div className="text-2xl font-bold text-blue-600">
-                {integrations.filter(i => i.enabled).length}
-              </div>
-              <div className="text-sm text-blue-700">Enabled</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Configuration Dialog */}
-      <Dialog open={showConfigDialog} onOpenChange={setShowConfigDialog}>
-        <DialogContent>
+      {/* Add Integration Dialog */}
+      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add New Integration</DialogTitle>
             <DialogDescription>
@@ -434,26 +489,57 @@ export default function IntegrationsPage() {
             </DialogDescription>
           </DialogHeader>
           
-          <div className="grid gap-3">
-            <Button variant="outline" onClick={() => toast.info('Slack integration setup')}>
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Slack
-            </Button>
-            <Button variant="outline" onClick={() => toast.info('Prometheus integration setup')}>
-              <Activity className="h-4 w-4 mr-2" />
-              Prometheus
-            </Button>
-            <Button variant="outline" onClick={() => toast.info('AWS integration setup')}>
-              <Cloud className="h-4 w-4 mr-2" />
-              AWS CloudWatch
-            </Button>
+          <div className="grid gap-3 max-h-96 overflow-y-auto">
+            {availableIntegrations.map((integration: AvailableIntegration) => {
+              const IconComponent = INTEGRATION_ICONS[integration.type] || Settings;
+              return (
+                <div
+                  key={integration.type}
+                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-gray-100 rounded-lg">
+                      <IconComponent className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="font-medium">{integration.name}</div>
+                      <div className="text-sm text-gray-500">{integration.description}</div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="outline" className="text-xs">
+                          {integration.category}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          {integration.setup_difficulty}
+                        </Badge>
+                        {integration.required && (
+                          <Badge className="text-xs bg-red-100 text-red-800">Required</Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {integration.status === 'coming_soon' && (
+                      <Badge variant="outline" className="text-xs">
+                        Coming Soon
+                      </Badge>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        toast.info(`${integration.name} setup coming soon`);
+                        setShowAddDialog(false);
+                      }}
+                      disabled={integration.status === 'coming_soon'}
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Setup
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConfigDialog(false)}>
-              Cancel
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </section>

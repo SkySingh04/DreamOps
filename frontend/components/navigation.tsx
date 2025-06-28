@@ -16,20 +16,21 @@ import {
   Activity,
   Shield,
   X,
-  Home
+  Home,
+  LogOut,
+  User as UserIcon
 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
+  DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { signOut } from '@/app/(login)/actions';
 import { useRouter } from 'next/navigation';
 import { User } from '@/lib/db/schema';
 import useSWR, { mutate } from 'swr';
-import { LogOut } from 'lucide-react';
 import { AccountTierBadge } from '@/components/ui/account-tier-badge';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -44,181 +45,179 @@ const navItems = [
 
 export function Navigation() {
   const pathname = usePathname();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const { data: user } = useSWR<User>('/api/user', fetcher);
-  const { data: alertUsage } = useSWR(
-    user ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1/alert-tracking/usage/team_123` : null,
-    fetcher
-  );
   const router = useRouter();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { data: user, error, isLoading } = useSWR<User>('/api/user', fetcher);
 
-  async function handleSignOut() {
-    await signOut();
-    mutate('/api/user');
-    router.push('/');
-  }
-
-  const visibleNavItems = navItems.filter(item => 
-    user || !item.hideWhenLoggedOut
-  );
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST' });
+      mutate('/api/user', null, false);
+      router.push('/sign-in');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white">
+    <nav className="bg-white shadow-sm border-b">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 items-center justify-between">
-          {/* Logo */}
-          <div className="flex items-center">
+        <div className="flex justify-between h-16">
+          {/* Left side - Logo and nav items */}
+          <div className="flex">
+            {/* Logo */}
             <Link href="/" className="flex items-center">
-              <CircleIcon className="h-8 w-8 text-orange-500" />
-              <span className="ml-2 text-xl font-semibold text-gray-900">DreamOps</span>
+              <Bot className="h-8 w-8 text-orange-600" />
+              <span className="ml-2 text-xl font-bold text-gray-900">DreamOps</span>
             </Link>
+
+            {/* Desktop navigation */}
+            <div className="hidden md:ml-8 md:flex md:space-x-8">
+              {navItems.map((item) => {
+                if (item.hideWhenLoggedOut && !user) return null;
+                
+                const isActive = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`
+                      inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium
+                      ${isActive
+                        ? 'border-orange-500 text-gray-900'
+                        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                      }
+                    `}
+                  >
+                    <item.icon className="h-4 w-4 mr-2" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex md:items-center md:space-x-6">
-            {visibleNavItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`text-sm font-medium transition-colors hover:text-orange-600 ${
-                  pathname === item.href
-                    ? 'text-orange-600'
-                    : 'text-gray-700'
-                }`}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-
-          {/* User Menu / Auth Buttons */}
+          {/* Right side - User menu */}
           <div className="flex items-center space-x-4">
-            {!user ? (
+            {user && (
               <>
-                <Link
-                  href="/pricing"
-                  className="hidden md:inline-block text-sm font-medium text-gray-700 hover:text-gray-900"
-                >
-                  Pricing
-                </Link>
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/sign-in">Sign In</Link>
-                </Button>
-                <Button asChild size="sm" className="hidden sm:inline-flex">
-                  <Link href="/sign-up">Get Started</Link>
-                </Button>
-              </>
-            ) : (
-              <>
-                {/* Account Tier Badge */}
-                {alertUsage && (
-                  <AccountTierBadge 
-                    tier={alertUsage.account_tier || 'free'} 
-                    size="sm"
-                    className="mr-3"
-                  />
-                )}
-                
-                <DropdownMenu open={isUserMenuOpen} onOpenChange={setIsUserMenuOpen}>
-                <DropdownMenuTrigger>
-                  <Avatar className="cursor-pointer size-8">
-                    <AvatarImage alt={user.name || ''} />
-                    <AvatarFallback>
-                      {user.email
-                        .split(' ')
-                        .map((n) => n[0])
-                        .join('')
-                        .toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem asChild>
-                    <Link href="/dashboard" className="w-full cursor-pointer">
-                      <LayoutDashboard className="mr-2 h-4 w-4" />
-                      Dashboard
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/settings" className="w-full cursor-pointer">
-                      <Settings className="mr-2 h-4 w-4" />
-                      Settings
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-red-600">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Sign Out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                <AccountTierBadge tier={user.accountTier || 'free'} />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src="/avatar.png" alt={user.name || ''} />
+                        <AvatarFallback>
+                          {user.name?.charAt(0).toUpperCase() || 'U'}
+                        </AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-56" align="end" forceMount>
+                    <DropdownMenuItem className="flex flex-col items-start">
+                      <div className="text-sm font-medium">{user.name || 'User'}</div>
+                      <div className="text-xs text-gray-500">{user.email}</div>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard/general">
+                        <UserIcon className="mr-2 h-4 w-4" />
+                        <span>Account</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/settings">
+                        <Settings className="mr-2 h-4 w-4" />
+                        <span>Settings</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleLogout}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      <span>Log out</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </>
             )}
 
             {/* Mobile menu button */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="md:hidden"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            >
-              {isMobileMenuOpen ? (
-                <X className="h-5 w-5" />
-              ) : (
-                <Menu className="h-5 w-5" />
-              )}
-            </Button>
+            <div className="md:hidden">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              >
+                {isMobileMenuOpen ? (
+                  <X className="h-6 w-6" />
+                ) : (
+                  <Menu className="h-6 w-6" />
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Mobile Navigation */}
+      {/* Mobile navigation menu */}
       {isMobileMenuOpen && (
-        <div className="md:hidden border-t border-gray-200">
-          <nav className="px-4 py-2 space-y-1">
-            {visibleNavItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className={`block py-2 px-3 text-base font-medium rounded-md transition-colors ${
-                  pathname === item.href
-                    ? 'bg-orange-50 text-orange-600'
-                    : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                }`}
-              >
-                <div className="flex items-center">
-                  <item.icon className="h-5 w-5 mr-2" />
-                  {item.label}
-                </div>
-              </Link>
-            ))}
-            {!user && (
-              <>
+        <div className="md:hidden">
+          <div className="pt-2 pb-3 space-y-1">
+            {navItems.map((item) => {
+              if (item.hideWhenLoggedOut && !user) return null;
+              
+              const isActive = pathname === item.href;
+              return (
                 <Link
-                  href="/pricing"
+                  key={item.href}
+                  href={item.href}
+                  className={`
+                    block pl-3 pr-4 py-2 border-l-4 text-base font-medium
+                    ${isActive
+                      ? 'bg-orange-50 border-orange-500 text-orange-700'
+                      : 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800'
+                    }
+                  `}
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="block py-2 px-3 text-base font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-md"
                 >
-                  Pricing
+                  <div className="flex items-center">
+                    <item.icon className="h-5 w-5 mr-3" />
+                    {item.label}
+                  </div>
                 </Link>
-                <div className="pt-2 space-y-2">
-                  <Button asChild variant="outline" className="w-full">
-                    <Link href="/sign-in" onClick={() => setIsMobileMenuOpen(false)}>
-                      Sign In
-                    </Link>
-                  </Button>
-                  <Button asChild className="w-full">
-                    <Link href="/sign-up" onClick={() => setIsMobileMenuOpen(false)}>
-                      Get Started
-                    </Link>
-                  </Button>
+              );
+            })}
+            {user && (
+              <>
+                <div className="border-t pt-2">
+                  <Link
+                    href="/dashboard/general"
+                    className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <div className="flex items-center">
+                      <UserIcon className="h-5 w-5 mr-3" />
+                      Account
+                    </div>
+                  </Link>
+                  <button
+                    onClick={() => {
+                      handleLogout();
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="block w-full text-left pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800"
+                  >
+                    <div className="flex items-center">
+                      <LogOut className="h-5 w-5 mr-3" />
+                      Log out
+                    </div>
+                  </button>
                 </div>
               </>
             )}
-          </nav>
+          </div>
         </div>
       )}
-    </header>
+    </nav>
   );
 }

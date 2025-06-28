@@ -620,7 +620,7 @@ async def test_integration_connection(integration_name: str) -> IntegrationTestR
         latency = (datetime.now() - start_time).total_seconds() * 1000
 
         if is_healthy:
-            capabilities = integration.get_capabilities()
+            capabilities = await integration.get_capabilities()
             return IntegrationTestResult(
                 success=True,
                 message=f"Successfully connected to {integration_name}",

@@ -17,7 +17,7 @@ ALERTS_DB: Dict[str, Dict[str, Any]] = {}
 class Alert(BaseModel):
     """Alert model"""
     id: Optional[str] = None
-    team_id: str
+    user_id: str
     incident_id: str
     alert_type: str = "manual"
     title: Optional[str] = None
@@ -70,7 +70,7 @@ async def create_alert(alert: Alert):
         from .alert_tracking import record_alert_usage, RecordAlertRequest
         try:
             usage_request = RecordAlertRequest(
-                team_id=alert.team_id,
+                user_id=alert.user_id,
                 alert_type=alert.alert_type,
                 incident_id=alert.incident_id,
                 metadata=alert.metadata
@@ -92,7 +92,7 @@ async def create_alert(alert: Alert):
         except Exception as e:
             logger.error(f"Failed to record alert usage: {e}")
         
-        logger.info(f"Alert created: {alert.id} for team {alert.team_id}")
+        logger.info(f"Alert created: {alert.id} for user {alert.user_id}")
         
         return AlertResponse(
             success=True,
@@ -109,7 +109,7 @@ async def create_alert(alert: Alert):
 
 @router.get("/", response_model=AlertResponse)
 async def list_alerts(
-    team_id: Optional[str] = Query(None, description="Filter by team ID"),
+    user_id: Optional[str] = Query(None, description="Filter by user ID"),
     status: Optional[str] = Query(None, description="Filter by status"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum alerts to return"),
     offset: int = Query(0, ge=0, description="Number of alerts to skip")
@@ -119,7 +119,7 @@ async def list_alerts(
         # Filter alerts
         filtered_alerts = []
         for alert_id, alert_data in ALERTS_DB.items():
-            if team_id and alert_data.get("team_id") != team_id:
+            if user_id and alert_data.get("user_id") != user_id:
                 continue
             if status and alert_data.get("status") != status:
                 continue
@@ -235,10 +235,10 @@ async def delete_alert(alert_id: str, decrement_usage: bool = Query(False)):
 
 @router.delete("/", response_model=AlertResponse)
 async def delete_all_alerts(
-    team_id: str = Query(..., description="Team ID to delete alerts for"),
+    user_id: str = Query(..., description="User ID to delete alerts for"),
     confirm: bool = Query(False, description="Confirm deletion")
 ):
-    """Delete all alerts for a team"""
+    """Delete all alerts for a user"""
     try:
         if not confirm:
             raise HTTPException(
@@ -246,19 +246,19 @@ async def delete_all_alerts(
                 detail="Set confirm=true to delete all alerts"
             )
         
-        # Find and delete alerts for the team
+        # Find and delete alerts for the user
         deleted_count = 0
         alerts_to_delete = []
         
         for alert_id, alert_data in ALERTS_DB.items():
-            if alert_data.get("team_id") == team_id:
+            if alert_data.get("user_id") == user_id:
                 alerts_to_delete.append(alert_id)
         
         for alert_id in alerts_to_delete:
             ALERTS_DB.pop(alert_id)
             deleted_count += 1
         
-        logger.info(f"Deleted {deleted_count} alerts for team {team_id}")
+        logger.info(f"Deleted {deleted_count} alerts for user {user_id}")
         
         return AlertResponse(
             success=True,
@@ -273,26 +273,26 @@ async def delete_all_alerts(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/reset-usage/{team_id}")
-async def reset_alert_usage(team_id: str):
-    """Reset alert usage count for a team (testing only)"""
+@router.post("/reset-usage/{user_id}")
+async def reset_alert_usage(user_id: str):
+    """Reset alert usage count for a user (testing only)"""
     try:
-        from .alert_tracking import TEAM_DATA
+        from .alert_tracking import USER_DATA
         
-        if team_id in TEAM_DATA:
-            TEAM_DATA[team_id]["alerts_used"] = 0
-            TEAM_DATA[team_id]["incidents_processed"] = set()
-            logger.info(f"Reset alert usage for team {team_id}")
+        if user_id in USER_DATA:
+            USER_DATA[user_id]["alerts_used"] = 0
+            USER_DATA[user_id]["incidents_processed"] = set()
+            logger.info(f"Reset alert usage for user {user_id}")
             
             return {
                 "success": True,
-                "message": f"Alert usage reset for team {team_id}",
+                "message": f"Alert usage reset for user {user_id}",
                 "alerts_used": 0
             }
         else:
             return {
                 "success": True,
-                "message": "Team not found, but will start fresh",
+                "message": "User not found, but will start fresh",
                 "alerts_used": 0
             }
             
@@ -301,14 +301,14 @@ async def reset_alert_usage(team_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/stats/{team_id}")
-async def get_alert_stats(team_id: str):
-    """Get alert statistics for a team"""
+@router.get("/stats/{user_id}")
+async def get_alert_stats(user_id: str):
+    """Get alert statistics for a user"""
     try:
         from .alert_tracking import get_alert_usage
         
         # Get usage data
-        usage_data = await get_alert_usage(team_id)
+        usage_data = await get_alert_usage(user_id)
         
         # Count alerts by status
         stats = {
@@ -325,7 +325,7 @@ async def get_alert_stats(team_id: str):
         }
         
         for alert_id, alert_data in ALERTS_DB.items():
-            if alert_data.get("team_id") == team_id:
+            if alert_data.get("user_id") == user_id:
                 stats["total"] += 1
                 status = alert_data.get("status", "active")
                 stats[status] = stats.get(status, 0) + 1
@@ -336,7 +336,7 @@ async def get_alert_stats(team_id: str):
         
         return {
             "success": True,
-            "team_id": team_id,
+            "user_id": user_id,
             "usage": {
                 "alerts_used": usage_data.alerts_used,
                 "alerts_limit": usage_data.alerts_limit,

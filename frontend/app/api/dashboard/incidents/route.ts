@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUser } from '@/lib/db/queries';
-import { getUserWithTeam } from '@/lib/db/queries';
 import { getRecentIncidents, createIncident } from '@/lib/db/dashboard-queries';
 
 // Force dynamic rendering to prevent build-time database access
@@ -13,15 +12,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userWithTeam = await getUserWithTeam(user.id);
-    if (!userWithTeam?.teamId) {
-      return NextResponse.json({ error: 'User not part of a team' }, { status: 400 });
-    }
-
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '10');
 
-    const incidents = await getRecentIncidents(userWithTeam.teamId, limit);
+    const incidents = await getRecentIncidents(limit);
     
     return NextResponse.json(incidents);
   } catch (error) {
@@ -40,11 +34,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userWithTeam = await getUserWithTeam(user.id);
-    if (!userWithTeam?.teamId) {
-      return NextResponse.json({ error: 'User not part of a team' }, { status: 400 });
-    }
-
     const body = await request.json();
     const { title, description, severity, source, sourceId, metadata } = body;
 
@@ -55,7 +44,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const incident = await createIncident(userWithTeam.teamId, {
+    const incident = await createIncident({
       title,
       description,
       severity,

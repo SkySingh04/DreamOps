@@ -54,122 +54,138 @@ function AccountForm({
           id="email"
           name="email"
           type="email"
-          placeholder="Enter your email"
-          defaultValue={emailValue}
-          required
+          placeholder="test@test.com"
+          value={emailValue}
+          disabled
         />
       </div>
+      {state.error && (
+        <div className="text-red-500 text-sm">{state.error}</div>
+      )}
+      {state.success && (
+        <div className="text-green-500 text-sm">{state.success}</div>
+      )}
+      <Button
+        type="submit"
+        className="bg-orange-500 hover:bg-orange-600 text-white"
+      >
+        Update Account
+      </Button>
     </>
   );
 }
 
-function AccountFormWithData({ state }: { state: ActionState }) {
-  const { data: user } = useSWR<User>('/api/user', fetcher);
-  return (
-    <AccountForm
-      state={state}
-      nameValue={user?.name ?? ''}
-      emailValue={user?.email ?? ''}
-    />
-  );
-}
-
-export default function GeneralPage() {
+function GeneralContent() {
+  const { data: user, error, isLoading } = useSWR<User>('/api/user', fetcher);
   const [state, formAction, isPending] = useActionState<ActionState, FormData>(
     updateAccount,
     {}
   );
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error || !user) {
+    return (
+      <div className="text-red-500">
+        Failed to load user data. Please try again.
+      </div>
+    );
+  }
+
   return (
-    <section className="flex-1 p-4 lg:p-8">
-      <h1 className="text-lg lg:text-2xl font-medium text-gray-900 mb-6">
-        General Settings
-      </h1>
-
-      {/* Alert Usage Overview */}
-      <AlertUsageCard className="mb-6" teamId="team_123" />
-
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* Account Settings Card */}
       <Card>
         <CardHeader>
-          <CardTitle>Account Information</CardTitle>
+          <CardTitle>Account Settings</CardTitle>
         </CardHeader>
         <CardContent>
-          <form className="space-y-4" action={formAction}>
-            <Suspense fallback={<AccountForm state={state} />}>
-              <AccountFormWithData state={state} />
-            </Suspense>
-            {state.error && (
-              <p className="text-red-500 text-sm">{state.error}</p>
+          <form action={formAction} className="space-y-4">
+            {isPending ? (
+              <div className="flex items-center space-x-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Updating account...</span>
+              </div>
+            ) : (
+              <AccountForm
+                state={state}
+                nameValue={user.name || ''}
+                emailValue={user.email}
+              />
             )}
-            {state.success && (
-              <p className="text-green-500 text-sm">{state.success}</p>
-            )}
-            <Button
-              type="submit"
-              className="bg-orange-500 hover:bg-orange-600 text-white"
-              disabled={isPending}
-            >
-              {isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                'Save Changes'
-              )}
-            </Button>
           </form>
         </CardContent>
       </Card>
 
-      {/* Demo Payment Gateway Test Section */}
-      <Card className="mt-6">
+      {/* Alert Usage Card */}
+      <AlertUsageCard userId={user.id.toString()} />
+
+      {/* Subscription Card */}
+      <Card className="lg:col-span-2">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5" />
-            Payment Gateway Test (Demo)
+            Subscription & Billing
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600">
-              This is a demo payment button to test the PhonePe integration. 
-              Click below to initiate a test payment.
-            </p>
-            
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <p className="text-sm text-amber-800 font-medium mb-2">Test Credentials:</p>
-              <ul className="text-sm text-amber-700 space-y-1">
-                <li>• UPI: <code className="bg-amber-100 px-1 rounded">success@paytm</code> (for success)</li>
-                <li>• Card: <code className="bg-amber-100 px-1 rounded">4242 4242 4242 4242</code></li>
-                <li>• CVV: <code className="bg-amber-100 px-1 rounded">123</code>, OTP: <code className="bg-amber-100 px-1 rounded">123456</code></li>
-              </ul>
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Current Plan</h3>
+              <div className="flex items-center justify-between p-4 bg-gray-100 rounded-lg">
+                <div>
+                  <p className="font-medium text-lg">
+                    {user.planName || 'Free'} Plan
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {user.accountTier === 'free' && '3 alerts per month'}
+                    {user.accountTier === 'starter' && '50 alerts per month'}
+                    {user.accountTier === 'professional' && 'Unlimited alerts'}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold">
+                    {user.accountTier === 'free' && '₹0'}
+                    {user.accountTier === 'starter' && '₹999'}
+                    {user.accountTier === 'professional' && '₹4,999'}
+                  </p>
+                  <p className="text-sm text-gray-600">per month</p>
+                </div>
+              </div>
             </div>
 
-            <div className="flex gap-4">
-              <PaymentButton
-                planId="STARTER"
-                planName="Test Payment - Starter"
-                amount={100}  // ₹100 for testing
-                teamId="test_team_demo"
-                className="bg-green-600 hover:bg-green-700"
-              />
-              
-              <PaymentButton
-                planId="PROFESSIONAL"
-                planName="Test Payment - Professional"
-                amount={500}  // ₹500 for testing
-                teamId="test_team_demo"
-                className="bg-blue-600 hover:bg-blue-700"
-              />
-            </div>
-
-            <p className="text-xs text-gray-500 mt-4">
-              Note: This is using PhonePe sandbox environment. No real money will be charged.
-            </p>
+            {user.accountTier === 'free' && (
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Upgrade Your Plan</h3>
+                <PaymentButton 
+                  userId={user.id.toString()}
+                  currentPlan={user.accountTier || 'free'}
+                />
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
-    </section>
+    </div>
+  );
+}
+
+export default function General() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      }
+    >
+      <GeneralContent />
+    </Suspense>
   );
 }

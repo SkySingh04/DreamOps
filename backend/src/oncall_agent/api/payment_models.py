@@ -33,7 +33,7 @@ class SubscriptionPlan(str, Enum):
 
 class PaymentRequest(BaseModel):
     """Payment initiation request"""
-    team_id: str
+    user_id: str
     amount: int = Field(..., description="Amount in paise (INR smallest unit)")
     plan: SubscriptionPlan
     payment_method: Optional[PaymentMethod] = None
@@ -77,7 +77,7 @@ class PhonePeCallback(BaseModel):
 class PaymentTransaction(BaseModel):
     """Payment transaction record"""
     id: str
-    team_id: str
+    user_id: str
     merchant_transaction_id: str
     phonepe_transaction_id: Optional[str] = None
     amount: int
@@ -93,7 +93,7 @@ class PaymentTransaction(BaseModel):
 
 class SubscriptionUpdate(BaseModel):
     """Subscription update model"""
-    team_id: str
+    user_id: str
     plan: SubscriptionPlan
     transaction_id: str
     valid_from: datetime

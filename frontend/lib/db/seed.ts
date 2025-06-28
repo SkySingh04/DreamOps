@@ -1,6 +1,6 @@
-// Stripe integration removed
+// Seed script for initial user
 import { getDb } from './drizzle';
-import { users, teams, teamMembers } from './schema';
+import { users } from './schema';
 import { hashPassword } from '@/lib/auth/session-crypto';
 
 async function seed() {
@@ -21,21 +21,9 @@ async function seed() {
     .returning();
 
   console.log('Initial user created.');
-
-  const [team] = await db
-    .insert(teams)
-    .values({
-      name: 'Test Team',
-    })
-    .returning();
-
-  await db.insert(teamMembers).values({
-    teamId: team.id,
-    userId: user.id,
-    role: 'owner',
-  });
-
-  console.log('Seed completed without Stripe integration.');
+  console.log('Email:', email);
+  console.log('Password:', password);
+  console.log('User ID:', user.id);
 }
 
 seed()

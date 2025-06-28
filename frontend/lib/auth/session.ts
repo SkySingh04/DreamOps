@@ -7,6 +7,7 @@ const key = new TextEncoder().encode(process.env.AUTH_SECRET);
 type SessionData = {
   user: { id: number };
   expires: string;
+  isSetupComplete?: boolean;
 };
 
 export async function signToken(payload: SessionData) {
@@ -30,11 +31,12 @@ export async function getSession() {
   return await verifyToken(session);
 }
 
-export async function setSession(user: NewUser) {
+export async function setSession(user: NewUser & { isSetupComplete?: boolean }) {
   const expiresInOneDay = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const session: SessionData = {
     user: { id: user.id! },
     expires: expiresInOneDay.toISOString(),
+    isSetupComplete: user.isSetupComplete || false,
   };
   const encryptedSession = await signToken(session);
   (await cookies()).set('session', encryptedSession, {

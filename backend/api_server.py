@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import signal
 import sys
 from contextlib import asynccontextmanager
@@ -16,7 +17,11 @@ from src.oncall_agent.api.routers import (
     agent_logs,
     agent_router,
     analytics_router,
+    api_keys,
+    auth_setup,
     dashboard_router,
+    dev_config,
+    firebase_auth,
     incidents_router,
     integrations_router,
     monitoring_router,
@@ -25,6 +30,7 @@ from src.oncall_agent.api.routers import (
     payments_router,
     alert_tracking,
     alert_crud,
+    user_integrations,
 )
 from src.oncall_agent.api.routers import mock_payments
 from src.oncall_agent.config import get_config
@@ -72,9 +78,10 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+origins = config.cors_origins.split(",") if hasattr(config, 'cors_origins') else ["http://localhost:3000"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -87,6 +94,14 @@ async def log_requests(request: Request, call_next):
     """Log all incoming requests for debugging."""
     # Log request details
     logger.info(f"Incoming request: {request.method} {request.url.path}")
+
+    # Log authorization header for debugging authentication issues
+    auth_header = request.headers.get("authorization")
+    if request.url.path.startswith("/api/v1/auth/"):
+        logger.info(f"Auth endpoint called: {request.url.path}")
+        logger.info(f"Authorization header present: {bool(auth_header)}")
+        if auth_header:
+            logger.info(f"Authorization header format: {auth_header[:20]}...")
 
     # Log webhook requests in detail
     if request.url.path == "/webhook/pagerduty":
@@ -127,6 +142,20 @@ async def root():
     }
 
 
+@app.get("/routes")
+async def list_routes():
+    """List all registered routes for debugging."""
+    routes = []
+    for route in app.routes:
+        if hasattr(route, "path") and hasattr(route, "methods"):
+            routes.append({
+                "path": route.path,
+                "methods": list(route.methods),
+                "name": route.name
+            })
+    return {"routes": sorted(routes, key=lambda x: x["path"])}
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
@@ -156,6 +185,43 @@ async def health_check():
     return health_status
 
 
+@app.get("/integrations")
+async def get_mcp_integrations():
+    """Get MCP integration status for frontend."""
+    try:
+        integrations = []
+        
+        # Try to get agent instance
+        try:
+            from src.oncall_agent.api.webhooks import agent_trigger
+            if agent_trigger and hasattr(agent_trigger, 'agent') and agent_trigger.agent:
+                agent = agent_trigger.agent
+                
+                # Get MCP integrations from agent
+                for name, integration in agent.mcp_integrations.items():
+                    try:
+                        is_healthy = await integration.health_check()
+                        integrations.append({
+                            "name": name,
+                            "capabilities": await integration.get_capabilities(),
+                            "connected": is_healthy
+                        })
+                    except Exception as e:
+                        logger.error(f"Error checking integration {name}: {e}")
+                        integrations.append({
+                            "name": name,
+                            "capabilities": [],
+                            "connected": False
+                        })
+        except Exception as e:
+            logger.error(f"Error getting agent instance: {e}")
+        
+        return {"integrations": integrations}
+    except Exception as e:
+        logger.error(f"Error getting MCP integrations: {e}")
+        return {"integrations": []}
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler."""
@@ -171,6 +237,10 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Include routers
 # Always include core routers
+# Note: Both firebase_auth and auth_setup have /api/v1/auth prefix
+# FastAPI will merge routes from both routers under the same prefix
+app.include_router(firebase_auth.router)  # Firebase auth endpoints
+app.include_router(auth_setup.router)  # Auth and setup flow endpoints
 app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(incidents_router, prefix="/api/v1")
 app.include_router(agent_router, prefix="/api/v1")
@@ -184,6 +254,13 @@ app.include_router(payments_router, prefix="/api/v1")
 app.include_router(mock_payments.router, prefix="/api/v1")
 app.include_router(alert_tracking, prefix="/api/v1")
 app.include_router(alert_crud, prefix="/api/v1")
+app.include_router(api_keys.router)
+app.include_router(user_integrations.router)  # Already has /api/v1 prefix
+
+# Include dev config router only in development mode
+if os.getenv("NODE_ENV") == "development":
+    app.include_router(dev_config.router)
+    logger.info("Dev config routes registered (development mode)")
 
 # Conditionally include webhook router
 if config.pagerduty_enabled:
@@ -223,11 +300,14 @@ def main():
     uvicorn_access = logging.getLogger("uvicorn.access")
     uvicorn_access.addFilter(WebSocketFilter())
 
+    # Get port from environment variable or use default
+    port = int(os.environ.get("PORT", config.api_port))
+
     # Run server
     uvicorn.run(
         "api_server:app",
-        host=config.api_host,
-        port=config.api_port,
+        host="0.0.0.0",  # Bind to all interfaces for Render
+        port=port,
         reload=config.api_reload,
         workers=config.api_workers if not config.api_reload else 1,
         log_level=config.api_log_level.lower(),

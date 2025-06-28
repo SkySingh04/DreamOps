@@ -12,15 +12,31 @@ import {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+// Dynamically import Firebase auth to avoid SSR issues
+let firebaseAuth: any = null;
+if (typeof window !== 'undefined') {
+  import('./firebase/config').then(module => {
+    firebaseAuth = module.auth;
+  });
+}
+
 class APIClient {
   private baseURL: string;
-  private headers: HeadersInit;
 
   constructor() {
     this.baseURL = API_BASE_URL;
-    this.headers = {
-      'Content-Type': 'application/json',
-    };
+  }
+
+  private async getAuthToken(): Promise<string | null> {
+    try {
+      if (firebaseAuth && firebaseAuth.currentUser) {
+        return await firebaseAuth.currentUser.getIdToken();
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting auth token:', error);
+      return null;
+    }
   }
 
   private async request<T>(
@@ -28,18 +44,43 @@ class APIClient {
     options: RequestInit = {}
   ): Promise<APIResponse<T>> {
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(options.headers as Record<string, string> || {}),
+      };
+
+      // Add authorization header
+      const token = await this.getAuthToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${this.baseURL}${endpoint}`, {
         ...options,
-        headers: {
-          ...this.headers,
-          ...options.headers,
-        },
+        headers,
       });
 
-      const data = await response.json();
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      let data;
+      
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        // If not JSON, get the text content for debugging
+        const textContent = await response.text();
+        console.error('Non-JSON response received:', {
+          status: response.status,
+          statusText: response.statusText,
+          contentType,
+          content: textContent.substring(0, 200) + '...'
+        });
+        throw new Error(`Expected JSON response but got ${contentType || 'unknown content type'}`);
+      }
 
       if (!response.ok) {
-        throw new Error(data.error?.message || 'API request failed');
+        console.error(`API Error ${response.status}:`, data);
+        throw new Error(data.detail || data.error?.message || 'API request failed');
       }
 
       return {
@@ -54,6 +95,31 @@ class APIClient {
         },
       };
     }
+  }
+
+  // Convenience methods
+  async get<T = any>(endpoint: string, options?: RequestInit): Promise<APIResponse<T>> {
+    return this.request<T>(endpoint, { ...options, method: 'GET' });
+  }
+
+  async post<T = any>(endpoint: string, data?: any, options?: RequestInit): Promise<APIResponse<T>> {
+    return this.request<T>(endpoint, {
+      ...options,
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  async put<T = any>(endpoint: string, data?: any, options?: RequestInit): Promise<APIResponse<T>> {
+    return this.request<T>(endpoint, {
+      ...options,
+      method: 'PUT',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  async delete<T = any>(endpoint: string, options?: RequestInit): Promise<APIResponse<T>> {
+    return this.request<T>(endpoint, { ...options, method: 'DELETE' });
   }
 
   // Dashboard endpoints
@@ -243,30 +309,11 @@ class APIClient {
 
   // Integration endpoints
   async getIntegrations(): Promise<APIResponse<Integration[]>> {
-    return this.request<Integration[]>('/integrations');
+    return this.request<Integration[]>('/api/v1/integrations/');
   }
 
   async getMCPIntegrations(): Promise<APIResponse<{ integrations: Array<{ name: string; capabilities: string[]; connected: boolean }> }>> {
-    // Call the correct backend endpoint for real MCP integrations
-    const response = await this.request<Array<{ name: string; capabilities: string[]; status: string }>>('/api/v1/integrations/');
-    console.log('MCP Integrations Response:', response); // Debug log
-    
-    // Transform the response to match the expected format
-    if (response.status === 'success' && response.data) {
-      const transformedData = {
-        integrations: response.data.map((integration: any) => ({
-          name: integration.name,
-          capabilities: integration.capabilities || [],
-          connected: integration.status === 'connected'
-        }))
-      };
-      return {
-        status: 'success',
-        data: transformedData
-      };
-    }
-    
-    return response as any;
+    return this.request<{ integrations: Array<{ name: string; capabilities: string[]; connected: boolean }> }>('/api/v1/integrations/');
   }
 
   async getIntegration(id: string): Promise<APIResponse<Integration>> {
@@ -283,14 +330,14 @@ class APIClient {
     id: string,
     config: Record<string, any>
   ): Promise<APIResponse<Integration>> {
-    return this.request<Integration>(`/api/v1/integrations/${id}`, {
+    return this.request<Integration>(`/api/v1/integrations/${id}/config`, {
       method: 'PUT',
-      body: JSON.stringify({ config }),
+      body: JSON.stringify(config),
     });
   }
 
   async toggleIntegration(id: string, enabled: boolean): Promise<APIResponse<Integration>> {
-    return this.request<Integration>(`/api/v1/integrations/${id}`, {
+    return this.request<Integration>(`/api/v1/integrations/${id}/config`, {
       method: 'PUT',
       body: JSON.stringify({ enabled }),
     });
@@ -373,7 +420,9 @@ class APIClient {
     const response = await fetch(
       `${this.baseURL}/api/v1/analytics/export?format=${format}${queryParams ? `&${queryParams}` : ''}`,
       {
-        headers: this.headers,
+        headers: {
+          'Content-Type': 'application/json',
+        },
       }
     );
 
@@ -540,6 +589,8 @@ export const queryKeys = {
   incident: (id: string) => ['incident', id],
   incidentTimeline: (id: string) => ['incident', id, 'timeline'],
   integrations: ['integrations'],
+  mcpIntegrations: ['mcp-integrations'],
+  availableIntegrations: ['available-integrations'],
   integration: (id: string) => ['integration', id],
   aiConfig: ['ai-agent', 'config'],
   agentStatus: ['ai-agent', 'status'],

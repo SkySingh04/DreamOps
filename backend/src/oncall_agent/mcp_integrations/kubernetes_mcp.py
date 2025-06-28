@@ -253,7 +253,7 @@ class KubernetesMCPServerIntegration(MCPIntegration):
         except:
             return False
 
-    def get_capabilities(self) -> dict[str, Any]:
+    async def get_capabilities(self) -> dict[str, Any]:
         """Return capabilities of the Kubernetes integration."""
         return {
             "context_types": ["pods", "deployments", "services", "events", "logs"],

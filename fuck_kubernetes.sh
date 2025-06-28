@@ -184,6 +184,16 @@ EOF
 # Function to simulate image pull error
 fuck_image_pull() {
     echo -e "${RED}🔥 Fucking Kubernetes: Simulating Image Pull Error${NC}"
+    
+    if [ "$DEMO_MODE" = true ]; then
+        echo -e "${YELLOW}DEMO MODE: Simulating Image Pull Error deployment...${NC}"
+        sleep 2
+        echo -e "${GREEN}✓ Image pull error simulation deployed (demo). ImagePullBackOff incoming!${NC}"
+        echo -e "${YELLOW}Demo: kubectl apply -f imagepull-deployment.yaml${NC}"
+        echo -e "${YELLOW}Demo: Deployment would try to pull non-existent images${NC}"
+        return 0
+    fi
+    
     ensure_namespace
     
     cat <<EOF | kubectl apply -f -
@@ -265,6 +275,16 @@ EOF
 # Function to simulate deployment failure
 fuck_deployment() {
     echo -e "${RED}🔥 Fucking Kubernetes: Simulating Deployment Failure${NC}"
+    
+    if [ "$DEMO_MODE" = true ]; then
+        echo -e "${YELLOW}DEMO MODE: Simulating Deployment Failure...${NC}"
+        sleep 2
+        echo -e "${GREEN}✓ Deployment failure simulation initiated (demo). Rolling update will fail!${NC}"
+        echo -e "${YELLOW}Demo: kubectl create deployment and update with bad image${NC}"
+        echo -e "${YELLOW}Demo: Deployment would fail during rolling update${NC}"
+        return 0
+    fi
+    
     ensure_namespace
     
     # First create a working deployment
@@ -303,6 +323,16 @@ EOF
 # Function to simulate service unavailable
 fuck_service() {
     echo -e "${RED}🔥 Fucking Kubernetes: Simulating Service Unavailable${NC}"
+    
+    if [ "$DEMO_MODE" = true ]; then
+        echo -e "${YELLOW}DEMO MODE: Simulating Service Unavailable...${NC}"
+        sleep 2
+        echo -e "${GREEN}✓ Service unavailable simulation deployed (demo). Service has no endpoints!${NC}"
+        echo -e "${YELLOW}Demo: kubectl apply service with wrong selectors${NC}"
+        echo -e "${YELLOW}Demo: Service would have no working endpoints${NC}"
+        return 0
+    fi
+    
     ensure_namespace
     
     # Create a service with no matching pods

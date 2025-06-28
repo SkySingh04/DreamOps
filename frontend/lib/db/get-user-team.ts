@@ -1,14 +1,10 @@
-import { getUser, getUserWithTeam } from './queries';
+// This file is deprecated as teams are no longer used
+// Keeping it to avoid breaking imports
 
-export async function getCurrentUserTeamId(): Promise<number | null> {
-  try {
-    const user = await getUser();
-    if (!user) return null;
+export async function getUserWithTeam(userId: number) {
+  return null;
+}
 
-    const userWithTeam = await getUserWithTeam(user.id);
-    return userWithTeam?.teamId || null;
-  } catch (error) {
-    console.error('Error getting user team ID:', error);
-    return null;
-  }
+export async function getTeamForUser() {
+  return null;
 }

@@ -27,7 +27,7 @@ class AlertUsageResponse(BaseModel):
 
 class RecordAlertRequest(BaseModel):
     """Request model for recording alert usage."""
-    team_id: str
+    user_id: str
     alert_type: str
     incident_id: Optional[str] = None
     metadata: Optional[dict] = None
@@ -35,13 +35,13 @@ class RecordAlertRequest(BaseModel):
 
 class UpdateSubscriptionRequest(BaseModel):
     """Request model for updating subscription."""
-    team_id: str
+    user_id: str
     plan_id: str
     transaction_id: str
 
 
 # In-memory storage for demo (replace with database in production)
-TEAM_DATA = {}
+USER_DATA = {}
 
 SUBSCRIPTION_PLANS = {
     "free": {"name": "Free", "alerts_limit": 3, "price": 0},
@@ -51,14 +51,14 @@ SUBSCRIPTION_PLANS = {
 }
 
 
-@router.get("/usage/{team_id}", response_model=AlertUsageResponse)
-async def get_alert_usage(team_id: str):
-    """Get alert usage for a team."""
-    logger.info(f"Getting alert usage for team: {team_id}")
+@router.get("/usage/{user_id}", response_model=AlertUsageResponse)
+async def get_alert_usage(user_id: str):
+    """Get alert usage for a user."""
+    logger.info(f"Getting alert usage for user: {user_id}")
     
-    # Initialize team data if not exists
-    if team_id not in TEAM_DATA:
-        TEAM_DATA[team_id] = {
+    # Initialize user data if not exists
+    if user_id not in USER_DATA:
+        USER_DATA[user_id] = {
             "alerts_used": 0,
             "alerts_limit": 3,
             "account_tier": "free",
@@ -66,28 +66,28 @@ async def get_alert_usage(team_id: str):
             "incidents_processed": set()  # Track processed incident IDs
         }
     
-    team_data = TEAM_DATA[team_id]
+    user_data = USER_DATA[user_id]
     
     # Check if we need to reset monthly usage
     now = datetime.now()
-    billing_start = team_data["billing_cycle_start"]
+    billing_start = user_data["billing_cycle_start"]
     if (now - billing_start).days >= 30:
         # Reset for new billing cycle
-        team_data["billing_cycle_start"] = now.replace(day=1)
-        team_data["alerts_used"] = 0
-        team_data["incidents_processed"] = set()
+        user_data["billing_cycle_start"] = now.replace(day=1)
+        user_data["alerts_used"] = 0
+        user_data["incidents_processed"] = set()
     
     # Calculate billing cycle end (1 month from start)
-    billing_cycle_end = team_data["billing_cycle_start"] + timedelta(days=30)
+    billing_cycle_end = user_data["billing_cycle_start"] + timedelta(days=30)
     
-    alerts_remaining = max(0, team_data["alerts_limit"] - team_data["alerts_used"])
-    is_limit_reached = team_data["alerts_used"] >= team_data["alerts_limit"]
+    alerts_remaining = max(0, user_data["alerts_limit"] - user_data["alerts_used"])
+    is_limit_reached = user_data["alerts_used"] >= user_data["alerts_limit"]
     
     return AlertUsageResponse(
-        alerts_used=team_data["alerts_used"],
-        alerts_limit=team_data["alerts_limit"],
+        alerts_used=user_data["alerts_used"],
+        alerts_limit=user_data["alerts_limit"],
         alerts_remaining=alerts_remaining,
-        account_tier=team_data["account_tier"],
+        account_tier=user_data["account_tier"],
         billing_cycle_end=billing_cycle_end.isoformat(),
         is_limit_reached=is_limit_reached
     )
@@ -95,12 +95,12 @@ async def get_alert_usage(team_id: str):
 
 @router.post("/record")
 async def record_alert_usage(request: RecordAlertRequest):
-    """Record alert usage for a team."""
-    logger.info(f"Recording alert usage for team: {request.team_id}, type: {request.alert_type}, incident: {request.incident_id}")
+    """Record alert usage for a user."""
+    logger.info(f"Recording alert usage for user: {request.user_id}, type: {request.alert_type}, incident: {request.incident_id}")
     
-    # Initialize team data if not exists
-    if request.team_id not in TEAM_DATA:
-        TEAM_DATA[request.team_id] = {
+    # Initialize user data if not exists
+    if request.user_id not in USER_DATA:
+        USER_DATA[request.user_id] = {
             "alerts_used": 0,
             "alerts_limit": 3,
             "account_tier": "free",
@@ -108,59 +108,59 @@ async def record_alert_usage(request: RecordAlertRequest):
             "incidents_processed": set()
         }
     
-    team_data = TEAM_DATA[request.team_id]
+    user_data = USER_DATA[request.user_id]
     
     # Check if this incident was already processed
-    if request.incident_id and request.incident_id in team_data["incidents_processed"]:
+    if request.incident_id and request.incident_id in user_data["incidents_processed"]:
         logger.info(f"Incident {request.incident_id} already processed, skipping")
         return {
             "success": True,
-            "alerts_used": team_data["alerts_used"],
-            "alerts_remaining": max(0, team_data["alerts_limit"] - team_data["alerts_used"]),
+            "alerts_used": user_data["alerts_used"],
+            "alerts_remaining": max(0, user_data["alerts_limit"] - user_data["alerts_used"]),
             "already_processed": True
         }
     
     # Check if limit reached
-    if team_data["alerts_limit"] != -1 and team_data["alerts_used"] >= team_data["alerts_limit"]:
+    if user_data["alerts_limit"] != -1 and user_data["alerts_used"] >= user_data["alerts_limit"]:
         raise HTTPException(
             status_code=403,
             detail={
                 "error": "Alert limit reached",
                 "message": "You have reached your monthly alert limit. Please upgrade your subscription to continue.",
-                "alerts_used": team_data["alerts_used"],
-                "alerts_limit": team_data["alerts_limit"],
-                "account_tier": team_data["account_tier"]
+                "alerts_used": user_data["alerts_used"],
+                "alerts_limit": user_data["alerts_limit"],
+                "account_tier": user_data["account_tier"]
             }
         )
     
     # Increment usage
-    team_data["alerts_used"] += 1
+    user_data["alerts_used"] += 1
     if request.incident_id:
-        team_data["incidents_processed"].add(request.incident_id)
+        user_data["incidents_processed"].add(request.incident_id)
     
-    alerts_remaining = max(0, team_data["alerts_limit"] - team_data["alerts_used"]) if team_data["alerts_limit"] != -1 else -1
+    alerts_remaining = max(0, user_data["alerts_limit"] - user_data["alerts_used"]) if user_data["alerts_limit"] != -1 else -1
     
     return {
         "success": True,
-        "alerts_used": team_data["alerts_used"],
+        "alerts_used": user_data["alerts_used"],
         "alerts_remaining": alerts_remaining,
-        "is_limit_reached": team_data["alerts_limit"] != -1 and team_data["alerts_used"] >= team_data["alerts_limit"]
+        "is_limit_reached": user_data["alerts_limit"] != -1 and user_data["alerts_used"] >= user_data["alerts_limit"]
     }
 
 
-@router.post("/upgrade")
-async def upgrade_subscription(request: UpdateSubscriptionRequest):
-    """Upgrade team subscription."""
-    logger.info(f"Upgrading subscription for team: {request.team_id} to plan: {request.plan_id}")
+@router.post("/upgrade-plan")
+async def upgrade_subscription(user_id: str, plan_id: str, transaction_id: str):
+    """Upgrade user subscription."""
+    logger.info(f"Upgrading subscription for user: {user_id} to plan: {plan_id}")
     
-    if request.plan_id not in SUBSCRIPTION_PLANS:
+    if plan_id not in SUBSCRIPTION_PLANS:
         raise HTTPException(status_code=400, detail="Invalid plan ID")
     
-    plan = SUBSCRIPTION_PLANS[request.plan_id]
+    plan = SUBSCRIPTION_PLANS[plan_id]
     
-    # Initialize team data if not exists
-    if request.team_id not in TEAM_DATA:
-        TEAM_DATA[request.team_id] = {
+    # Initialize user data if not exists
+    if user_id not in USER_DATA:
+        USER_DATA[user_id] = {
             "alerts_used": 0,
             "alerts_limit": 3,
             "account_tier": "free",
@@ -169,20 +169,20 @@ async def upgrade_subscription(request: UpdateSubscriptionRequest):
         }
     
     # Update subscription
-    TEAM_DATA[request.team_id].update({
-        "account_tier": request.plan_id,
+    USER_DATA[user_id].update({
+        "account_tier": plan_id,
         "alerts_limit": plan["alerts_limit"],
         "last_payment_at": datetime.now(),
-        "transaction_id": request.transaction_id
+        "transaction_id": transaction_id
     })
     
-    logger.info(f"Team {request.team_id} upgraded to {request.plan_id} plan with {plan['alerts_limit']} alerts")
+    logger.info(f"User {user_id} upgraded to {plan_id} plan with {plan['alerts_limit']} alerts")
     
     return {
         "success": True,
-        "new_tier": request.plan_id,
+        "new_tier": plan_id,
         "new_limit": plan["alerts_limit"],
-        "transaction_id": request.transaction_id,
+        "transaction_id": transaction_id,
         "message": f"Successfully upgraded to {plan['name']} plan"
     }
 

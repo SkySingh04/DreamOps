@@ -50,8 +50,8 @@ async def initiate_payment(
         payment_request = PaymentRequest(**body)
         
         # For testing, allow without authentication
-        if current_user and payment_request.team_id != current_user.get("team_id"):
-            raise HTTPException(status_code=403, detail="Unauthorized team access")
+        if current_user and payment_request.user_id != str(current_user.get("id", "")):
+            raise HTTPException(status_code=403, detail="Unauthorized user access")
         
         phonepe_service = get_payment_service()
         response = await phonepe_service.initiate_payment(payment_request)
@@ -92,9 +92,9 @@ async def payment_callback(
             payment_details = result.get("payment_details", {})
             amount = payment_details.get("amount", 0) / 100  # Convert from paise
             
-            # Parse team_id from transaction_id or metadata
+            # Parse user_id from transaction_id or metadata
             # In production, this would be stored properly
-            team_id = "team_123"  # Default for testing
+            user_id = "1"  # Default for testing
             
             # Determine plan based on amount
             plan_id = "free"
@@ -105,10 +105,10 @@ async def payment_callback(
             elif amount == 9999:
                 plan_id = "enterprise"
             
-            # Upgrade the team plan
+            # Upgrade the user plan
             background_tasks.add_task(
-                upgrade_team_plan_async,
-                team_id=team_id,
+                upgrade_user_plan_async,
+                user_id=user_id,
                 plan_id=plan_id,
                 transaction_id=transaction_id
             )
@@ -276,7 +276,7 @@ async def test_mock_payment():
     try:
         # Create a test payment request
         test_payment = PaymentRequest(
-            team_id="test_team_123",
+            user_id="1",
             amount=99900,  # ₹999 in paise
             plan="STARTER"
         )
@@ -356,23 +356,23 @@ async def send_payment_notification(transaction_id: str, status: str):
     # TODO: Implement email/slack/webhook notifications
 
 
-async def upgrade_team_plan_async(team_id: str, plan_id: str, transaction_id: str):
-    """Async helper to upgrade team plan after successful payment"""
+async def upgrade_user_plan_async(user_id: str, plan_id: str, transaction_id: str):
+    """Async helper to upgrade user plan after successful payment"""
     try:
         # Make HTTP request to alert tracking service
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"http://localhost:8000/api/v1/alert-tracking/upgrade-plan",
                 params={
-                    "team_id": team_id,
+                    "user_id": user_id,
                     "plan_id": plan_id,
                     "transaction_id": transaction_id
                 }
             )
             
             if response.status_code == 200:
-                logger.info(f"Successfully upgraded team {team_id} to plan {plan_id}")
+                logger.info(f"Successfully upgraded user {user_id} to plan {plan_id}")
             else:
-                logger.error(f"Failed to upgrade team plan: {response.text}")
+                logger.error(f"Failed to upgrade user plan: {response.text}")
     except Exception as e:
-        logger.error(f"Error upgrading team plan: {e}")
+        logger.error(f"Error upgrading user plan: {e}")
