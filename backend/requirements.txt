@@ -113,6 +113,8 @@ googleapis-common-protos==1.70.0
     # via
     #   google-api-core
     #   grpcio-status
+greenlet==3.2.3
+    # via sqlalchemy
 grpcio==1.73.1
     # via
     #   google-api-core
@@ -181,6 +183,8 @@ oauthlib==3.3.1
     #   requests-oauthlib
 packaging==25.0
     # via gunicorn
+phonepe==1.0.1
+    # via oncall-agent (pyproject.toml)
 propcache==0.3.2
     # via
     #   aiohttp
@@ -211,6 +215,7 @@ pydantic==2.11.7
     #   anthropic
     #   fastapi
     #   mcp
+    #   phonepe
     #   pydantic-settings
 pydantic-core==2.33.2
     # via pydantic
@@ -257,7 +262,9 @@ requests==2.32.4
     #   google-api-core
     #   google-cloud-storage
     #   kubernetes
+    #   phonepe
     #   requests-oauthlib
+    #   stripe
 requests-oauthlib==2.0.0
     # via kubernetes
 rich==14.0.0
@@ -292,6 +299,8 @@ starlette==0.46.2
     # via
     #   fastapi
     #   mcp
+stripe==12.2.0
+    # via oncall-agent (pyproject.toml)
 tomli==2.2.1
     # via agno
 typer==0.16.0
@@ -300,10 +309,13 @@ typing-extensions==4.14.0
     # via
     #   agno
     #   anthropic
+    #   anyio
     #   fastapi
     #   pydantic
     #   pydantic-core
+    #   referencing
     #   sqlalchemy
+    #   stripe
     #   typer
     #   typing-inspection
 typing-inspection==0.4.1
