@@ -121,6 +121,48 @@ frontend/
 - Use dataclasses for structured data
 - Implement proper JSON serialization for API responses
 
+### File Management Guidelines
+
+**IMPORTANT: DO NOT CREATE UNNECESSARY FILES**
+
+This is a production codebase. When working with this codebase, strictly follow these file management rules:
+
+1. **NEVER create test files** - We will write tests later in a structured manner:
+   - No `test_*.py` files
+   - No `*_test.py` files
+   - No test directories
+   - No pytest files
+
+2. **NEVER create demo/example files**:
+   - No `demo_*.py` files
+   - No `example_*.py` files
+   - No simulation scripts
+   - No mock implementations
+
+3. **NEVER create temporary or experimental files**:
+   - No `temp_*.py` files
+   - No `tmp_*.py` files
+   - No `experiment_*.py` files
+   - No quick test scripts
+   - No validation scripts unless explicitly requested
+
+4. **NEVER create duplicate implementations**:
+   - Check if functionality already exists before creating new files
+   - Use existing integrations rather than creating alternatives
+   - Extend existing classes rather than creating new versions
+
+5. **Keep the codebase clean**:
+   - Only create files that are essential for production functionality
+   - Remove any generated log files, temporary files, or backup files
+   - Do not commit `.bak`, `.tmp`, `.log`, or similar files
+
+6. **When asked to test or validate**:
+   - Use the existing `main.py` or `api_server.py` to test functionality
+   - Modify existing files rather than creating new test files
+   - Use the Python REPL or existing scripts for quick checks
+
+Remember: This is a production codebase that should remain clean and focused. Every file should serve a clear production purpose.
+
 ### Common Patterns in This Codebase
 
 1. **Error Handling**:
@@ -569,3 +611,15 @@ Before submitting any changes:
 - [ ] Security considerations are addressed
 
 This document should be your primary reference when working with the DreamOps codebase. Always refer back to it when implementing new features or making modifications.
+
+## Final Reminder: Production Code Standards
+
+This is a **PRODUCTION CODEBASE**. Do not create:
+- Test files (we'll add proper tests later)
+- Demo or example files
+- Temporary or experimental scripts
+- Mock implementations
+- Duplicate functionality
+- Any "circus files" that don't serve production purposes
+
+Keep the codebase clean, focused, and production-ready at all times.
