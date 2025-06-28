@@ -580,3 +580,23 @@ class KubernetesMCPOnlyIntegration(MCPIntegration):
     def get_audit_log(self) -> list[dict[str, Any]]:
         """Get the audit log of all MCP tool calls."""
         return [call.to_dict() for call in self._audit_log]
+
+    async def discover_contexts(self) -> list[str]:
+        """Discover available Kubernetes contexts using MCP server."""
+        try:
+            self.logger.info("Discovering Kubernetes contexts via MCP...")
+            
+            # Use the kubernetes_list_contexts tool
+            result = await self._call_mcp_tool('kubernetes_list_contexts', {})
+            
+            if result.get('success'):
+                contexts = result.get('contexts', [])
+                self.logger.info(f"Discovered {len(contexts)} Kubernetes contexts")
+                return contexts
+            else:
+                self.logger.error(f"Failed to discover contexts: {result.get('error')}")
+                return []
+                
+        except Exception as e:
+            self.logger.error(f"Error discovering contexts: {e}")
+            return []
