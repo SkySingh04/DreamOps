@@ -2,9 +2,6 @@
 // This maintains compatibility while moving away from direct DB access
 export { 
   getUser, 
-  getTeamByStripeCustomerId,
-  updateTeamSubscription,
-  getUserWithTeam,
-  getActivityLogs,
-  getTeamForUser
+  getUserById,
+  getActivityLogs
 } from '@/lib/api/auth';

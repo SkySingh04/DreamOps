@@ -18,16 +18,16 @@ from src.oncall_agent.api.routers import (
     agent_router,
     analytics_router,
     api_keys,
-    auth,
     auth_setup,
     dashboard_router,
+    dev_config,
+    firebase_auth,
     incidents_router,
     integrations_router,
     monitoring_router,
     security_router,
     settings_router,
-    team_integrations,
-    firebase_auth,
+    user_integrations,
 )
 from src.oncall_agent.config import get_config
 from src.oncall_agent.utils import get_logger, setup_logging
@@ -90,7 +90,7 @@ async def log_requests(request: Request, call_next):
     """Log all incoming requests for debugging."""
     # Log request details
     logger.info(f"Incoming request: {request.method} {request.url.path}")
-    
+
     # Log authorization header for debugging authentication issues
     auth_header = request.headers.get("authorization")
     if request.url.path.startswith("/api/v1/auth/"):
@@ -247,7 +247,12 @@ app.include_router(security_router, prefix="/api/v1")
 app.include_router(monitoring_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
 app.include_router(api_keys.router)
-app.include_router(team_integrations.router)  # Already has /api/v1 prefix
+app.include_router(user_integrations.router)  # Already has /api/v1 prefix
+
+# Include dev config router only in development mode
+if os.getenv("NODE_ENV") == "development":
+    app.include_router(dev_config.router)
+    logger.info("Dev config routes registered (development mode)")
 
 # Conditionally include webhook router
 if config.pagerduty_enabled:
@@ -288,9 +293,8 @@ def main():
     uvicorn_access.addFilter(WebSocketFilter())
 
     # Get port from environment variable or use default
-    import os
     port = int(os.environ.get("PORT", config.api_port))
-    
+
     # Run server
     uvicorn.run(
         "api_server:app",

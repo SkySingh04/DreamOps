@@ -1,16 +1,14 @@
 """Encryption service for secure storage of sensitive data."""
 
-import os
 import base64
-from typing import Optional
+import os
+
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-import logging
 
-from src.oncall_agent.utils.logger import get_logger
 from src.oncall_agent.config import get_config
-
+from src.oncall_agent.utils.logger import get_logger
 
 logger = get_logger(__name__)
 config = get_config()
@@ -18,8 +16,8 @@ config = get_config()
 
 class EncryptionService:
     """Service for encrypting and decrypting sensitive data like API keys."""
-    
-    def __init__(self, encryption_key: Optional[str] = None):
+
+    def __init__(self, encryption_key: str | None = None):
         """Initialize the encryption service.
         
         Args:
@@ -27,8 +25,8 @@ class EncryptionService:
                           will use from environment or generate new one.
         """
         self._fernet = self._initialize_fernet(encryption_key)
-        
-    def _initialize_fernet(self, encryption_key: Optional[str] = None) -> Fernet:
+
+    def _initialize_fernet(self, encryption_key: str | None = None) -> Fernet:
         """Initialize Fernet cipher with encryption key."""
         if encryption_key:
             # Use provided key
@@ -42,7 +40,7 @@ class EncryptionService:
                 # Derive key from a passphrase (not recommended for production)
                 passphrase = os.getenv("ENCRYPTION_PASSPHRASE", "dreamops-default-key-change-me")
                 salt = os.getenv("ENCRYPTION_SALT", "dreamops-salt").encode()
-                
+
                 kdf = PBKDF2HMAC(
                     algorithm=hashes.SHA256(),
                     length=32,
@@ -50,14 +48,14 @@ class EncryptionService:
                     iterations=100000,
                 )
                 key = base64.urlsafe_b64encode(kdf.derive(passphrase.encode()))
-                
+
                 logger.warning(
                     "Using derived encryption key. Set ENCRYPTION_KEY environment "
                     "variable for production use."
                 )
-        
+
         return Fernet(key)
-    
+
     def encrypt(self, plaintext: str) -> str:
         """Encrypt a plaintext string.
         
@@ -73,7 +71,7 @@ class EncryptionService:
         except Exception as e:
             logger.error(f"Encryption failed: {str(e)}")
             raise ValueError("Failed to encrypt data")
-    
+
     def decrypt(self, ciphertext: str) -> str:
         """Decrypt an encrypted string.
         
@@ -90,7 +88,7 @@ class EncryptionService:
         except Exception as e:
             logger.error(f"Decryption failed: {str(e)}")
             raise ValueError("Failed to decrypt data")
-    
+
     def encrypt_api_key(self, api_key: str) -> str:
         """Encrypt an API key for storage.
         
@@ -102,9 +100,9 @@ class EncryptionService:
         """
         if not api_key:
             raise ValueError("API key cannot be empty")
-            
+
         return self.encrypt(api_key)
-    
+
     def decrypt_api_key(self, encrypted_key: str) -> str:
         """Decrypt an API key for use.
         
@@ -116,9 +114,9 @@ class EncryptionService:
         """
         if not encrypted_key:
             raise ValueError("Encrypted key cannot be empty")
-            
+
         return self.decrypt(encrypted_key)
-    
+
     def mask_api_key(self, api_key: str) -> str:
         """Create a masked version of an API key for display.
         
@@ -130,7 +128,7 @@ class EncryptionService:
         """
         if not api_key or len(api_key) < 8:
             return "***"
-            
+
         # Show first few characters and last few characters
         if api_key.startswith(("sk-", "pk_", "api_")):
             # Common API key prefixes
@@ -139,7 +137,7 @@ class EncryptionService:
         else:
             # Generic masking
             return f"{api_key[:3]}...{api_key[-4:]}"
-    
+
     @staticmethod
     def generate_encryption_key() -> str:
         """Generate a new encryption key.
@@ -149,7 +147,7 @@ class EncryptionService:
         """
         key = Fernet.generate_key()
         return base64.urlsafe_b64encode(key).decode()
-    
+
     def rotate_encryption_key(self, new_key: str, old_encrypted_data: list[str]) -> list[str]:
         """Rotate encryption key by re-encrypting data.
         
@@ -168,20 +166,20 @@ class EncryptionService:
             except Exception as e:
                 logger.error(f"Failed to decrypt during rotation: {str(e)}")
                 raise
-        
+
         # Create new service with new key
         new_service = EncryptionService(new_key)
-        
+
         # Re-encrypt with new key
         new_encrypted_data = []
         for plaintext in decrypted_data:
             new_encrypted_data.append(new_service.encrypt(plaintext))
-        
+
         return new_encrypted_data
 
 
 # Global instance
-_encryption_service: Optional[EncryptionService] = None
+_encryption_service: EncryptionService | None = None
 
 
 def get_encryption_service() -> EncryptionService:

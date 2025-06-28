@@ -1,9 +1,10 @@
 """Authentication and setup flow models."""
 
 from datetime import datetime
-from typing import Any, Optional
-from pydantic import BaseModel, EmailStr, Field, validator
 from enum import Enum
+from typing import Any
+
+from pydantic import BaseModel, EmailStr, Field
 
 
 class LLMProvider(str, Enum):
@@ -27,8 +28,8 @@ class LLMConfigRequest(BaseModel):
     """Request model for LLM configuration."""
     provider: LLMProvider
     api_key: str = Field(..., min_length=1, description="API key for the provider")
-    key_name: Optional[str] = Field(None, max_length=100, description="Optional name for the key")
-    model: Optional[str] = Field(None, max_length=50, description="Specific model to use")
+    key_name: str | None = Field(None, max_length=100, description="Optional name for the key")
+    model: str | None = Field(None, max_length=50, description="Specific model to use")
 
 
 class LLMConfigResponse(BaseModel):
@@ -36,9 +37,9 @@ class LLMConfigResponse(BaseModel):
     id: int
     provider: LLMProvider
     key_name: str
-    model: Optional[str]
+    model: str | None
     is_validated: bool
-    validated_at: Optional[datetime]
+    validated_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -47,15 +48,15 @@ class TestLLMRequest(BaseModel):
     """Request model for testing LLM connection."""
     provider: LLMProvider
     api_key: str = Field(..., min_length=1)
-    model: Optional[str] = None
+    model: str | None = None
 
 
 class TestLLMResponse(BaseModel):
     """Response model for LLM connection test."""
     valid: bool
-    error: Optional[str] = None
-    model_info: Optional[dict[str, Any]] = None
-    rate_limit_info: Optional[dict[str, Any]] = None
+    error: str | None = None
+    model_info: dict[str, Any] | None = None
+    rate_limit_info: dict[str, Any] | None = None
 
 
 class SetupRequirement(BaseModel):
@@ -63,15 +64,15 @@ class SetupRequirement(BaseModel):
     requirement_type: SetupRequirementType
     is_required: bool
     is_completed: bool
-    completed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
+    completed_at: datetime | None = None
+    error_message: str | None = None
 
 
 class SetupStatusResponse(BaseModel):
     """Response model for setup status."""
     is_setup_complete: bool
     llm_configured: bool
-    llm_provider: Optional[LLMProvider] = None
+    llm_provider: LLMProvider | None = None
     integrations_configured: dict[str, bool]
     setup_requirements: list[SetupRequirement]
     missing_requirements: list[str]
@@ -83,7 +84,7 @@ class ValidationResult(BaseModel):
     validation_type: str
     target: str
     is_successful: bool
-    error_message: Optional[str] = None
+    error_message: str | None = None
     validated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -98,7 +99,7 @@ class UserSetupValidationResponse(BaseModel):
 class CompleteSetupRequest(BaseModel):
     """Request to mark setup as complete."""
     force: bool = Field(
-        False, 
+        False,
         description="Force completion even if some optional requirements are incomplete"
     )
 
@@ -108,7 +109,7 @@ class CompleteSetupResponse(BaseModel):
     success: bool
     is_setup_complete: bool
     message: str
-    setup_completed_at: Optional[datetime] = None
+    setup_completed_at: datetime | None = None
 
 
 class SetupRequirementsResponse(BaseModel):
@@ -123,13 +124,13 @@ class UserWithSetup(BaseModel):
     """User model with setup information."""
     id: int
     email: EmailStr
-    name: Optional[str]
+    name: str | None
     role: str
-    llm_provider: Optional[LLMProvider]
-    llm_model: Optional[str]
+    llm_provider: LLMProvider | None
+    llm_model: str | None
     is_setup_complete: bool
-    setup_completed_at: Optional[datetime]
-    last_validation_at: Optional[datetime]
+    setup_completed_at: datetime | None
+    last_validation_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -140,14 +141,14 @@ class APIKeyCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     api_key: str = Field(..., min_length=1)
     is_primary: bool = Field(False, description="Set as primary key for this provider")
-    model: Optional[str] = Field(None, max_length=50)
+    model: str | None = Field(None, max_length=50)
 
 
 class APIKeyUpdateRequest(BaseModel):
     """Request model for updating API keys."""
-    name: Optional[str] = Field(None, min_length=1, max_length=100)
-    is_primary: Optional[bool] = None
-    status: Optional[str] = Field(None, pattern="^(active|exhausted|invalid)$")
+    name: str | None = Field(None, min_length=1, max_length=100)
+    is_primary: bool | None = None
+    status: str | None = Field(None, pattern="^(active|exhausted|invalid)$")
 
 
 class APIKeyResponse(BaseModel):
@@ -158,12 +159,12 @@ class APIKeyResponse(BaseModel):
     key_masked: str
     is_primary: bool
     status: str
-    model: Optional[str]
+    model: str | None
     is_validated: bool
-    validated_at: Optional[datetime]
+    validated_at: datetime | None
     error_count: int
-    last_error: Optional[str]
-    last_used_at: Optional[datetime]
+    last_error: str | None
+    last_used_at: datetime | None
     created_at: datetime
     updated_at: datetime
 

@@ -1,9 +1,10 @@
 import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import { Manrope } from 'next/font/google';
-import { getUser, getTeamForUser } from '@/lib/db/queries';
+import { getUser } from '@/lib/db/queries';
 import { SWRConfig } from 'swr';
 import { Providers } from '@/lib/providers';
+import { DevModeIndicator } from '@/components/dev-mode-indicator';
 
 export const metadata: Metadata = {
   title: 'DreamOps',
@@ -23,7 +24,6 @@ export default async function RootLayout({
 }) {
   // Fetch data server-side
   const user = await getUser();
-  const team = await getTeamForUser();
 
   return (
     <html
@@ -35,12 +35,12 @@ export default async function RootLayout({
           <SWRConfig
             value={{
               fallback: {
-                '/api/user': user,
-                '/api/team': team
+                '/api/user': user
               }
             }}
           >
             {children}
+            <DevModeIndicator />
           </SWRConfig>
         </Providers>
       </body>

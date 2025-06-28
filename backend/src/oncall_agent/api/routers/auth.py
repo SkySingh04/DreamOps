@@ -2,13 +2,12 @@
 
 import os
 from datetime import datetime, timedelta
-from typing import Optional
-import logging
-from fastapi import APIRouter, HTTPException, Depends, Response, Request
-from pydantic import BaseModel, EmailStr
+
+import asyncpg
 import bcrypt
 import jwt
-import asyncpg
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from pydantic import BaseModel, EmailStr
 
 from src.oncall_agent.utils.logger import get_logger
 
@@ -33,32 +32,32 @@ class SignUpRequest(BaseModel):
     name: str
     email: EmailStr
     password: str
-    invite_id: Optional[int] = None
+    invite_id: int | None = None
 
 
 class SignInResponse(BaseModel):
     success: bool
     message: str
-    user_id: Optional[int] = None
-    token: Optional[str] = None
-    is_setup_complete: Optional[bool] = None
+    user_id: int | None = None
+    token: str | None = None
+    is_setup_complete: bool | None = None
 
 
 class SignUpResponse(BaseModel):
     success: bool
     message: str
-    user_id: Optional[int] = None
-    token: Optional[str] = None
+    user_id: int | None = None
+    token: str | None = None
 
 
 class UserInfo(BaseModel):
     id: int
     email: str
-    name: Optional[str]
+    name: str | None
     role: str
-    team_id: Optional[int]
+    team_id: int | None
     is_setup_complete: bool
-    llm_provider: Optional[str]
+    llm_provider: str | None
 
 
 async def get_db_connection():
@@ -108,7 +107,7 @@ async def get_current_user(request: Request) -> dict:
     session_cookie = request.cookies.get("session")
     if not session_cookie:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    
+
     try:
         payload = decode_jwt_token(session_cookie)
         return payload
@@ -123,7 +122,7 @@ async def sign_in(
 ) -> SignInResponse:
     """Sign in user."""
     conn = await get_db_connection()
-    
+
     try:
         # Get user with team information
         query = """
@@ -136,22 +135,22 @@ async def sign_in(
             WHERE u.email = $1 AND u.deleted_at IS NULL
             LIMIT 1
         """
-        
+
         user_row = await conn.fetchrow(query, request.email)
-        
+
         if not user_row:
             return SignInResponse(
                 success=False,
                 message="Invalid email or password"
             )
-        
+
         # Verify password
         if not verify_password(request.password, user_row['password_hash']):
             return SignInResponse(
                 success=False,
                 message="Invalid email or password"
             )
-        
+
         # Log activity
         if user_row['team_id']:
             await conn.execute(
@@ -161,10 +160,10 @@ async def sign_in(
                 """,
                 user_row['team_id'], user_row['id']
             )
-        
+
         # Create JWT token
         token = create_jwt_token(user_row['id'], user_row['is_setup_complete'])
-        
+
         # Set session cookie
         response.set_cookie(
             key="session",
@@ -174,7 +173,7 @@ async def sign_in(
             samesite="lax",
             max_age=86400  # 1 day
         )
-        
+
         return SignInResponse(
             success=True,
             message="Sign in successful",
@@ -182,7 +181,7 @@ async def sign_in(
             token=token,
             is_setup_complete=user_row['is_setup_complete']
         )
-        
+
     except Exception as e:
         logger.error(f"Sign in error: {str(e)}")
         return SignInResponse(
@@ -200,23 +199,23 @@ async def sign_up(
 ) -> SignUpResponse:
     """Sign up new user."""
     conn = await get_db_connection()
-    
+
     try:
         # Check if user already exists
         existing = await conn.fetchval(
             "SELECT id FROM users WHERE email = $1",
             request.email
         )
-        
+
         if existing:
             return SignUpResponse(
                 success=False,
                 message="User with this email already exists"
             )
-        
+
         # Hash password
         password_hash = hash_password(request.password)
-        
+
         # Start transaction
         async with conn.transaction():
             # Create user
@@ -228,9 +227,9 @@ async def sign_up(
                 """,
                 request.name, request.email, password_hash
             )
-            
+
             team_id = None
-            
+
             # Handle invitation if provided
             if request.invite_id:
                 invitation = await conn.fetchrow(
@@ -240,11 +239,11 @@ async def sign_up(
                     """,
                     request.invite_id, request.email
                 )
-                
+
                 if invitation:
                     team_id = invitation['team_id']
                     role = invitation['role']
-                    
+
                     # Update invitation status
                     await conn.execute(
                         """
@@ -267,7 +266,7 @@ async def sign_up(
                     f"{request.email}'s Team"
                 )
                 role = 'owner'
-            
+
             # Add user to team
             await conn.execute(
                 """
@@ -276,7 +275,7 @@ async def sign_up(
                 """,
                 user_id, team_id, role
             )
-            
+
             # Initialize setup requirements
             requirements = [
                 ('llm_config', True),
@@ -286,7 +285,7 @@ async def sign_up(
                 ('notion', False),
                 ('grafana', False)
             ]
-            
+
             for req_type, is_required in requirements:
                 await conn.execute(
                     """
@@ -296,7 +295,7 @@ async def sign_up(
                     """,
                     user_id, req_type, is_required
                 )
-            
+
             # Log activity
             await conn.execute(
                 """
@@ -305,10 +304,10 @@ async def sign_up(
                 """,
                 team_id, user_id
             )
-        
+
         # Create JWT token
         token = create_jwt_token(user_id, False)  # New users need setup
-        
+
         # Set session cookie
         response.set_cookie(
             key="session",
@@ -318,14 +317,14 @@ async def sign_up(
             samesite="lax",
             max_age=86400  # 1 day
         )
-        
+
         return SignUpResponse(
             success=True,
             message="Sign up successful",
             user_id=user_id,
             token=token
         )
-        
+
     except Exception as e:
         logger.error(f"Sign up error: {str(e)}")
         return SignUpResponse(
@@ -343,11 +342,11 @@ async def sign_out(
 ) -> dict:
     """Sign out user."""
     conn = await get_db_connection()
-    
+
     try:
         # Log activity
         user_id = current_user["user"]["id"]
-        
+
         # Get user's team
         team_id = await conn.fetchval(
             """
@@ -355,7 +354,7 @@ async def sign_out(
             """,
             user_id
         )
-        
+
         if team_id:
             await conn.execute(
                 """
@@ -364,12 +363,12 @@ async def sign_out(
                 """,
                 team_id, user_id
             )
-        
+
         # Clear session cookie
         response.delete_cookie("session")
-        
+
         return {"success": True, "message": "Signed out successfully"}
-        
+
     except Exception as e:
         logger.error(f"Sign out error: {str(e)}")
         return {"success": False, "message": "Error during sign out"}
@@ -383,10 +382,10 @@ async def get_me(
 ) -> UserInfo:
     """Get current user information."""
     conn = await get_db_connection()
-    
+
     try:
         user_id = current_user["user"]["id"]
-        
+
         query = """
             SELECT u.id, u.name, u.email, u.role, u.is_setup_complete, u.llm_provider,
                    tm.team_id
@@ -395,12 +394,12 @@ async def get_me(
             WHERE u.id = $1 AND u.deleted_at IS NULL
             LIMIT 1
         """
-        
+
         user_row = await conn.fetchrow(query, user_id)
-        
+
         if not user_row:
             raise HTTPException(status_code=404, detail="User not found")
-        
+
         return UserInfo(
             id=user_row['id'],
             email=user_row['email'],
@@ -410,7 +409,7 @@ async def get_me(
             is_setup_complete=user_row['is_setup_complete'],
             llm_provider=user_row['llm_provider']
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:

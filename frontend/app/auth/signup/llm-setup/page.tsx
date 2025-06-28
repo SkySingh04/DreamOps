@@ -13,6 +13,7 @@ import { CheckCircle2, Loader2, AlertCircle, Info, ArrowRight, Key, Brain } from
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/firebase/auth-context';
+import { useDevAutofill } from '@/lib/hooks/use-dev-autofill';
 
 interface LLMProvider {
   id: 'anthropic' | 'openai';
@@ -73,6 +74,21 @@ export default function LLMSetupPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const currentProvider = LLM_PROVIDERS.find(p => p.id === selectedProvider)!;
+  
+  const { isDevMode, getDevConfig } = useDevAutofill('llm');
+  
+  // Auto-fill in dev mode
+  useEffect(() => {
+    if (isDevMode) {
+      const devConfig = getDevConfig('llm');
+      if (devConfig) {
+        setSelectedProvider(devConfig.provider);
+        setApiKey(devConfig.api_key);
+        setKeyName('Development API Key');
+        setSelectedModel(devConfig.model);
+      }
+    }
+  }, [isDevMode]);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -207,6 +223,11 @@ export default function LLMSetupPage() {
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Configure Your AI Assistant
+            {isDevMode && (
+              <span className="ml-2 text-sm font-normal bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                DEV MODE
+              </span>
+            )}
           </h1>
           <p className="text-lg text-gray-600">
             DreamOps uses advanced AI to analyze and resolve incidents automatically

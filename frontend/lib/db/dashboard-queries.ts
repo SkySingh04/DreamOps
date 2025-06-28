@@ -5,7 +5,6 @@ import {
   metrics, 
   aiActions, 
   incidentLogs,
-  teams,
   users,
   type Incident,
   type AiAction,
@@ -36,7 +35,7 @@ export interface RecentAiAction {
   incidentId?: number | null;
 }
 
-export async function getDashboardMetrics(teamId: number): Promise<DashboardMetrics> {
+export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   try {
     const db = await getDb();
     // Get active incidents count
@@ -44,10 +43,7 @@ export async function getDashboardMetrics(teamId: number): Promise<DashboardMetr
       .select({ count: sql<number>`count(*)` })
       .from(incidents)
       .where(
-        and(
-          eq(incidents.teamId, teamId),
-          sql`${incidents.status} IN ('open', 'investigating')`
-        )
+        sql`${incidents.status} IN ('open', 'investigating')`
       );
 
     // Get resolved incidents today
@@ -61,7 +57,6 @@ export async function getDashboardMetrics(teamId: number): Promise<DashboardMetr
       .from(incidents)
       .where(
         and(
-          eq(incidents.teamId, teamId),
           eq(incidents.status, 'resolved'),
           gte(incidents.resolvedAt, today),
           lt(incidents.resolvedAt, tomorrow)
@@ -73,10 +68,7 @@ export async function getDashboardMetrics(teamId: number): Promise<DashboardMetr
       .select({ value: metrics.value })
       .from(metrics)
       .where(
-        and(
-          eq(metrics.teamId, teamId),
-          eq(metrics.metricType, 'health_score')
-        )
+        eq(metrics.metricType, 'health_score')
       )
       .orderBy(desc(metrics.timestamp))
       .limit(1);
@@ -86,10 +78,7 @@ export async function getDashboardMetrics(teamId: number): Promise<DashboardMetr
       .select({ value: metrics.value })
       .from(metrics)
       .where(
-        and(
-          eq(metrics.teamId, teamId),
-          eq(metrics.metricType, 'avg_response_time')
-        )
+        eq(metrics.metricType, 'avg_response_time')
       )
       .orderBy(desc(metrics.timestamp))
       .limit(1);
@@ -99,10 +88,7 @@ export async function getDashboardMetrics(teamId: number): Promise<DashboardMetr
       .select({ value: metrics.value })
       .from(metrics)
       .where(
-        and(
-          eq(metrics.teamId, teamId),
-          eq(metrics.metricType, 'ai_agent_status')
-        )
+        eq(metrics.metricType, 'ai_agent_status')
       )
       .orderBy(desc(metrics.timestamp))
       .limit(1);
@@ -127,7 +113,7 @@ export async function getDashboardMetrics(teamId: number): Promise<DashboardMetr
   }
 }
 
-export async function getRecentIncidents(teamId: number, limit: number = 10): Promise<RecentIncident[]> {
+export async function getRecentIncidents(limit: number = 10): Promise<RecentIncident[]> {
   try {
     const db = await getDb();
     const result = await db
@@ -139,7 +125,6 @@ export async function getRecentIncidents(teamId: number, limit: number = 10): Pr
         createdAt: incidents.createdAt,
       })
       .from(incidents)
-      .where(eq(incidents.teamId, teamId))
       .orderBy(desc(incidents.createdAt))
       .limit(limit);
 
@@ -150,7 +135,7 @@ export async function getRecentIncidents(teamId: number, limit: number = 10): Pr
   }
 }
 
-export async function getRecentAiActions(teamId: number, limit: number = 10): Promise<RecentAiAction[]> {
+export async function getRecentAiActions(limit: number = 10): Promise<RecentAiAction[]> {
   try {
     const db = await getDb();
     const result = await db
@@ -162,7 +147,6 @@ export async function getRecentAiActions(teamId: number, limit: number = 10): Pr
         incidentId: aiActions.incidentId,
       })
       .from(aiActions)
-      .where(eq(aiActions.teamId, teamId))
       .orderBy(desc(aiActions.createdAt))
       .limit(limit);
 
@@ -173,7 +157,7 @@ export async function getRecentAiActions(teamId: number, limit: number = 10): Pr
   }
 }
 
-export async function createIncident(teamId: number, incidentData: {
+export async function createIncident(incidentData: {
   title: string;
   description?: string;
   severity: string;
@@ -186,7 +170,6 @@ export async function createIncident(teamId: number, incidentData: {
     const [newIncident] = await db
       .insert(incidents)
       .values({
-        teamId,
         title: incidentData.title,
         description: incidentData.description,
         severity: incidentData.severity,
@@ -213,11 +196,10 @@ export async function createIncident(teamId: number, incidentData: {
   }
 }
 
-export async function recordMetric(teamId: number, metricType: string, value: string, metadata?: string): Promise<void> {
+export async function recordMetric(metricType: string, value: string, metadata?: string): Promise<void> {
   try {
     const db = await getDb();
     await db.insert(metrics).values({
-      teamId,
       metricType,
       value,
       metadata,
@@ -227,7 +209,7 @@ export async function recordMetric(teamId: number, metricType: string, value: st
   }
 }
 
-export async function recordAiAction(teamId: number, actionData: {
+export async function recordAiAction(actionData: {
   action: string;
   description?: string;
   incidentId?: number;
@@ -237,7 +219,6 @@ export async function recordAiAction(teamId: number, actionData: {
   try {
     const db = await getDb();
     const [newAction] = await db.insert(aiActions).values({
-      teamId,
       action: actionData.action,
       description: actionData.description,
       incidentId: actionData.incidentId,

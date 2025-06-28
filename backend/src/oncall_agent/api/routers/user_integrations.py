@@ -1,4 +1,4 @@
-"""Team-scoped integration management API endpoints."""
+"""User integration management API endpoints."""
 
 import json
 from datetime import UTC, datetime
@@ -12,11 +12,11 @@ from pydantic import BaseModel
 
 from src.oncall_agent.config import get_config
 from src.oncall_agent.utils import get_logger
-from src.oncall_agent.security.firebase_auth import get_current_firebase_user, FirebaseUser
+
 from .auth_setup import get_current_user
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/api/v1", tags=["team-integrations"])
+router = APIRouter(prefix="/api/v1", tags=["integrations"])
 
 # Get encryption key from config
 config = get_config()
@@ -26,7 +26,7 @@ fernet = Fernet(ENCRYPTION_KEY)
 
 
 # Mock database storage (replace with actual database in production)
-TEAM_INTEGRATIONS_DB: dict[int, list[dict[str, Any]]] = {}
+USER_INTEGRATIONS_DB: dict[int, list[dict[str, Any]]] = {}
 INTEGRATION_AUDIT_LOGS_DB: list[dict[str, Any]] = []
 
 
@@ -47,20 +47,17 @@ async def get_current_user_id(user: dict = Depends(get_current_user)) -> int:
     return user["id"]
 
 
-async def get_current_team_id(user: dict = Depends(get_current_user)) -> int:
-    """Get current team ID from authenticated user."""
-    return user["team_id"]
 
 
-class TeamIntegrationCreate(BaseModel):
-    """Model for creating a team integration."""
+class IntegrationCreate(BaseModel):
+    """Model for creating an integration."""
     integration_type: str
     config: dict[str, Any]
     is_required: bool = False
 
 
-class TeamIntegrationUpdate(BaseModel):
-    """Model for updating a team integration."""
+class IntegrationUpdate(BaseModel):
+    """Model for updating an integration."""
     config: dict[str, Any] | None = None
     is_enabled: bool | None = None
 
@@ -71,15 +68,14 @@ class IntegrationTestRequest(BaseModel):
     config: dict[str, Any]
 
 
-@router.get("/teams/{team_id}/integrations")
-async def list_team_integrations(
-    team_id: int = Path(..., description="Team ID"),
+@router.get("/user/integrations")
+async def list_user_integrations(
     current_user_id: int = Depends(get_current_user_id)
 ) -> JSONResponse:
-    """List all integrations for a team."""
+    """List all integrations for the current user."""
     try:
-        # Get team integrations from mock database
-        integrations = TEAM_INTEGRATIONS_DB.get(team_id, [])
+        # Get user integrations from mock database
+        integrations = USER_INTEGRATIONS_DB.get(current_user_id, [])
 
         # Decrypt configs for response
         for integration in integrations:
@@ -94,17 +90,16 @@ async def list_team_integrations(
             "total": len(integrations)
         })
     except Exception as e:
-        logger.error(f"Error listing team integrations: {e}")
+        logger.error(f"Error listing user integrations: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/teams/{team_id}/integrations")
-async def create_team_integration(
-    team_id: int = Path(..., description="Team ID"),
-    integration: TeamIntegrationCreate = Body(...),
+@router.post("/user/integrations")
+async def create_user_integration(
+    integration: IntegrationCreate = Body(...),
     current_user_id: int = Depends(get_current_user_id)
 ) -> JSONResponse:
-    """Create a new integration for a team."""
+    """Create a new integration for the current user."""
     try:
         # Validate integration type
         valid_types = ['pagerduty', 'kubernetes', 'github', 'notion', 'grafana']
@@ -112,16 +107,16 @@ async def create_team_integration(
             raise HTTPException(status_code=400, detail=f"Invalid integration type: {integration.integration_type}")
 
         # Check if integration already exists
-        team_integrations = TEAM_INTEGRATIONS_DB.get(team_id, [])
-        existing = next((i for i in team_integrations if i['integration_type'] == integration.integration_type), None)
+        user_integrations = USER_INTEGRATIONS_DB.get(current_user_id, [])
+        existing = next((i for i in user_integrations if i['integration_type'] == integration.integration_type), None)
         if existing:
-            raise HTTPException(status_code=409, detail="Integration already exists for this team")
+            raise HTTPException(status_code=409, detail="Integration already exists for this user")
 
         # Create new integration
         integration_id = str(uuid4())
         new_integration = {
             "id": integration_id,
-            "team_id": team_id,
+            "user_id": current_user_id,
             "integration_type": integration.integration_type,
             "config_encrypted": encrypt_config(integration.config),
             "is_enabled": True,
@@ -133,14 +128,14 @@ async def create_team_integration(
         }
 
         # Save to mock database
-        if team_id not in TEAM_INTEGRATIONS_DB:
-            TEAM_INTEGRATIONS_DB[team_id] = []
-        TEAM_INTEGRATIONS_DB[team_id].append(new_integration)
+        if current_user_id not in USER_INTEGRATIONS_DB:
+            USER_INTEGRATIONS_DB[current_user_id] = []
+        USER_INTEGRATIONS_DB[current_user_id].append(new_integration)
 
         # Create audit log
         audit_log = {
             "id": len(INTEGRATION_AUDIT_LOGS_DB) + 1,
-            "team_id": team_id,
+            "user_id": current_user_id,
             "integration_id": integration_id,
             "action": "created",
             "performed_by": current_user_id,
@@ -166,22 +161,21 @@ async def create_team_integration(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error creating team integration: {e}")
+        logger.error(f"Error creating user integration: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/teams/{team_id}/integrations/{integration_id}")
-async def update_team_integration(
-    team_id: int = Path(..., description="Team ID"),
+@router.put("/user/integrations/{integration_id}")
+async def update_user_integration(
     integration_id: str = Path(..., description="Integration ID"),
-    update: TeamIntegrationUpdate = Body(...),
+    update: IntegrationUpdate = Body(...),
     current_user_id: int = Depends(get_current_user_id)
 ) -> JSONResponse:
-    """Update a team integration."""
+    """Update a user integration."""
     try:
         # Find integration
-        team_integrations = TEAM_INTEGRATIONS_DB.get(team_id, [])
-        integration = next((i for i in team_integrations if i['id'] == integration_id), None)
+        user_integrations = USER_INTEGRATIONS_DB.get(current_user_id, [])
+        integration = next((i for i in user_integrations if i['id'] == integration_id), None)
         if not integration:
             raise HTTPException(status_code=404, detail="Integration not found")
 
@@ -205,7 +199,7 @@ async def update_team_integration(
         # Create audit log
         audit_log = {
             "id": len(INTEGRATION_AUDIT_LOGS_DB) + 1,
-            "team_id": team_id,
+            "user_id": current_user_id,
             "integration_id": integration_id,
             "action": "disabled" if update.is_enabled is False else "updated",
             "performed_by": current_user_id,
@@ -233,17 +227,16 @@ async def update_team_integration(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/teams/{team_id}/integrations/{integration_id}")
-async def delete_team_integration(
-    team_id: int = Path(..., description="Team ID"),
+@router.delete("/user/integrations/{integration_id}")
+async def delete_user_integration(
     integration_id: str = Path(..., description="Integration ID"),
     current_user_id: int = Depends(get_current_user_id)
 ) -> JSONResponse:
     """Delete a team integration."""
     try:
         # Find integration
-        team_integrations = TEAM_INTEGRATIONS_DB.get(team_id, [])
-        integration = next((i for i in team_integrations if i['id'] == integration_id), None)
+        user_integrations = USER_INTEGRATIONS_DB.get(current_user_id, [])
+        integration = next((i for i in user_integrations if i['id'] == integration_id), None)
         if not integration:
             raise HTTPException(status_code=404, detail="Integration not found")
 
@@ -252,12 +245,12 @@ async def delete_team_integration(
             raise HTTPException(status_code=400, detail="Cannot delete required integration")
 
         # Remove from database
-        TEAM_INTEGRATIONS_DB[team_id] = [i for i in team_integrations if i['id'] != integration_id]
+        USER_INTEGRATIONS_DB[current_user_id] = [i for i in user_integrations if i['id'] != integration_id]
 
         # Create audit log
         audit_log = {
             "id": len(INTEGRATION_AUDIT_LOGS_DB) + 1,
-            "team_id": team_id,
+            "user_id": current_user_id,
             "integration_id": integration_id,
             "action": "deleted",
             "performed_by": current_user_id,
@@ -426,18 +419,17 @@ async def test_grafana_integration(config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-@router.post("/teams/{team_id}/integrations/test-all")
-async def test_all_team_integrations(
-    team_id: int = Path(..., description="Team ID"),
+@router.post("/integrations/test-all")
+async def test_all_user_integrations(
     current_user_id: int = Depends(get_current_user_id)
 ) -> JSONResponse:
-    """Test all integrations for a team."""
+    """Test all integrations for a user."""
     try:
-        # Get team integrations
-        team_integrations = TEAM_INTEGRATIONS_DB.get(team_id, [])
+        # Get user integrations
+        user_integrations = USER_INTEGRATIONS_DB.get(current_user_id, [])
 
         results = []
-        for integration in team_integrations:
+        for integration in user_integrations:
             if not integration.get('is_enabled', True):
                 results.append({
                     "integration_id": integration['id'],

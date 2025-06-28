@@ -25,7 +25,7 @@ import { apiClient } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 
-interface TeamIntegration {
+interface UserIntegration {
   id: string;
   integration_type: string;
   is_enabled: boolean;
@@ -101,13 +101,12 @@ const INTEGRATION_METADATA: Record<string, IntegrationMetadata> = {
 };
 
 export default function IntegrationsSettingsPage() {
-  const [integrations, setIntegrations] = useState<TeamIntegration[]>([]);
+  const [integrations, setIntegrations] = useState<UserIntegration[]>([]);
   const [availableIntegrations, setAvailableIntegrations] = useState<IntegrationMetadata[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedIntegration, setSelectedIntegration] = useState<IntegrationMetadata | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isTestingAll, setIsTestingAll] = useState(false);
-  const [teamId, setTeamId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState('connected');
 
   useEffect(() => {
@@ -117,23 +116,16 @@ export default function IntegrationsSettingsPage() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      // Get current user and team
-      const userResponse = await apiClient.get('/api/user');
-      const currentTeamId = userResponse.data?.teamId;
-      setTeamId(currentTeamId);
+      // Fetch user integrations
+      const integrationsResponse = await apiClient.get('/api/v1/user/integrations');
+      setIntegrations(integrationsResponse.data.integrations || []);
 
-      if (currentTeamId) {
-        // Fetch team integrations
-        const integrationsResponse = await apiClient.get(`/api/v1/teams/${currentTeamId}/integrations`);
-        setIntegrations(integrationsResponse.data.integrations || []);
-
-        // Determine available integrations
-        const connectedTypes = integrationsResponse.data.integrations.map((i: TeamIntegration) => i.integration_type);
-        const available = Object.values(INTEGRATION_METADATA).filter(
-          meta => !connectedTypes.includes(meta.type) && meta.status !== 'coming_soon'
-        );
-        setAvailableIntegrations(available);
-      }
+      // Determine available integrations
+      const connectedTypes = integrationsResponse.data.integrations.map((i: UserIntegration) => i.integration_type);
+      const available = Object.values(INTEGRATION_METADATA).filter(
+        meta => !connectedTypes.includes(meta.type) && meta.status !== 'coming_soon'
+      );
+      setAvailableIntegrations(available);
     } catch (error) {
       console.error('Failed to fetch integrations:', error);
       toast.error('Failed to load integrations');
@@ -152,7 +144,7 @@ export default function IntegrationsSettingsPage() {
     };
   };
 
-  const getStatusIcon = (integration: TeamIntegration) => {
+  const getStatusIcon = (integration: UserIntegration) => {
     if (!integration.is_enabled) {
       return <XCircle className="h-5 w-5 text-gray-400" />;
     }
@@ -167,7 +159,7 @@ export default function IntegrationsSettingsPage() {
     }
   };
 
-  const getStatusText = (integration: TeamIntegration) => {
+  const getStatusText = (integration: UserIntegration) => {
     if (!integration.is_enabled) return 'Disabled';
     
     switch (integration.last_test_status) {
@@ -180,7 +172,7 @@ export default function IntegrationsSettingsPage() {
     }
   };
 
-  const handleTest = async (integration: TeamIntegration) => {
+  const handleTest = async (integration: UserIntegration) => {
     try {
       const response = await apiClient.post(
         `/api/v1/integrations/test/${integration.integration_type}`,
@@ -191,7 +183,7 @@ export default function IntegrationsSettingsPage() {
       );
 
       // Update integration with test result
-      await apiClient.put(`/api/v1/teams/${teamId}/integrations/${integration.id}`, {
+      await apiClient.put(`/api/v1/user/integrations/${integration.id}`, {
         last_test_status: response.data.success ? 'success' : 'failed',
         last_test_error: response.data.error
       });
@@ -208,9 +200,9 @@ export default function IntegrationsSettingsPage() {
     }
   };
 
-  const handleToggle = async (integration: TeamIntegration) => {
+  const handleToggle = async (integration: UserIntegration) => {
     try {
-      await apiClient.put(`/api/v1/teams/${teamId}/integrations/${integration.id}`, {
+      await apiClient.put(`/api/v1/user/integrations/${integration.id}`, {
         is_enabled: !integration.is_enabled
       });
 
@@ -222,7 +214,7 @@ export default function IntegrationsSettingsPage() {
     }
   };
 
-  const handleRemove = async (integration: TeamIntegration) => {
+  const handleRemove = async (integration: UserIntegration) => {
     if (integration.is_required) {
       toast.error('Required integrations cannot be removed');
       return;
@@ -233,7 +225,7 @@ export default function IntegrationsSettingsPage() {
     }
 
     try {
-      await apiClient.delete(`/api/v1/teams/${teamId}/integrations/${integration.id}`);
+      await apiClient.delete(`/api/v1/user/integrations/${integration.id}`);
       await fetchData();
       
       toast.success(`${getIntegrationMetadata(integration.integration_type).name} has been removed`);
@@ -246,7 +238,7 @@ export default function IntegrationsSettingsPage() {
     setIsTestingAll(true);
     
     try {
-      const response = await apiClient.post(`/api/v1/teams/${teamId}/integrations/test-all`);
+      const response = await apiClient.post('/api/v1/integrations/test-all');
       await fetchData();
       
       toast.success(`${response.data.summary.successful} of ${response.data.summary.total} integrations connected successfully`);
@@ -263,10 +255,22 @@ export default function IntegrationsSettingsPage() {
   };
 
   const handleIntegrationSave = async (config: any) => {
-    if (!selectedIntegration || !teamId) return;
+    console.log('handleIntegrationSave called', { selectedIntegration, config });
+    if (!selectedIntegration) {
+      console.error('Missing selectedIntegration', { selectedIntegration });
+      return;
+    }
 
     try {
-      await apiClient.post(`/api/v1/teams/${teamId}/integrations`, {
+      console.log('Sending request to save integration', {
+        url: '/api/v1/user/integrations',
+        data: {
+          integration_type: selectedIntegration.type,
+          config,
+          is_required: false
+        }
+      });
+      await apiClient.post('/api/v1/user/integrations', {
         integration_type: selectedIntegration.type,
         config,
         is_required: false
@@ -274,15 +278,12 @@ export default function IntegrationsSettingsPage() {
 
       await fetchData();
       
-      toast({
-        title: 'Integration Added',
+      toast.success('Integration Added', {
         description: `${selectedIntegration.name} has been connected successfully`
       });
     } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.response?.data?.detail || 'Failed to add integration',
-        variant: 'destructive'
+      toast.error('Error', {
+        description: error.response?.data?.detail || 'Failed to add integration'
       });
     }
 
