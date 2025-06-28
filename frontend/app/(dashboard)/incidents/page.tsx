@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Card,
@@ -9,6 +9,7 @@ import {
   CardTitle,
   CardDescription,
 } from '@/components/ui/card';
+import { UpgradeModal } from '@/components/payments/upgrade-modal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -86,7 +87,10 @@ export default function IncidentsPage() {
   const [nukeProgress, setNukeProgress] = useState({ current: 0, total: 0 });
   const [expandedIncident, setExpandedIncident] = useState<string | null>(null);
   const [showAgentLogs, setShowAgentLogs] = useState(true);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [alertUsageData, setAlertUsageData] = useState<any>(null);
   const queryClient = useQueryClient();
+  const teamId = "team_123"; // In production, get from context/auth
 
   // Fetch AI config to get current mode
   const { data: aiConfigData } = useQuery({
@@ -200,12 +204,61 @@ export default function IncidentsPage() {
     },
   });
 
+  // Check alert usage before actions
+  const checkAlertUsage = async () => {
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/alert-tracking/usage/${teamId}`
+      );
+      const data = await response.json();
+      setAlertUsageData(data);
+      
+      if (data.is_limit_reached) {
+        setShowUpgradeModal(true);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Failed to check alert usage:', error);
+      return true; // Allow action if check fails
+    }
+  };
+
   const triggerMockMutation = useMutation({
-    mutationFn: (type: string) => apiClient.triggerMockIncident(type),
+    mutationFn: async (type: string) => {
+      // Check alert usage first
+      const canProceed = await checkAlertUsage();
+      if (!canProceed) {
+        throw new Error('Alert limit reached');
+      }
+      
+      // Trigger the incident
+      const result = await apiClient.triggerMockIncident(type);
+      
+      // Record alert usage
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/alert-tracking/record-alert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          team_id: teamId,
+          alert_type: 'mock_incident',
+          metadata: { incident_type: type }
+        })
+      });
+      
+      return result;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.incidents() });
       toast.success('Mock incident triggered');
       setShowMockDialog(false);
+    },
+    onError: (error: any) => {
+      if (error.message === 'Alert limit reached') {
+        toast.error('Alert limit reached. Please upgrade your plan.');
+      } else {
+        toast.error('Failed to trigger incident');
+      }
     },
   });
 
@@ -1320,6 +1373,16 @@ export default function IncidentsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Upgrade Modal */}
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        currentPlan={alertUsageData?.account_tier || 'free'}
+        alertsUsed={alertUsageData?.alerts_used || 0}
+        alertsLimit={alertUsageData?.alerts_limit || 3}
+        teamId={teamId}
+      />
     </section>
   );
 }

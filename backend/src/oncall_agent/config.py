@@ -87,6 +87,17 @@ class Config(BaseSettings):
     debug: bool = Field(False, env="DEBUG")
     aws_profile: str | None = Field(None, env="AWS_PROFILE")
     aws_default_region: str = Field("us-east-1", env="AWS_DEFAULT_REGION")
+    
+    # PhonePe payment gateway settings
+    phonepe_merchant_id: str | None = Field(None, env="PHONEPE_MERCHANT_ID")
+    phonepe_salt_key: str | None = Field(None, env="PHONEPE_SALT_KEY")
+    phonepe_salt_index: str = Field("1", env="PHONEPE_SALT_INDEX")
+    phonepe_base_url: str = Field("https://api.phonepe.com/apis/hermes", env="PHONEPE_BASE_URL")
+    phonepe_redirect_url: str | None = Field(None, env="PHONEPE_REDIRECT_URL")
+    phonepe_callback_url: str | None = Field(None, env="PHONEPE_CALLBACK_URL")
+    
+    # General settings
+    environment: str = Field("production", env="ENVIRONMENT")
 
     class Config:
         env_file = ".env"
@@ -106,8 +117,25 @@ def get_config() -> Config:
     """Get the application configuration singleton."""
     global _config
     if _config is None:
-        # Load .env file if it exists
-        load_dotenv()
+        # Load environment files in order of preference
+        import os
+        
+        # First try to load from environment-specific file
+        node_env = os.getenv("NODE_ENV", "production")
+        env_files = [
+            f".env.{node_env}",  # .env.development, .env.local, etc.
+            ".env.local",       # Local development
+            ".env"              # Default fallback
+        ]
+        
+        for env_file in env_files:
+            if load_dotenv(env_file):
+                print(f"Loaded config from {env_file}")
+                break
+        else:
+            # Also try to load default .env
+            load_dotenv()
+            
         _config = Config()
     return _config
 

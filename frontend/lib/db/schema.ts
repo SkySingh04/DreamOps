@@ -29,6 +29,13 @@ export const teams = pgTable('teams', {
   stripeProductId: text('stripe_product_id'),
   planName: varchar('plan_name', { length: 50 }),
   subscriptionStatus: varchar('subscription_status', { length: 20 }),
+  // Alert tracking and account tier
+  accountTier: varchar('account_tier', { length: 20 }).default('free'),
+  alertsUsed: integer('alerts_used').default(0),
+  alertsLimit: integer('alerts_limit').default(3),
+  billingCycleStart: timestamp('billing_cycle_start').defaultNow(),
+  phonepeCustomerId: text('phonepe_customer_id'),
+  lastPaymentAt: timestamp('last_payment_at'),
 });
 
 export const teamMembers = pgTable('team_members', {
@@ -126,6 +133,46 @@ export const aiActions = pgTable('ai_actions', {
   metadata: text('metadata'), // JSON string for additional data
 });
 
+export const alertUsage = pgTable('alert_usage', {
+  id: serial('id').primaryKey(),
+  teamId: integer('team_id')
+    .notNull()
+    .references(() => teams.id),
+  incidentId: integer('incident_id').references(() => incidents.id),
+  alertType: varchar('alert_type', { length: 50 }).notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  metadata: text('metadata'),
+});
+
+export const paymentTransactions = pgTable('payment_transactions', {
+  id: serial('id').primaryKey(),
+  teamId: integer('team_id')
+    .notNull()
+    .references(() => teams.id),
+  transactionId: varchar('transaction_id', { length: 255 }).notNull().unique(),
+  amount: integer('amount').notNull(),
+  currency: varchar('currency', { length: 10 }).default('INR'),
+  planName: varchar('plan_name', { length: 50 }).notNull(),
+  status: varchar('status', { length: 20 }).notNull(),
+  paymentMethod: varchar('payment_method', { length: 50 }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  completedAt: timestamp('completed_at'),
+  metadata: text('metadata'),
+});
+
+export const subscriptionPlans = pgTable('subscription_plans', {
+  id: serial('id').primaryKey(),
+  planId: varchar('plan_id', { length: 50 }).notNull().unique(),
+  name: varchar('name', { length: 100 }).notNull(),
+  displayName: varchar('display_name', { length: 100 }).notNull(),
+  price: integer('price').notNull(),
+  currency: varchar('currency', { length: 10 }).default('INR'),
+  alertsLimit: integer('alerts_limit').notNull(),
+  features: text('features').notNull(), // JSON array
+  isActive: integer('is_active').default(1),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
 export const teamsRelations = relations(teams, ({ many }) => ({
   teamMembers: many(teamMembers),
   activityLogs: many(activityLogs),
@@ -133,6 +180,8 @@ export const teamsRelations = relations(teams, ({ many }) => ({
   incidents: many(incidents),
   metrics: many(metrics),
   aiActions: many(aiActions),
+  alertUsage: many(alertUsage),
+  paymentTransactions: many(paymentTransactions),
 }));
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -229,6 +278,24 @@ export const aiActionsRelations = relations(aiActions, ({ one }) => ({
   }),
 }));
 
+export const alertUsageRelations = relations(alertUsage, ({ one }) => ({
+  team: one(teams, {
+    fields: [alertUsage.teamId],
+    references: [teams.id],
+  }),
+  incident: one(incidents, {
+    fields: [alertUsage.incidentId],
+    references: [incidents.id],
+  }),
+}));
+
+export const paymentTransactionsRelations = relations(paymentTransactions, ({ one }) => ({
+  team: one(teams, {
+    fields: [paymentTransactions.teamId],
+    references: [teams.id],
+  }),
+}));
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Team = typeof teams.$inferSelect;
@@ -247,6 +314,12 @@ export type Metric = typeof metrics.$inferSelect;
 export type NewMetric = typeof metrics.$inferInsert;
 export type AiAction = typeof aiActions.$inferSelect;
 export type NewAiAction = typeof aiActions.$inferInsert;
+export type AlertUsage = typeof alertUsage.$inferSelect;
+export type NewAlertUsage = typeof alertUsage.$inferInsert;
+export type PaymentTransaction = typeof paymentTransactions.$inferSelect;
+export type NewPaymentTransaction = typeof paymentTransactions.$inferInsert;
+export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
+export type NewSubscriptionPlan = typeof subscriptionPlans.$inferInsert;
 export type TeamDataWithMembers = Team & {
   teamMembers: (TeamMember & {
     user: Pick<User, 'id' | 'name' | 'email'>;

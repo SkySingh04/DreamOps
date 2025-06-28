@@ -26,15 +26,43 @@ echo -e "${YELLOW}Debug: AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION${NC}"
 if ! command -v kubectl &> /dev/null; then
     echo -e "${RED}Error: kubectl command not found. Please install kubectl first.${NC}"
     echo -e "${YELLOW}Debug: Checking common kubectl locations...${NC}"
-    for loc in /usr/local/bin/kubectl /usr/bin/kubectl /opt/homebrew/bin/kubectl; do
+    
+    # List of possible kubectl locations including Docker Desktop
+    kubectl_paths=(
+        "/usr/local/bin/kubectl"
+        "/usr/bin/kubectl" 
+        "/opt/homebrew/bin/kubectl"
+        "/mnt/c/Program Files/Docker/Docker/resources/bin/kubectl.exe"
+        "/c/Program Files/Docker/Docker/resources/bin/kubectl.exe"
+    )
+    
+    kubectl_found=false
+    for loc in "${kubectl_paths[@]}"; do
         if [ -f "$loc" ]; then
             echo -e "${YELLOW}Found kubectl at: $loc${NC}"
-            export PATH="$(dirname $loc):$PATH"
+            # Create a symlink or alias for easier access
+            if [[ "$loc" == *".exe" ]]; then
+                # For Windows executable, create an alias
+                echo -e "${YELLOW}Setting up kubectl wrapper for Windows executable${NC}"
+                # Create a simple wrapper script instead of function
+                mkdir -p /tmp/kubectl-wrapper 2>/dev/null
+                cat > /tmp/kubectl-wrapper/kubectl << EOF
+#!/bin/bash
+exec "$loc" "\$@"
+EOF
+                chmod +x /tmp/kubectl-wrapper/kubectl
+                export PATH="/tmp/kubectl-wrapper:$PATH"
+            else
+                export PATH="$(dirname $loc):$PATH"
+            fi
+            kubectl_found=true
             break
         fi
     done
+    
     # Check again after updating PATH
-    if ! command -v kubectl &> /dev/null; then
+    if [ "$kubectl_found" = false ] || ! kubectl version --client &> /dev/null; then
+        echo -e "${RED}Error: kubectl not found or not working${NC}"
         exit 1
     fi
 fi
@@ -60,14 +88,20 @@ fi
 
 # Check if we have a valid kubernetes context
 echo -e "${YELLOW}Debug: Testing kubectl connection...${NC}"
-if ! kubectl cluster-info &> /dev/null; then
-    echo -e "${RED}Error: No valid kubernetes cluster context found.${NC}"
+
+# Try to get cluster info without producing stderr output
+if kubectl cluster-info &> /dev/null 2>&1; then
+    echo -e "${GREEN}✓ Connected to Kubernetes cluster${NC}"
+    DEMO_MODE=false
+else
+    echo -e "${YELLOW}Warning: No valid kubernetes cluster context found.${NC}"
     echo -e "${YELLOW}Debug: Current context:${NC}"
-    kubectl config current-context 2>&1 || echo "No context set"
+    # Suppress error output and file access attempts
+    kubectl config current-context 2>/dev/null || echo "No context set"
     echo -e "${YELLOW}Debug: Available contexts:${NC}"
-    kubectl config get-contexts 2>&1 || echo "No contexts available"
-    echo "Please ensure you have a running Kubernetes cluster (EKS, Kind, etc.)"
-    exit 1
+    kubectl config get-contexts 2>/dev/null || echo "No contexts available"
+    echo -e "${YELLOW}Running in DEMO MODE - simulating chaos operations...${NC}"
+    DEMO_MODE=true
 fi
 
 # Function to print usage
@@ -101,6 +135,16 @@ ensure_namespace() {
 # Function to simulate pod crash
 fuck_pod_crash() {
     echo -e "${RED}🔥 Fucking Kubernetes: Simulating Pod Crash (CrashLoopBackOff)${NC}"
+    
+    if [ "$DEMO_MODE" = true ]; then
+        echo -e "${YELLOW}DEMO MODE: Simulating Pod Crash deployment...${NC}"
+        sleep 2
+        echo -e "${GREEN}✓ Pod crash simulation deployed (demo). CrashLoopBackOff incoming!${NC}"
+        echo -e "${YELLOW}Demo: kubectl apply -f crashloop-deployment.yaml${NC}"
+        echo -e "${YELLOW}Demo: Deployment would create pods that crash immediately${NC}"
+        return 0
+    fi
+    
     ensure_namespace
     
     cat <<EOF | kubectl apply -f -
@@ -172,6 +216,16 @@ EOF
 # Function to simulate OOM kill
 fuck_oom_kill() {
     echo -e "${RED}🔥 Fucking Kubernetes: Simulating OOM Kill${NC}"
+    
+    if [ "$DEMO_MODE" = true ]; then
+        echo -e "${YELLOW}DEMO MODE: Simulating OOM Kill deployment...${NC}"
+        sleep 2
+        echo -e "${GREEN}✓ OOM kill simulation deployed (demo). Memory massacre incoming!${NC}"
+        echo -e "${YELLOW}Demo: kubectl apply -f oom-kill-deployment.yaml${NC}"
+        echo -e "${YELLOW}Demo: Deployment would consume excessive memory and trigger OOMKilled${NC}"
+        return 0
+    fi
+    
     ensure_namespace
     
     cat <<EOF | kubectl apply -f -

@@ -1,0 +1,267 @@
+# DreamOps - AI-Powered On-Call Agent
+
+DreamOps is an autonomous incident response system that uses AI to automatically resolve infrastructure issues. The system integrates with PagerDuty, Kubernetes, GitHub, and other services to provide real-time incident detection, analysis, and resolution.
+
+## Overview
+
+DreamOps provides:
+- **Autonomous Incident Resolution**: AI-powered analysis and automated remediation
+- **Multi-Platform Integration**: Kubernetes, PagerDuty, GitHub, Notion support
+- **YOLO Mode**: Fully autonomous operations with safety mechanisms
+- **Real-Time Dashboard**: Monitor incidents and agent actions in real-time
+- **Complete Audit Trail**: Full logging and tracking of all operations
+
+## Quick Start
+
+### Prerequisites
+- Node.js 18+ and Python 3.11+
+- Docker and Docker Compose
+- Kubernetes cluster (optional, for K8s features)
+- Anthropic API key
+
+### Installation
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/your-org/oncall-agent.git
+   cd oncall-agent
+   ```
+
+2. **Set up the backend**:
+   ```bash
+   cd backend
+   pip install uv
+   uv sync
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
+
+3. **Set up the frontend**:
+   ```bash
+   cd frontend
+   npm install
+   cp .env.example .env.local
+   # Edit .env.local with your configuration
+   ```
+
+4. **Start the services**:
+   ```bash
+   # Start backend
+   cd backend && uv run python api_server.py
+
+   # Start frontend (in another terminal)
+   cd frontend && npm run dev
+   ```
+
+5. **Access the dashboard**: Open http://localhost:3000
+
+## Documentation
+
+For detailed documentation, see the `/docs` folder:
+
+- **[Database Setup](docs/database-setup.md)** - Complete database configuration for all environments
+- **[PagerDuty Integration](docs/pagerduty-integration.md)** - PagerDuty setup and webhook configuration
+- **[YOLO Mode](docs/yolo-mode.md)** - Autonomous operation mode and safety mechanisms
+- **[Deployment Guide](docs/deployment.md)** - AWS deployment options (Terraform, Amplify)
+- **[MCP Integrations](docs/mcp-integrations.md)** - External service integrations and API usage
+- **[Technical Details](docs/technical-details.md)** - Architecture, implementation details, and fixes
+- **[CI/CD Guide](docs/ci-cd.md)** - GitHub Actions workflows and deployment automation
+
+## Key Features
+
+### AI-Powered Incident Resolution
+- Analyzes PagerDuty alerts and determines remediation actions
+- Supports pattern recognition for common infrastructure issues
+- Provides confidence scores and risk assessments for all actions
+
+### YOLO Mode (Autonomous Operations)
+- Fully autonomous incident resolution without human intervention
+- Built-in safety mechanisms and rollback capabilities
+- Pattern-based resolution strategies for common issues
+
+### Multi-Platform Integrations
+- **Kubernetes**: Pod management, resource scaling, deployment operations
+- **PagerDuty**: Incident acknowledgment, resolution, and notes
+- **GitHub**: Issue tracking, pull request automation
+- **Notion**: Documentation and knowledge base integration
+
+### Real-Time Monitoring
+- Live dashboard showing active incidents and agent actions
+- WebSocket-based real-time updates
+- Complete audit trail with detailed logging
+
+## Configuration
+
+### Environment Files
+
+Create environment files for each component:
+
+**Backend (`backend/.env`)**:
+```env
+ANTHROPIC_API_KEY=your-anthropic-key
+DATABASE_URL=postgresql://...
+K8S_ENABLED=true
+K8S_ENABLE_DESTRUCTIVE_OPERATIONS=false
+PAGERDUTY_API_KEY=your-pagerduty-key
+PAGERDUTY_USER_EMAIL=your-email@company.com
+```
+
+**Frontend (`frontend/.env.local`)**:
+```env
+POSTGRES_URL=postgresql://...
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_ENVIRONMENT=local
+```
+
+### Database Setup
+
+DreamOps uses separate Neon PostgreSQL databases for different environments:
+- Local development database
+- Staging database for testing
+- Production database
+
+See [Database Setup Guide](docs/database-setup.md) for complete configuration instructions.
+
+### PagerDuty Integration
+
+Configure PagerDuty webhooks to trigger automated incident response:
+1. Generate PagerDuty API key with full access
+2. Configure webhook endpoint: `https://your-api-url.com/webhook/pagerduty`
+3. Set up user email for incident operations
+
+See [PagerDuty Integration Guide](docs/pagerduty-integration.md) for detailed setup.
+
+## Deployment
+
+DreamOps supports multiple deployment options:
+
+### Local Development
+```bash
+# Using Docker Compose
+docker-compose up
+
+# Or start services individually
+cd backend && uv run python api_server.py
+cd frontend && npm run dev
+```
+
+### Production Deployment
+
+**Option 1: AWS Infrastructure (Recommended)**
+- Complete Terraform infrastructure deployment
+- ECS Fargate for backend, S3+CloudFront for frontend
+- See [Deployment Guide](docs/deployment.md)
+
+**Option 2: AWS Amplify (Frontend)**
+- Simplified frontend deployment
+- Automatic CI/CD integration
+- Custom domain support
+
+### Kubernetes Integration
+
+For Kubernetes features, ensure:
+- Valid `~/.kube/config` file
+- Proper RBAC permissions for cluster operations
+- `K8S_ENABLED=true` in environment configuration
+
+## Usage
+
+### Basic Workflow
+
+1. **Configure Integrations**: Set up PagerDuty, Kubernetes, and other service connections
+2. **Enable YOLO Mode**: For autonomous operations (optional)
+3. **Monitor Dashboard**: Watch real-time incident resolution
+4. **Review Logs**: Check detailed execution logs and audit trails
+
+### YOLO Mode Usage
+
+For fully autonomous operations:
+```bash
+cd backend
+./enable_yolo_mode.sh  # Sets K8S_ENABLE_DESTRUCTIVE_OPERATIONS=true
+```
+
+See [YOLO Mode Guide](docs/yolo-mode.md) for safety considerations and configuration options.
+
+### Testing
+
+Run comprehensive tests:
+```bash
+# Backend tests
+cd backend && uv run pytest tests/ -v
+
+# Frontend tests
+cd frontend && npm test
+
+# Integration tests
+cd backend && uv run python test_complete_flow.py
+```
+
+## Architecture
+
+DreamOps uses a modern, scalable architecture:
+
+- **Backend**: FastAPI with async Python
+- **Frontend**: Next.js with real-time WebSocket integration
+- **Database**: PostgreSQL with Drizzle ORM
+- **AI**: Anthropic Claude for incident analysis
+- **Integrations**: MCP (Model Context Protocol) for external services
+
+See [Technical Details](docs/technical-details.md) for implementation specifics.
+
+## Security
+
+### Security Features
+- Environment-based secret management
+- API request validation with Pydantic
+- Comprehensive audit logging
+- Network security with proper access controls
+
+### Best Practices
+- Store sensitive data in environment variables
+- Use AWS Secrets Manager in production
+- Implement least-privilege access
+- Regular security scanning via CI/CD
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Run the test suite
+6. Submit a pull request
+
+### Development Guidelines
+- Follow existing code style and conventions
+- Add documentation for new features
+- Ensure all tests pass
+- Update relevant documentation files
+
+## CI/CD
+
+DreamOps includes comprehensive CI/CD workflows:
+- Automated testing and linting
+- Security vulnerability scanning
+- Automated deployment to staging and production
+- Documentation governance
+
+See [CI/CD Guide](docs/ci-cd.md) for workflow details and configuration.
+
+## Support
+
+For issues and questions:
+1. Check the documentation in `/docs`
+2. Review existing GitHub issues
+3. Create a new issue with detailed information
+4. Include logs and configuration details
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- Anthropic for Claude AI capabilities
+- The open-source community for the excellent tools and libraries
+- Contributors who help improve DreamOps

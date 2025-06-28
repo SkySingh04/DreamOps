@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
+import httpx
 
 from src.oncall_agent.api.log_streaming import log_stream_manager
 from src.oncall_agent.api.models import (
@@ -55,6 +56,35 @@ def verify_pagerduty_signature(payload: bytes, signature: str, secret: str) -> b
     ).hexdigest()
 
     return hmac.compare_digest(expected, signature)
+
+
+async def record_alert_usage(team_id: str, incident_id: str, alert_type: str = "pagerduty"):
+    """Record alert usage for the team."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "http://localhost:8000/api/v1/alert-tracking/record",
+                json={
+                    "team_id": team_id,
+                    "alert_type": alert_type,
+                    "incident_id": incident_id,
+                    "metadata": {"source": "pagerduty_webhook"}
+                }
+            )
+            if response.status_code == 403:
+                # Alert limit reached
+                logger.warning(f"Alert limit reached for team {team_id}")
+                return False, response.json()
+            elif response.status_code == 200:
+                data = response.json()
+                logger.info(f"Alert recorded: {data['alerts_used']}/{data.get('alerts_remaining', 'unlimited')} used")
+                return True, data
+            else:
+                logger.error(f"Failed to record alert usage: {response.status_code}")
+                return True, None  # Don't block on tracking failures
+    except Exception as e:
+        logger.error(f"Error recording alert usage: {e}")
+        return True, None  # Don't block on tracking failures
 
 
 @router.post("/pagerduty")
@@ -218,6 +248,22 @@ async def pagerduty_webhook(
                 )
 
                 INCIDENTS_DB[incident.id] = inc_record
+
+                # Record alert usage for this incident
+                team_id = "team_123"  # TODO: Get actual team ID from incident or service
+                can_process, usage_data = await record_alert_usage(team_id, incident.id, "pagerduty")
+                
+                if not can_process:
+                    # Alert limit reached
+                    logger.warning(f"Alert limit reached for team {team_id}, skipping agent processing")
+                    return JSONResponse(
+                        status_code=403,
+                        content={
+                            "status": "error",
+                            "message": "Alert limit reached. Please upgrade your subscription.",
+                            "alert_usage": usage_data
+                        }
+                    )
 
                 # Process immediately
                 result = await trigger.trigger_oncall_agent(

@@ -10,12 +10,13 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Activity, AlertCircle, CheckCircle, Clock, TrendingUp, Shield, Server, RefreshCw } from 'lucide-react';
+import { Activity, AlertCircle, CheckCircle, Clock, TrendingUp, Shield, Server, RefreshCw, Settings } from 'lucide-react';
 import { useWebSocket } from '@/lib/hooks/use-websocket';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { AlertUsageCard } from '@/components/dashboard/alert-usage-card';
 
 interface DashboardMetrics {
   activeIncidents: number;
@@ -234,7 +235,21 @@ export default function DashboardPage() {
             }`}></span>
             AI Agent {currentMetrics.aiAgentStatus === 'online' ? 'Online' : 'Offline'}
           </Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push('/dashboard/general')}
+            className="flex items-center gap-2"
+          >
+            <Settings className="h-4 w-4" />
+            Settings
+          </Button>
         </div>
+      </div>
+      
+      {/* Alert Usage Card */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <AlertUsageCard teamId="team_123" className="lg:col-span-1" />
       </div>
       
       {/* Metrics Grid with Recent Incidents */}

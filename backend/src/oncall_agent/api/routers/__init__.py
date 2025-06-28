@@ -8,6 +8,9 @@ from .integrations import router as integrations_router
 from .monitoring import router as monitoring_router
 from .security import router as security_router
 from .settings import router as settings_router
+from .payments import router as payments_router
+from .alert_tracking import router as alert_tracking
+from .alert_crud import router as alert_crud
 
 __all__ = [
     "dashboard_router",
@@ -17,5 +20,8 @@ __all__ = [
     "analytics_router",
     "security_router",
     "monitoring_router",
-    "settings_router"
+    "settings_router",
+    "payments_router",
+    "alert_tracking",
+    "alert_crud"
 ]

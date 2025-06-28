@@ -5,11 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Loader2 } from 'lucide-react';
+import { Loader2, CreditCard } from 'lucide-react';
 import { updateAccount } from '@/app/(login)/actions';
 import { User } from '@/lib/db/schema';
 import useSWR from 'swr';
 import { Suspense } from 'react';
+import { PaymentButton } from '@/components/payments/payment-button';
+import { AlertUsageCard } from '@/components/dashboard/alert-usage-card';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -84,6 +86,9 @@ export default function GeneralPage() {
         General Settings
       </h1>
 
+      {/* Alert Usage Overview */}
+      <AlertUsageCard className="mb-6" teamId="team_123" />
+
       <Card>
         <CardHeader>
           <CardTitle>Account Information</CardTitle>
@@ -114,6 +119,55 @@ export default function GeneralPage() {
               )}
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      {/* Demo Payment Gateway Test Section */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5" />
+            Payment Gateway Test (Demo)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              This is a demo payment button to test the PhonePe integration. 
+              Click below to initiate a test payment.
+            </p>
+            
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <p className="text-sm text-amber-800 font-medium mb-2">Test Credentials:</p>
+              <ul className="text-sm text-amber-700 space-y-1">
+                <li>• UPI: <code className="bg-amber-100 px-1 rounded">success@paytm</code> (for success)</li>
+                <li>• Card: <code className="bg-amber-100 px-1 rounded">4242 4242 4242 4242</code></li>
+                <li>• CVV: <code className="bg-amber-100 px-1 rounded">123</code>, OTP: <code className="bg-amber-100 px-1 rounded">123456</code></li>
+              </ul>
+            </div>
+
+            <div className="flex gap-4">
+              <PaymentButton
+                planId="STARTER"
+                planName="Test Payment - Starter"
+                amount={100}  // ₹100 for testing
+                teamId="test_team_demo"
+                className="bg-green-600 hover:bg-green-700"
+              />
+              
+              <PaymentButton
+                planId="PROFESSIONAL"
+                planName="Test Payment - Professional"
+                amount={500}  // ₹500 for testing
+                teamId="test_team_demo"
+                className="bg-blue-600 hover:bg-blue-700"
+              />
+            </div>
+
+            <p className="text-xs text-gray-500 mt-4">
+              Note: This is using PhonePe sandbox environment. No real money will be charged.
+            </p>
+          </div>
         </CardContent>
       </Card>
     </section>

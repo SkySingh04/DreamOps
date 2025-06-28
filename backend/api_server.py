@@ -22,7 +22,11 @@ from src.oncall_agent.api.routers import (
     monitoring_router,
     security_router,
     settings_router,
+    payments_router,
+    alert_tracking,
+    alert_crud,
 )
+from src.oncall_agent.api.routers import mock_payments
 from src.oncall_agent.config import get_config
 from src.oncall_agent.utils import get_logger, setup_logging
 
@@ -176,6 +180,10 @@ app.include_router(analytics_router, prefix="/api/v1")
 app.include_router(security_router, prefix="/api/v1")
 app.include_router(monitoring_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
+app.include_router(payments_router, prefix="/api/v1")
+app.include_router(mock_payments.router, prefix="/api/v1")
+app.include_router(alert_tracking, prefix="/api/v1")
+app.include_router(alert_crud, prefix="/api/v1")
 
 # Conditionally include webhook router
 if config.pagerduty_enabled:

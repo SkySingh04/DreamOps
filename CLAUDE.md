@@ -4,17 +4,16 @@ This document provides comprehensive instructions for AI assistants (like Claude
 
 ## Documentation Structure
 
-**IMPORTANT**: Before making any changes, read the relevant documentation in the `/docs` folder:
+**IMPORTANT**: All project documentation has been consolidated into the main README.md file. Before making any changes, read the relevant sections in README.md:
 
-- `docs/database-setup.md` - Database configuration for all environments
-- `docs/pagerduty-integration.md` - PagerDuty setup and webhook configuration  
-- `docs/yolo-mode.md` - Autonomous operation mode and safety mechanisms
-- `docs/deployment.md` - AWS deployment options (Terraform, Amplify)
-- `docs/mcp-integrations.md` - External service integrations and API usage
-- `docs/technical-details.md` - Architecture, implementation details, and fixes
-- `docs/ci-cd.md` - GitHub Actions workflows and deployment automation
+- **Database Setup** - Database configuration for all environments
+- **Configuration** - PagerDuty setup and webhook configuration  
+- **Features & Integrations** - YOLO mode, MCP integrations, and safety mechanisms
+- **Deployment** - AWS deployment options (Terraform, Amplify)
+- **Architecture & Technical Details** - Implementation details and fixes
+- **CI/CD** - GitHub Actions workflows and deployment automation
 
-Always check these documentation files for the latest information before implementing changes.
+Always check the README.md for the latest information before implementing changes.
 
 ## Project Overview
 

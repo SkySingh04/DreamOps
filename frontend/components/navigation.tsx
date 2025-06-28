@@ -30,6 +30,7 @@ import { useRouter } from 'next/navigation';
 import { User } from '@/lib/db/schema';
 import useSWR, { mutate } from 'swr';
 import { LogOut } from 'lucide-react';
+import { AccountTierBadge } from '@/components/ui/account-tier-badge';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -46,6 +47,10 @@ export function Navigation() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const { data: user } = useSWR<User>('/api/user', fetcher);
+  const { data: alertUsage } = useSWR(
+    user ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1/alert-tracking/usage/team_123` : null,
+    fetcher
+  );
   const router = useRouter();
 
   async function handleSignOut() {
@@ -105,7 +110,17 @@ export function Navigation() {
                 </Button>
               </>
             ) : (
-              <DropdownMenu open={isUserMenuOpen} onOpenChange={setIsUserMenuOpen}>
+              <>
+                {/* Account Tier Badge */}
+                {alertUsage && (
+                  <AccountTierBadge 
+                    tier={alertUsage.account_tier || 'free'} 
+                    size="sm"
+                    className="mr-3"
+                  />
+                )}
+                
+                <DropdownMenu open={isUserMenuOpen} onOpenChange={setIsUserMenuOpen}>
                 <DropdownMenuTrigger>
                   <Avatar className="cursor-pointer size-8">
                     <AvatarImage alt={user.name || ''} />
@@ -137,6 +152,7 @@ export function Navigation() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              </>
             )}
 
             {/* Mobile menu button */}
