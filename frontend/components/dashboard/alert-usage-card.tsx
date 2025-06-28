@@ -18,11 +18,12 @@ interface AlertUsageData {
 }
 
 interface AlertUsageCardProps {
-  teamId?: string;
+  userId?: string;
+  teamId?: string; // Keep for backward compatibility
   className?: string;
 }
 
-export function AlertUsageCard({ teamId = "team_123", className }: AlertUsageCardProps) {
+export function AlertUsageCard({ userId, teamId, className }: AlertUsageCardProps) {
   const [usageData, setUsageData] = useState<AlertUsageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -32,12 +33,14 @@ export function AlertUsageCard({ teamId = "team_123", className }: AlertUsageCar
     // Refresh usage data every 30 seconds
     const interval = setInterval(fetchUsageData, 30000);
     return () => clearInterval(interval);
-  }, [teamId]);
+  }, [userId, teamId]);
 
   const fetchUsageData = async () => {
     try {
+      // Use userId if available (new user-based model), otherwise fall back to teamId
+      const id = userId || teamId || "team_123";
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/alert-tracking/usage/${teamId}`
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/alert-tracking/usage/${id}`
       );
       if (response.ok) {
         const data = await response.json();
@@ -155,7 +158,7 @@ export function AlertUsageCard({ teamId = "team_123", className }: AlertUsageCar
         currentPlan={usageData.account_tier}
         alertsUsed={usageData.alerts_used}
         alertsLimit={usageData.alerts_limit}
-        teamId={teamId}
+        teamId={userId || teamId}
       />
     </>
   );
