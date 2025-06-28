@@ -4,15 +4,11 @@ import { apiKeys, teamMembers } from '@/lib/db/schema';
 import { getUser } from '@/lib/db/queries';
 import { eq, and } from 'drizzle-orm';
 
+// Legacy function - in new user-based model, we use userId directly
 async function getUserTeamId(userId: number): Promise<number | null> {
-  const db = await getDb();
-  const result = await db
-    .select({ teamId: teamMembers.teamId })
-    .from(teamMembers)
-    .where(eq(teamMembers.userId, userId))
-    .limit(1);
-  
-  return result.length > 0 ? result[0].teamId : null;
+  // In the new user-based model, we can just return the userId as the "team" ID
+  // since each user is now their own team/account
+  return userId;
 }
 
 // GET /api/v1/api-keys/settings - Get API key settings
@@ -30,7 +26,7 @@ export async function GET(request: NextRequest) {
 
     const db = await getDb();
 
-    // Get all keys for the team
+    // Get all keys for the user
     const keys = await db
       .select({
         id: apiKeys.id,
@@ -38,7 +34,7 @@ export async function GET(request: NextRequest) {
         status: apiKeys.status,
       })
       .from(apiKeys)
-      .where(eq(apiKeys.teamId, teamId));
+      .where(eq(apiKeys.userId, user.id));
 
     if (keys.length === 0) {
       return NextResponse.json({ error: 'No API keys configured' }, { status: 404 });

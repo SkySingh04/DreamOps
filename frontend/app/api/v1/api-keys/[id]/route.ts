@@ -9,15 +9,11 @@ interface APIKeyUpdate {
   is_primary?: boolean;
 }
 
+// Legacy function - in new user-based model, we use userId directly
 async function getUserTeamId(userId: number): Promise<number | null> {
-  const db = await getDb();
-  const result = await db
-    .select({ teamId: teamMembers.teamId })
-    .from(teamMembers)
-    .where(eq(teamMembers.userId, userId))
-    .limit(1);
-  
-  return result.length > 0 ? result[0].teamId : null;
+  // In the new user-based model, we can just return the userId as the "team" ID
+  // since each user is now their own team/account
+  return userId;
 }
 
 // GET /api/v1/api-keys/[id] - Get a specific API key
@@ -57,7 +53,7 @@ export async function GET(
       .where(
         and(
           eq(apiKeys.id, parseInt(id)),
-          eq(apiKeys.teamId, teamId)
+          eq(apiKeys.userId, user.id)
         )
       )
       .limit(1);
@@ -106,7 +102,7 @@ export async function PUT(
       .where(
         and(
           eq(apiKeys.id, parseInt(id)),
-          eq(apiKeys.teamId, teamId)
+          eq(apiKeys.userId, user.id)
         )
       )
       .limit(1);
@@ -120,7 +116,7 @@ export async function PUT(
       await db
         .update(apiKeys)
         .set({ isPrimary: false })
-        .where(eq(apiKeys.teamId, teamId));
+        .where(eq(apiKeys.userId, user.id));
     }
 
     // Update the key
@@ -196,7 +192,7 @@ export async function DELETE(
       .where(
         and(
           eq(apiKeys.id, parseInt(id)),
-          eq(apiKeys.teamId, teamId)
+          eq(apiKeys.userId, user.id)
         )
       )
       .limit(1);
@@ -215,7 +211,7 @@ export async function DELETE(
       const [nextKey] = await db
         .select({ id: apiKeys.id })
         .from(apiKeys)
-        .where(eq(apiKeys.teamId, teamId))
+        .where(eq(apiKeys.userId, user.id))
         .limit(1);
 
       if (nextKey) {

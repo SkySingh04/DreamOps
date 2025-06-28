@@ -30,15 +30,11 @@ function validateApiKey(provider: string, key: string): boolean {
   return false;
 }
 
+// Legacy function - in new user-based model, we use userId directly
 async function getUserTeamId(userId: number): Promise<number | null> {
-  const db = await getDb();
-  const result = await db
-    .select({ teamId: teamMembers.teamId })
-    .from(teamMembers)
-    .where(eq(teamMembers.userId, userId))
-    .limit(1);
-  
-  return result.length > 0 ? result[0].teamId : null;
+  // In the new user-based model, we can just return the userId as the "team" ID
+  // since each user is now their own team/account
+  return userId;
 }
 
 // GET /api/v1/api-keys - List all API keys for the user's team
@@ -70,7 +66,7 @@ export async function GET(request: NextRequest) {
         updated_at: apiKeys.updatedAt,
       })
       .from(apiKeys)
-      .where(eq(apiKeys.teamId, teamId))
+      .where(eq(apiKeys.userId, user.id))
       .orderBy(desc(apiKeys.isPrimary), desc(apiKeys.createdAt));
 
     return NextResponse.json(keys);
@@ -116,28 +112,27 @@ export async function POST(request: NextRequest) {
 
     const db = await getDb();
 
-    // Check if this is the first key for the team
+    // Check if this is the first key for the user
     const existingKeys = await db
       .select({ id: apiKeys.id })
       .from(apiKeys)
-      .where(eq(apiKeys.teamId, teamId));
+      .where(eq(apiKeys.userId, user.id));
 
     const isFirstKey = existingKeys.length === 0;
     const shouldBePrimary = isFirstKey || is_primary;
 
-    // If setting as primary, unset other primary keys
+    // If setting as primary, unset other primary keys for this user
     if (shouldBePrimary) {
       await db
         .update(apiKeys)
         .set({ isPrimary: false })
-        .where(eq(apiKeys.teamId, teamId));
+        .where(eq(apiKeys.userId, user.id));
     }
 
     // Create the new API key
     const [newKey] = await db
       .insert(apiKeys)
       .values({
-        teamId,
         userId: user.id,
         provider,
         name,

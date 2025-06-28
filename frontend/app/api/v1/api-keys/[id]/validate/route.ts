@@ -5,15 +5,11 @@ import { getUser } from '@/lib/db/queries';
 import { eq, and } from 'drizzle-orm';
 import { createHash } from 'crypto';
 
+// Legacy function - in new user-based model, we use userId directly
 async function getUserTeamId(userId: number): Promise<number | null> {
-  const db = await getDb();
-  const result = await db
-    .select({ teamId: teamMembers.teamId })
-    .from(teamMembers)
-    .where(eq(teamMembers.userId, userId))
-    .limit(1);
-  
-  return result.length > 0 ? result[0].teamId : null;
+  // In the new user-based model, we can just return the userId as the "team" ID
+  // since each user is now their own team/account
+  return userId;
 }
 
 async function validateWithProvider(provider: string, apiKey: string): Promise<{ valid: boolean; error?: string }> {
@@ -92,7 +88,7 @@ export async function POST(
       .where(
         and(
           eq(apiKeys.id, parseInt(id)),
-          eq(apiKeys.teamId, teamId)
+          eq(apiKeys.userId, user.id)
         )
       )
       .limit(1);

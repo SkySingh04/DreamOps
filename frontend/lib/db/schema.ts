@@ -192,6 +192,25 @@ export const userApiKeys = pgTable('user_api_keys', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
+// Backward compatibility export for API routes
+export const apiKeys = userApiKeys;
+
+// Team members table for backward compatibility (legacy team-based features)
+export const teamMembers = pgTable('team_members', {
+  id: serial('id').primaryKey(),
+  teamId: integer('team_id'), // Legacy field, may reference users.id in new model
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id),
+  role: varchar('role', { length: 20 }).notNull().default('member'),
+  invitedBy: integer('invited_by').references(() => users.id),
+  invitedAt: timestamp('invited_at').defaultNow(),
+  joinedAt: timestamp('joined_at'),
+  status: varchar('status', { length: 20 }).notNull().default('active'), // active, invited, disabled
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
 export const userSetupRequirements = pgTable('user_setup_requirements', {
   id: serial('id').primaryKey(),
   userId: integer('user_id')
@@ -236,6 +255,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   apiKeys: many(userApiKeys),
   setupRequirements: many(userSetupRequirements),
   setupValidationLogs: many(setupValidationLogs),
+  teamMemberships: many(teamMembers),
+  invitedMembers: many(teamMembers, { relationName: 'invitedMembers' }),
 }));
 
 export const activityLogsRelations = relations(activityLogs, ({ one }) => ({
@@ -355,6 +376,18 @@ export const setupValidationLogsRelations = relations(setupValidationLogs, ({ on
   }),
 }));
 
+export const teamMembersRelations = relations(teamMembers, ({ one }) => ({
+  user: one(users, {
+    fields: [teamMembers.userId],
+    references: [users.id],
+  }),
+  invitedBy: one(users, {
+    fields: [teamMembers.invitedBy],
+    references: [users.id],
+    relationName: 'invitedMembers',
+  }),
+}));
+
 // Type exports
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -382,6 +415,8 @@ export type UserSetupRequirement = typeof userSetupRequirements.$inferSelect;
 export type NewUserSetupRequirement = typeof userSetupRequirements.$inferInsert;
 export type SetupValidationLog = typeof setupValidationLogs.$inferSelect;
 export type NewSetupValidationLog = typeof setupValidationLogs.$inferInsert;
+export type TeamMember = typeof teamMembers.$inferSelect;
+export type NewTeamMember = typeof teamMembers.$inferInsert;
 
 export enum ActivityType {
   SIGN_UP = 'SIGN_UP',
@@ -390,6 +425,10 @@ export enum ActivityType {
   UPDATE_PASSWORD = 'UPDATE_PASSWORD',
   DELETE_ACCOUNT = 'DELETE_ACCOUNT',
   UPDATE_ACCOUNT = 'UPDATE_ACCOUNT',
+  CREATE_TEAM = 'CREATE_TEAM',
+  REMOVE_TEAM_MEMBER = 'REMOVE_TEAM_MEMBER',
+  INVITE_TEAM_MEMBER = 'INVITE_TEAM_MEMBER',
+  ACCEPT_INVITATION = 'ACCEPT_INVITATION',
 }
 
 export enum IntegrationType {
