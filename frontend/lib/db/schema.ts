@@ -195,6 +195,25 @@ export const userApiKeys = pgTable('user_api_keys', {
 // Backward compatibility export for API routes
 export const apiKeys = userApiKeys;
 
+// Kubernetes credentials table
+export const kubernetesCredentials = pgTable('kubernetes_credentials', {
+  id: text('id').primaryKey(),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id),
+  clusterName: text('cluster_name').notNull(),
+  authMethod: text('auth_method').notNull(), // 'kubeconfig', 'service_account', 'client_cert', 'eks', 'gke', 'aks'
+  encryptedCredentials: text('encrypted_credentials').notNull(),
+  namespace: text('namespace').default('default'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  lastUsedAt: timestamp('last_used_at'),
+  isActive: boolean('is_active').notNull().default(true),
+  connectionStatus: text('connection_status').default('pending'), // 'pending', 'connected', 'failed', 'expired'
+  lastError: text('last_error'),
+  metadata: jsonb('metadata').default({}),
+});
+
 // Team members table for backward compatibility (legacy team-based features)
 export const teamMembers = pgTable('team_members', {
   id: serial('id').primaryKey(),

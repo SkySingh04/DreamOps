@@ -326,9 +326,16 @@ export default function KubernetesIntegrationPage() {
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => router.push('/integrations/kubernetes/setup')}
+          >
+            <Globe className="h-4 w-4 mr-2" />
+            Connect Any Cluster
+          </Button>
           <Button onClick={() => setShowConfigDialog(true)}>
             <Plus className="h-4 w-4 mr-2" />
-            Add Cluster
+            Add Local Cluster
           </Button>
         </div>
       </div>

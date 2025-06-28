@@ -67,7 +67,9 @@
       "Bash(mcp-server-kubernetes:*)",
       "Bash(pip index:*)",
       "Bash(diff:*)",
-      "Bash(cp:*)"
+      "Bash(cp:*)",
+      "Bash(npx tsx:*)",
+      "Bash(timeout:*)"
     ],
     "deny": []
   }

@@ -99,7 +99,7 @@ export function Navigation() {
 
           {/* Right side - User menu */}
           <div className="flex items-center space-x-4">
-            {user && (
+            {user ? (
               <>
                 <AccountTierBadge tier={user.accountTier || 'free'} />
                 <DropdownMenu>
@@ -138,6 +138,19 @@ export function Navigation() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+              </>
+            ) : (
+              <>
+                {!isLoading && (
+                  <div className="hidden md:flex items-center space-x-4">
+                    <Link href="/sign-in">
+                      <Button variant="ghost">Sign In</Button>
+                    </Link>
+                    <Link href="/sign-up">
+                      <Button>Get Started</Button>
+                    </Link>
+                  </div>
+                )}
               </>
             )}
 
