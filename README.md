@@ -10,6 +10,7 @@ DreamOps provides:
 - **YOLO Mode**: Fully autonomous operations with safety mechanisms
 - **Real-Time Dashboard**: Monitor incidents and agent actions in real-time
 - **Complete Audit Trail**: Full logging and tracking of all operations
+- **Individual User Model**: Each user operates independently with their own integrations and data (no teams/organizations)
 
 ## Quick Start
 

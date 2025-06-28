@@ -85,7 +85,6 @@ export default function IntegrationsSetupPage() {
   const [selectedIntegration, setSelectedIntegration] = useState<Integration | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isTestingAll, setIsTestingAll] = useState(false);
-  const [teamId, setTeamId] = useState<number | null>(null);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -103,16 +102,6 @@ export default function IntegrationsSetupPage() {
 
   const fetchUserTeam = async () => {
     try {
-      const response = await apiClient.get('/api/v1/auth/me');
-      
-      if (response.status !== 'success') {
-        throw new Error(response.error?.message || 'Failed to fetch user info');
-      }
-      
-      const data = response.data;
-      if (data.user?.team_id) {
-        setTeamId(data.user.team_id);
-      }
     } catch (error) {
       console.error('Failed to fetch user team:', error);
       toast.error('Failed to load user information');
@@ -157,7 +146,11 @@ export default function IntegrationsSetupPage() {
   };
 
   const handleIntegrationSave = async (config: any) => {
-    if (!selectedIntegration || !teamId) return;
+    console.log('Signup: handleIntegrationSave called', { selectedIntegration, config });
+    if (!selectedIntegration) {
+      console.error('Signup: Missing selectedIntegration', { selectedIntegration });
+      return;
+    }
 
     try {
       // For PagerDuty, skip testing and save directly
@@ -165,7 +158,7 @@ export default function IntegrationsSetupPage() {
         updateIntegrationStatus(selectedIntegration.type, 'connected', config);
         
         // Save the integration
-        await apiClient.post(`/api/v1/teams/${teamId}/integrations`, {
+        await apiClient.post('/api/v1/user/integrations', {
           integration_type: selectedIntegration.type,
           config,
           is_required: selectedIntegration.required
@@ -190,7 +183,7 @@ export default function IntegrationsSetupPage() {
 
         if (testResult.success) {
           // Save the integration
-          await apiClient.post(`/api/v1/teams/${teamId}/integrations`, {
+          await apiClient.post('/api/v1/user/integrations', {
             integration_type: selectedIntegration.type,
             config,
             is_required: selectedIntegration.required
@@ -235,12 +228,10 @@ export default function IntegrationsSetupPage() {
   };
 
   const handleTestAll = async () => {
-    if (!teamId) return;
-
     setIsTestingAll(true);
     
     try {
-      const response = await apiClient.post(`/api/v1/teams/${teamId}/integrations/test-all`);
+      const response = await apiClient.post('/api/v1/integrations/test-all');
       
       if (response.status !== 'success') {
         throw new Error(response.error?.message || 'Failed to test integrations');

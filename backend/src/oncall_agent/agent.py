@@ -43,7 +43,7 @@ class OncallAgent:
 
         # Initialize API key service
         self.api_key_service = APIKeyService()
-        
+
         # Check if we have any keys configured, otherwise fall back to config
         active_key = self.api_key_service.get_active_key()
         if not active_key and self.config.anthropic_api_key:
@@ -157,15 +157,15 @@ class OncallAgent:
         """Register an MCP integration with the agent."""
         self.logger.info(f"Registering MCP integration: {name}")
         self.mcp_integrations[name] = integration
-    
+
     async def _get_llm_client(self):
         """Get the appropriate LLM client based on active API key."""
         active_key = self.api_key_service.get_active_key()
         if not active_key:
             raise ValueError("No active API key configured")
-        
+
         key_id, api_key, provider = active_key
-        
+
         if provider == LLMProvider.ANTHROPIC:
             return AsyncAnthropic(api_key=api_key)
         elif provider == LLMProvider.OPENAI:
@@ -173,23 +173,23 @@ class OncallAgent:
             raise NotImplementedError("OpenAI provider not yet implemented")
         else:
             raise ValueError(f"Unsupported provider: {provider}")
-    
+
     async def _call_llm_with_fallback(self, prompt: str, max_retries: int = 3):
         """Call LLM with automatic fallback to next available key on failure."""
         last_error = None
-        
+
         for attempt in range(max_retries):
             try:
                 # Get current active key info
                 active_key = self.api_key_service.get_active_key()
                 if not active_key:
                     raise ValueError("No active API key available")
-                
+
                 key_id, _, provider = active_key
-                
+
                 # Get the client
                 client = await self._get_llm_client()
-                
+
                 # Make the API call
                 if provider == LLMProvider.ANTHROPIC:
                     response = await client.messages.create(
@@ -197,23 +197,23 @@ class OncallAgent:
                         max_tokens=2000,
                         messages=[{"role": "user", "content": prompt}]
                     )
-                    
+
                     # Record successful usage
                     self.api_key_service.record_key_usage(key_id, success=True)
-                    
+
                     return response
                 else:
                     raise NotImplementedError(f"Provider {provider} not implemented")
-                    
+
             except Exception as e:
                 last_error = e
                 error_msg = str(e)
                 self.logger.error(f"LLM API call failed: {error_msg}")
-                
+
                 # Record failure
                 if active_key:
                     self.api_key_service.record_key_usage(key_id, success=False, error=error_msg)
-                
+
                 # Try to switch to fallback key
                 if "rate" in error_msg.lower() or "limit" in error_msg.lower():
                     self.logger.info("Rate limit detected, switching to fallback key")
@@ -221,12 +221,12 @@ class OncallAgent:
                     if next_key:
                         self.logger.info(f"Switched to fallback key: {next_key[0]}")
                         continue
-                
+
                 # If not rate limit or no fallback, retry with same key
                 if attempt < max_retries - 1:
                     self.logger.info(f"Retrying with same key (attempt {attempt + 2}/{max_retries})")
                     await asyncio.sleep(2 ** attempt)  # Exponential backoff
-        
+
         # All attempts failed
         raise Exception(f"All LLM API attempts failed. Last error: {last_error}")
 

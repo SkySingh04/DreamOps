@@ -2,33 +2,30 @@
 
 import os
 from datetime import datetime
-from typing import Optional
-import logging
-from fastapi import APIRouter, HTTPException, Depends, Request, BackgroundTasks
-from sqlalchemy import select, and_, update
+
+import asyncpg
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.oncall_agent.api.models.auth import (
-    LLMConfigRequest,
-    LLMConfigResponse,
-    TestLLMRequest,
-    TestLLMResponse,
-    SetupStatusResponse,
-    SetupRequirement,
-    ValidationResult,
-    UserSetupValidationResponse,
     CompleteSetupRequest,
     CompleteSetupResponse,
+    LLMConfigRequest,
+    LLMConfigResponse,
     SetupRequirementsResponse,
-    UserWithSetup,
-    LLMProvider,
     SetupRequirementType,
+    TestLLMRequest,
+    TestLLMResponse,
+    UserSetupValidationResponse,
+    UserWithSetup,
+)
+from src.oncall_agent.security.firebase_auth import (
+    FirebaseUser,
+    get_current_firebase_user,
 )
 from src.oncall_agent.services.llm_validator import LLMValidator
 from src.oncall_agent.services.user_config import UserConfigService
 from src.oncall_agent.utils.logger import get_logger
-from src.oncall_agent.security.firebase_auth import get_current_firebase_user, FirebaseUser
-import asyncpg
 
 # Database connection
 DATABASE_URL = os.getenv("DATABASE_URL", os.getenv("POSTGRES_URL", ""))
@@ -41,7 +38,7 @@ async def get_db_connection():
         clean_url = clean_url.replace("&channel_binding=require", "")
     elif "?channel_binding=require" in clean_url:
         clean_url = clean_url.replace("?channel_binding=require", "")
-    
+
     return await asyncpg.connect(clean_url)
 
 # This would normally come from your auth system
@@ -54,22 +51,21 @@ async def get_current_user(firebase_user: FirebaseUser = Depends(get_current_fir
     conn = await get_db_connection()
     try:
         user = await conn.fetchrow(
-            "SELECT id, firebase_uid, email, name, team_id, role FROM users WHERE firebase_uid = $1",
+            "SELECT id, firebase_uid, email, name, role FROM users WHERE firebase_uid = $1",
             firebase_user.uid
         )
-        
+
         if not user:
             logger.error(f"User not found in database for Firebase UID: {firebase_user.uid}")
             # Let's also check if there are any users in the database
             user_count = await conn.fetchval("SELECT COUNT(*) FROM users")
             logger.info(f"Total users in database: {user_count}")
             raise HTTPException(status_code=404, detail=f"User not found for Firebase UID: {firebase_user.uid}")
-        
+
         logger.info(f"Found user: {user['email']} with ID: {user['id']}")
         return {
             "id": user['id'],
             "email": user['email'],
-            "team_id": user['team_id'],
             "role": user['role']
         }
     finally:
@@ -115,30 +111,29 @@ async def setup_llm_config(
             api_key=config.api_key,
             model=config.model
         )
-        
+
         if not validation_result.valid:
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid API key: {validation_result.error}"
             )
-        
+
         # Store the configuration
         stored_config = await user_config_service.store_llm_config(
             user_id=user["id"],
-            team_id=user["team_id"],
             config=config,
             validation_result=validation_result
         )
-        
+
         # Update setup requirement status
         background_tasks.add_task(
             user_config_service.mark_requirement_complete,
             user_id=user["id"],
             requirement_type=SetupRequirementType.LLM_CONFIG
         )
-        
+
         logger.info(f"LLM configuration stored for user {user['id']}")
-        
+
         return LLMConfigResponse(
             id=stored_config.id,
             provider=stored_config.provider,
@@ -149,7 +144,7 @@ async def setup_llm_config(
             created_at=stored_config.created_at,
             updated_at=stored_config.updated_at
         )
-        
+
     except Exception as e:
         logger.error(f"Failed to setup LLM config: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to save configuration")
@@ -170,14 +165,14 @@ async def test_llm_connection(
             api_key=request.api_key,
             model=request.model
         )
-        
+
         return TestLLMResponse(
             valid=result.valid,
             error=result.error,
             model_info=result.model_info,
             rate_limit_info=result.rate_limit_info
         )
-        
+
     except Exception as e:
         logger.error(f"Error testing LLM connection: {str(e)}")
         return TestLLMResponse(
@@ -207,41 +202,41 @@ async def validate_user_setup(
     try:
         validation_results = []
         requires_fix = []
-        
+
         # Validate LLM configuration
         llm_validation = await user_config_service.validate_llm_config(
             user_id=user["id"]
         )
-        
+
         validation_results.append(llm_validation)
         if not llm_validation.is_successful:
             requires_fix.append("llm_config")
-        
+
         # Validate required integrations
         integration_validations = await user_config_service.validate_integrations(
             user_id=user["id"]
         )
-        
+
         for validation in integration_validations:
             validation_results.append(validation)
             if not validation.is_successful and validation.target in ["pagerduty", "kubernetes"]:
                 requires_fix.append(validation.target)
-        
+
         # Update last validation timestamp
         background_tasks.add_task(
             user_config_service.update_last_validation,
             user_id=user["id"]
         )
-        
+
         is_valid = len(requires_fix) == 0
-        
+
         return UserSetupValidationResponse(
             is_valid=is_valid,
             validation_results=validation_results,
             requires_fix=requires_fix,
             last_validation_at=datetime.utcnow()
         )
-        
+
     except Exception as e:
         logger.error(f"Error validating setup: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to validate setup")
@@ -278,26 +273,26 @@ async def complete_user_setup(
         setup_status = await user_config_service.get_user_setup_status(
             user_id=user["id"]
         )
-        
+
         if not request.force and len(setup_status.missing_requirements) > 0:
             return CompleteSetupResponse(
                 success=False,
                 is_setup_complete=False,
                 message=f"Missing required items: {', '.join(setup_status.missing_requirements)}"
             )
-        
+
         # Mark setup as complete
         completion_time = await user_config_service.mark_setup_complete(
             user_id=user["id"]
         )
-        
+
         return CompleteSetupResponse(
             success=True,
             is_setup_complete=True,
             message="Setup completed successfully",
             setup_completed_at=completion_time
         )
-        
+
     except Exception as e:
         logger.error(f"Error completing setup: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to complete setup")
@@ -316,9 +311,9 @@ async def get_user_with_setup_info(
         user_info = await user_config_service.get_user_with_setup(
             user_id=user["id"]
         )
-        
+
         return user_info
-        
+
     except Exception as e:
         logger.error(f"Error getting user info: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to get user information")

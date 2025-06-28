@@ -1,26 +1,24 @@
 """Service for validating LLM API keys and connections."""
 
+from typing import Any
+
 import httpx
-from typing import Optional, Dict, Any
-from datetime import datetime
-import logging
 
 from src.oncall_agent.api.models.auth import LLMProvider
 from src.oncall_agent.utils.logger import get_logger
-
 
 logger = get_logger(__name__)
 
 
 class ValidationResult:
     """Result of LLM API key validation."""
-    
+
     def __init__(
         self,
         valid: bool,
-        error: Optional[str] = None,
-        model_info: Optional[Dict[str, Any]] = None,
-        rate_limit_info: Optional[Dict[str, Any]] = None
+        error: str | None = None,
+        model_info: dict[str, Any] | None = None,
+        rate_limit_info: dict[str, Any] | None = None
     ):
         self.valid = valid
         self.error = error
@@ -30,16 +28,16 @@ class ValidationResult:
 
 class LLMValidator:
     """Validates LLM API keys by testing connections."""
-    
+
     def __init__(self):
         self.anthropic_base_url = "https://api.anthropic.com/v1"
         self.openai_base_url = "https://api.openai.com/v1"
-        
+
     async def validate_api_key(
         self,
         provider: str,
         api_key: str,
-        model: Optional[str] = None
+        model: str | None = None
     ) -> ValidationResult:
         """Validate an API key with the specified provider.
         
@@ -60,11 +58,11 @@ class LLMValidator:
                 valid=False,
                 error=f"Unknown provider: {provider}"
             )
-    
+
     async def _validate_anthropic_key(
         self,
         api_key: str,
-        model: Optional[str] = None
+        model: str | None = None
     ) -> ValidationResult:
         """Validate Anthropic API key."""
         try:
@@ -84,10 +82,10 @@ class LLMValidator:
                     },
                     timeout=10.0
                 )
-                
+
                 if response.status_code == 200:
                     data = response.json()
-                    
+
                     # Extract rate limit info from headers
                     rate_limit_info = {
                         "requests_limit": response.headers.get("anthropic-ratelimit-requests-limit"),
@@ -97,7 +95,7 @@ class LLMValidator:
                         "tokens_remaining": response.headers.get("anthropic-ratelimit-tokens-remaining"),
                         "tokens_reset": response.headers.get("anthropic-ratelimit-tokens-reset"),
                     }
-                    
+
                     return ValidationResult(
                         valid=True,
                         model_info={
@@ -106,13 +104,13 @@ class LLMValidator:
                         },
                         rate_limit_info=rate_limit_info
                     )
-                    
+
                 elif response.status_code == 401:
                     return ValidationResult(
                         valid=False,
                         error="Invalid API key"
                     )
-                    
+
                 elif response.status_code == 429:
                     return ValidationResult(
                         valid=True,  # Key is valid but rate limited
@@ -121,14 +119,14 @@ class LLMValidator:
                             "retry_after": response.headers.get("retry-after")
                         }
                     )
-                    
+
                 else:
                     error_data = response.json()
                     return ValidationResult(
                         valid=False,
                         error=error_data.get("error", {}).get("message", f"HTTP {response.status_code}")
                     )
-                    
+
         except httpx.TimeoutException:
             return ValidationResult(
                 valid=False,
@@ -140,11 +138,11 @@ class LLMValidator:
                 valid=False,
                 error=f"Validation failed: {str(e)}"
             )
-    
+
     async def _validate_openai_key(
         self,
         api_key: str,
-        model: Optional[str] = None
+        model: str | None = None
     ) -> ValidationResult:
         """Validate OpenAI API key."""
         try:
@@ -157,16 +155,16 @@ class LLMValidator:
                     },
                     timeout=10.0
                 )
-                
+
                 if response.status_code == 200:
                     models_data = response.json()
                     available_models = [m["id"] for m in models_data.get("data", [])]
-                    
+
                     # Now make a minimal completion request
                     test_model = model or "gpt-4o-mini"
                     if test_model not in available_models and "gpt-3.5-turbo" in available_models:
                         test_model = "gpt-3.5-turbo"
-                    
+
                     completion_response = await client.post(
                         f"{self.openai_base_url}/chat/completions",
                         headers={
@@ -180,10 +178,10 @@ class LLMValidator:
                         },
                         timeout=10.0
                     )
-                    
+
                     if completion_response.status_code == 200:
                         completion_data = completion_response.json()
-                        
+
                         # Extract rate limit info
                         headers = completion_response.headers
                         rate_limit_info = {
@@ -194,7 +192,7 @@ class LLMValidator:
                             "tokens_remaining": headers.get("x-ratelimit-remaining-tokens"),
                             "tokens_reset": headers.get("x-ratelimit-reset-tokens"),
                         }
-                        
+
                         return ValidationResult(
                             valid=True,
                             model_info={
@@ -209,20 +207,20 @@ class LLMValidator:
                             valid=False,
                             error=f"Completion request failed: HTTP {completion_response.status_code}"
                         )
-                        
+
                 elif response.status_code == 401:
                     return ValidationResult(
                         valid=False,
                         error="Invalid API key"
                     )
-                    
+
                 else:
                     error_data = response.json()
                     return ValidationResult(
                         valid=False,
                         error=error_data.get("error", {}).get("message", f"HTTP {response.status_code}")
                     )
-                    
+
         except httpx.TimeoutException:
             return ValidationResult(
                 valid=False,

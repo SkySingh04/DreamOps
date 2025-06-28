@@ -31,14 +31,15 @@ DreamOps is an intelligent AI-powered incident response and infrastructure manag
 
 ## Key Architecture Decisions
 
-1. **Modular MCP Integrations**: All integrations extend `MCPIntegration` base class in `src/oncall_agent/mcp_integrations/base.py`
-2. **Async-First**: All operations are async to handle concurrent MCP calls efficiently
-3. **Configuration-Driven**: Uses pydantic for config validation and environment variables
-4. **Type-Safe**: Extensive use of type hints throughout the codebase
-5. **Retry Logic**: Built-in exponential backoff for network operations (configurable via MCP_MAX_RETRIES)
-6. **Singleton Config**: Global configuration instance accessed via `get_config()`
-7. **Environment Separation**: Complete database and configuration isolation between local/staging/production
-8. **YOLO Mode**: Autonomous remediation mode that executes fixes without human approval
+1. **Individual User Model**: The platform operates on an individual user basis WITHOUT teams. Users register and use the platform as individuals, not as part of teams or organizations.
+2. **Modular MCP Integrations**: All integrations extend `MCPIntegration` base class in `src/oncall_agent/mcp_integrations/base.py`
+3. **Async-First**: All operations are async to handle concurrent MCP calls efficiently
+4. **Configuration-Driven**: Uses pydantic for config validation and environment variables
+5. **Type-Safe**: Extensive use of type hints throughout the codebase
+6. **Retry Logic**: Built-in exponential backoff for network operations (configurable via MCP_MAX_RETRIES)
+7. **Singleton Config**: Global configuration instance accessed via `get_config()`
+8. **Environment Separation**: Complete database and configuration isolation between local/staging/production
+9. **YOLO Mode**: Autonomous remediation mode that executes fixes without human approval
 
 ## Project Structure
 
@@ -424,11 +425,14 @@ In YOLO mode, the PagerDuty integration:
 
 ### Schema Design
 The database schema is defined in `frontend/lib/db/schema.ts` using Drizzle ORM:
-- **Users**: Authentication and authorization
-- **Teams**: Multi-tenancy support
+- **Users**: Individual user accounts (NO TEAMS - users operate independently)
 - **Incidents**: Incident tracking and history
 - **Metrics**: Performance and analytics data
 - **Logs**: Agent execution logs
+- **Integrations**: User-specific integration configurations
+- **API Keys**: User-specific API key management
+
+**IMPORTANT**: This application uses an individual user model. There are NO teams, organizations, or multi-tenancy features. Each user has their own isolated data and integrations.
 
 ### Migration Strategy
 1. **Local Development**: Auto-migrate with `npm run db:migrate:local`

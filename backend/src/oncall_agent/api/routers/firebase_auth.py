@@ -2,25 +2,24 @@
 
 import os
 from datetime import datetime
-from typing import Optional, Dict, Any
-import logging
-from fastapi import APIRouter, HTTPException, Depends, Response, Request
-from pydantic import BaseModel, EmailStr
+from typing import Any
+
 import asyncpg
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, EmailStr
 
 from src.oncall_agent.utils.logger import get_logger
+
 try:
     from src.oncall_agent.security.firebase_auth import (
-        get_current_firebase_user, 
         FirebaseUser,
-        verify_firebase_token
+        get_current_firebase_user,
     )
 except Exception as e:
     logger = get_logger(__name__)
     logger.error(f"Failed to import Firebase auth utilities: {e}")
     raise
 
-from src.oncall_agent.security.encryption import encrypt_api_key, decrypt_api_key
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/v1/auth", tags=["firebase-authentication"])
@@ -51,25 +50,25 @@ async def test_database_connection():
     """Test database connection and list users."""
     try:
         conn = await get_db()
-        
+
         # Test connection
         version = await conn.fetchval("SELECT version()")
-        
+
         # Count users
         user_count = await conn.fetchval("SELECT COUNT(*) FROM users")
-        
+
         # Get all users with their setup status
         users = await conn.fetch("""
-            SELECT u.id, u.firebase_uid, u.email, u.created_at, u.team_id,
+            SELECT u.id, u.firebase_uid, u.email, u.created_at,
                    COUNT(usr.id) as setup_requirements_count
             FROM users u
             LEFT JOIN user_setup_requirements usr ON u.id = usr.user_id
-            GROUP BY u.id, u.firebase_uid, u.email, u.created_at, u.team_id
+            GROUP BY u.id, u.firebase_uid, u.email, u.created_at
             ORDER BY u.created_at DESC
         """)
-        
+
         await conn.close()
-        
+
         return {
             "status": "connected",
             "database_version": version,
@@ -86,8 +85,8 @@ async def test_database_connection():
 
 class FirebaseSignInRequest(BaseModel):
     uid: str
-    email: Optional[EmailStr]
-    name: Optional[str]
+    email: EmailStr | None
+    name: str | None
 
 
 class FirebaseSignUpRequest(BaseModel):
@@ -99,18 +98,18 @@ class FirebaseSignUpRequest(BaseModel):
 class AuthResponse(BaseModel):
     success: bool
     message: str
-    user_id: Optional[int] = None
-    is_setup_complete: Optional[bool] = None
+    user_id: int | None = None
+    is_setup_complete: bool | None = None
 
 
 class UserResponse(BaseModel):
-    user: Dict[str, Any]
+    user: dict[str, Any]
 
 
 class SetupStatusResponse(BaseModel):
     is_setup_complete: bool
     llm_configured: bool
-    integrations_configured: Dict[str, bool]
+    integrations_configured: dict[str, bool]
     missing_requirements: list[str]
     setup_progress_percentage: float
 
@@ -123,8 +122,8 @@ async def get_db():
         clean_url = clean_url.replace("&channel_binding=require", "")
     elif "?channel_binding=require" in clean_url:
         clean_url = clean_url.replace("?channel_binding=require", "")
-    
-    logger.debug(f"Connecting to database...")
+
+    logger.debug("Connecting to database...")
     return await asyncpg.connect(clean_url)
 
 
@@ -138,17 +137,18 @@ async def firebase_sign_in(
     try:
         # Ensure we're using the Firebase user's actual UID
         uid = firebase_user.uid
-        
+
         # Check if user exists
         user = await conn.fetchrow(
             "SELECT id, firebase_uid, is_setup_complete FROM users WHERE firebase_uid = $1 OR email = $2",
             uid,
             firebase_user.email or request.email
         )
-        
+
         if not user:
             # User doesn't exist in our database, create them
             logger.info(f"Creating new user for Firebase UID: {uid}")
+
             user_id = await conn.fetchval(
                 """
                 INSERT INTO users (
@@ -166,7 +166,7 @@ async def firebase_sign_in(
                 datetime.utcnow(),
                 datetime.utcnow()
             )
-            
+
             # Create setup requirements record
             await conn.execute(
                 """
@@ -182,7 +182,7 @@ async def firebase_sign_in(
                 datetime.utcnow(),
                 datetime.utcnow()
             )
-            
+
             return AuthResponse(
                 success=True,
                 message="Sign in successful",
@@ -205,23 +205,23 @@ async def firebase_sign_in(
                 is_setup_complete=user['is_setup_complete']
             )
         else:
-            # User exists with firebase_uid, just update last login
+            # User exists with firebase_uid
             logger.info(f"User {user['id']} signing in")
-        
+
         # Update last login
         await conn.execute(
             "UPDATE users SET updated_at = $1 WHERE id = $2",
             datetime.utcnow(),
             user['id']
         )
-        
+
         return AuthResponse(
             success=True,
             message="Sign in successful",
             user_id=user['id'],
             is_setup_complete=user['is_setup_complete'] or False
         )
-        
+
     except Exception as e:
         logger.error(f"Firebase sign in error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -240,14 +240,14 @@ async def firebase_sign_up(
     try:
         # Use the Firebase user's actual UID
         uid = firebase_user.uid
-        
+
         # Check if user already exists
         existing_user = await conn.fetchrow(
             "SELECT id, firebase_uid FROM users WHERE firebase_uid = $1 OR email = $2",
             uid,
             firebase_user.email or request.email
         )
-        
+
         if existing_user:
             # User already exists
             logger.info(f"User already exists with ID: {existing_user['id']}")
@@ -266,10 +266,10 @@ async def firebase_sign_up(
                 user_id=existing_user['id'],
                 is_setup_complete=False
             )
-        
+
         # Create new user with Firebase UID (password_hash is required, so set a placeholder)
         logger.info(f"Creating new user with Firebase UID: {uid}, email: {firebase_user.email or request.email}")
-        
+
         # Start a transaction to ensure atomicity
         async with conn.transaction():
             user_id = await conn.fetchval(
@@ -290,7 +290,7 @@ async def firebase_sign_up(
                 datetime.utcnow()
             )
             logger.info(f"Successfully created user with ID: {user_id}")
-            
+
             # Create setup requirements record
             try:
                 await conn.execute(
@@ -310,16 +310,16 @@ async def firebase_sign_up(
             except Exception as req_error:
                 logger.warning(f"Failed to create setup requirements: {req_error}")
                 # Continue anyway - the user was created successfully
-        
+
         logger.info(f"Successfully created setup requirements for user {user_id}")
-        
+
         return AuthResponse(
             success=True,
             message="Account created successfully",
             user_id=user_id,
             is_setup_complete=False
         )
-        
+
     except asyncpg.UniqueViolationError as e:
         logger.error(f"Unique constraint violation during signup: {e}")
         # Try to find the existing user
@@ -361,16 +361,16 @@ async def get_current_user(
         user = await conn.fetchrow(
             """
             SELECT id, firebase_uid, email, name, llm_provider, 
-                   is_setup_complete, created_at, team_id
+                   is_setup_complete, created_at
             FROM users 
             WHERE firebase_uid = $1
             """,
             firebase_user.uid
         )
-        
+
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        
+
         return UserResponse(
             user={
                 "id": user['id'],
@@ -379,11 +379,10 @@ async def get_current_user(
                 "name": user['name'],
                 "llm_provider": user['llm_provider'],
                 "is_setup_complete": user['is_setup_complete'],
-                "created_at": user['created_at'].isoformat() if user['created_at'] else None,
-                "team_id": user['team_id']
+                "created_at": user['created_at'].isoformat() if user['created_at'] else None
             }
         )
-        
+
     except Exception as e:
         logger.error(f"Get current user error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -403,10 +402,10 @@ async def get_setup_status(
             "SELECT id, is_setup_complete FROM users WHERE firebase_uid = $1",
             firebase_user.uid
         )
-        
+
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        
+
         # Get setup requirements
         requirements_rows = await conn.fetch(
             """
@@ -416,7 +415,7 @@ async def get_setup_status(
             """,
             user['id']
         )
-        
+
         # Convert to dict
         requirements = {
             'llm_provider_configured': False,
@@ -425,7 +424,7 @@ async def get_setup_status(
             'github_configured': False,
             'notion_configured': False
         }
-        
+
         for row in requirements_rows:
             if row['requirement_type'] == 'llm_config':
                 requirements['llm_provider_configured'] = row['is_completed']
@@ -437,7 +436,7 @@ async def get_setup_status(
                 requirements['github_configured'] = row['is_completed']
             elif row['requirement_type'] == 'notion':
                 requirements['notion_configured'] = row['is_completed']
-        
+
         if not requirements:
             # Create default requirements if not exist
             await conn.execute(
@@ -451,7 +450,7 @@ async def get_setup_status(
                 ($1, 'kubernetes', false, true, $2, $3)
                 """,
                 user['id'],
-                datetime.utcnow(), 
+                datetime.utcnow(),
                 datetime.utcnow()
             )
             requirements = {
@@ -461,12 +460,12 @@ async def get_setup_status(
                 'github_configured': False,
                 'notion_configured': False
             }
-        
+
         # Calculate setup progress
         required_items = ['llm_provider_configured', 'pagerduty_configured', 'kubernetes_configured']
         completed_required = sum(1 for item in required_items if requirements.get(item, False))
         progress = (completed_required / len(required_items)) * 100
-        
+
         # Determine missing requirements
         missing = []
         if not requirements['llm_provider_configured']:
@@ -475,7 +474,7 @@ async def get_setup_status(
             missing.append('pagerduty')
         if not requirements['kubernetes_configured']:
             missing.append('kubernetes')
-        
+
         return SetupStatusResponse(
             is_setup_complete=user['is_setup_complete'] or False,
             llm_configured=requirements['llm_provider_configured'] or False,
@@ -488,7 +487,7 @@ async def get_setup_status(
             missing_requirements=missing,
             setup_progress_percentage=progress
         )
-        
+
     except Exception as e:
         logger.error(f"Get setup status error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

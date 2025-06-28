@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUser } from '@/lib/db/queries';
-import { getUserWithTeam } from '@/lib/db/queries';
 import { getDashboardMetrics } from '@/lib/db/dashboard-queries';
 
 // Force dynamic rendering to prevent build-time database access
@@ -13,12 +12,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userWithTeam = await getUserWithTeam(user.id);
-    if (!userWithTeam?.teamId) {
-      return NextResponse.json({ error: 'User not part of a team' }, { status: 400 });
-    }
-
-    const metrics = await getDashboardMetrics(userWithTeam.teamId);
+    const metrics = await getDashboardMetrics();
     
     return NextResponse.json(metrics);
   } catch (error) {

@@ -147,6 +147,38 @@ async def list_integrations() -> list[Integration]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/templates")
+async def get_integration_templates() -> JSONResponse:
+    """Get configuration templates for each integration type."""
+    templates = {
+        "pagerduty": {
+            "integration_url": "https://events.pagerduty.com/integration/YOUR_INTEGRATION_KEY/enqueue",
+            "webhook_secret": "optional_webhook_secret_for_verification"
+        },
+        "kubernetes": {
+            "contexts": ["production-cluster", "staging-cluster"],
+            "namespaces": {"production-cluster": "default", "staging-cluster": "default"},
+            "enable_destructive_operations": False,
+            "kubeconfig_path": "~/.kube/config"
+        },
+        "github": {
+            "token": "ghp_YOUR_PERSONAL_ACCESS_TOKEN",
+            "organization": "your-org",
+            "repositories": ["repo1", "repo2"]
+        },
+        "notion": {
+            "token": "secret_YOUR_NOTION_INTEGRATION_TOKEN",
+            "workspace_id": "YOUR_WORKSPACE_ID"
+        },
+        "grafana": {
+            "url": "https://your-grafana-instance.com",
+            "api_key": "YOUR_GRAFANA_API_KEY"
+        }
+    }
+
+    return JSONResponse(content={"templates": templates})
+
+
 @router.get("/available")
 async def get_available_integrations() -> JSONResponse:
     """Get list of available integrations that can be added."""

@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { CopyIcon, CheckCircle2, AlertCircle, Loader2, ExternalLink } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { toast } from 'sonner';
+import { useDevAutofill } from '@/lib/hooks/use-dev-autofill';
 
 interface IntegrationSetupModalProps {
   integration: {
@@ -52,6 +53,8 @@ export function IntegrationSetupModal({
   const [testResult, setTestResult] = useState<any>(null);
   const [requirements, setRequirements] = useState<any>(null);
   const [template, setTemplate] = useState<any>(null);
+  
+  const { isDevMode, getDevConfig, autofillForm } = useDevAutofill(integration?.type);
 
   useEffect(() => {
     if (isOpen && integration) {
@@ -70,8 +73,17 @@ export function IntegrationSetupModal({
       setRequirements(reqResponse.data);
       setTemplate(templateResponse.data.templates[integration.type] || {});
       
-      // Initialize config with template
-      setConfig(templateResponse.data.templates[integration.type] || {});
+      // Initialize config with template or dev config
+      if (isDevMode) {
+        const devConfig = getDevConfig(integration.type);
+        if (devConfig) {
+          setConfig(devConfig);
+        } else {
+          setConfig(templateResponse.data.templates[integration.type] || {});
+        }
+      } else {
+        setConfig(templateResponse.data.templates[integration.type] || {});
+      }
     } catch (error) {
       console.error('Failed to fetch integration details:', error);
     }
@@ -119,6 +131,7 @@ export function IntegrationSetupModal({
   };
 
   const handleSave = () => {
+    console.log('Save button clicked', { integration, config });
     onSave(config);
   };
 
@@ -143,7 +156,14 @@ export function IntegrationSetupModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Setup {integration.name} Integration</DialogTitle>
+          <DialogTitle className="flex items-center justify-between">
+            <span>Setup {integration.name} Integration</span>
+            {isDevMode && (
+              <Badge variant="outline" className="ml-2 bg-yellow-50 border-yellow-300 text-yellow-800">
+                DEV MODE
+              </Badge>
+            )}
+          </DialogTitle>
           <DialogDescription>
             {integration.description}
           </DialogDescription>
@@ -314,11 +334,14 @@ function KubernetesConfig({ config, onChange, requirements }: any) {
     setIsDiscovering(true);
     try {
       const response = await apiClient.get('/api/v1/integrations/kubernetes/discover');
-      setContexts(response.data.contexts || []);
+      const contextObjects = response.data.contexts || [];
+      // Extract just the context names
+      const contextNames = contextObjects.map((ctx: any) => ctx.name);
+      setContexts(contextNames);
       
       // Initialize config with discovered contexts
-      if (response.data.contexts?.length > 0) {
-        const selectedContexts = response.data.contexts.slice(0, 1); // Select first by default
+      if (contextNames.length > 0) {
+        const selectedContexts = contextNames.slice(0, 1); // Select first by default
         const namespaces: any = {};
         selectedContexts.forEach((ctx: string) => {
           namespaces[ctx] = 'default';

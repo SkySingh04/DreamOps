@@ -1,8 +1,7 @@
 """API Key management router."""
 
-from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
 from ...models.api_key import (
@@ -46,10 +45,10 @@ async def create_api_key(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("", response_model=List[APIKey])
+@router.get("", response_model=list[APIKey])
 async def list_api_keys(
     service: APIKeyService = Depends(get_api_key_service)
-) -> List[APIKey]:
+) -> list[APIKey]:
     """List all API keys (with masked values)."""
     try:
         keys = service.list_keys()
@@ -142,12 +141,12 @@ async def validate_api_key(
     key_data = service.get_key(key_id)
     if not key_data:
         raise HTTPException(status_code=404, detail="API key not found")
-    
+
     # Get the actual key for validation
     actual_key = service.get_actual_key(key_id)
     if not actual_key:
         raise HTTPException(status_code=404, detail="API key not found")
-    
+
     # Validate based on provider
     try:
         if key_data.provider == LLMProvider.ANTHROPIC:
@@ -161,7 +160,7 @@ async def validate_api_key(
                         "anthropic-version": "2023-06-01"
                     }
                 )
-                
+
                 if response.status_code == 401:
                     # Invalid key
                     background_tasks.add_task(
@@ -195,7 +194,7 @@ async def validate_api_key(
                         status_code=400,
                         content={"valid": False, "error": error_msg}
                     )
-        
+
         elif key_data.provider == LLMProvider.OPENAI:
             # Test with OpenAI API
             import httpx
@@ -206,7 +205,7 @@ async def validate_api_key(
                         "Authorization": f"Bearer {actual_key}"
                     }
                 )
-                
+
                 if response.status_code == 401:
                     background_tasks.add_task(
                         service.record_key_usage,
@@ -237,14 +236,14 @@ async def validate_api_key(
                         status_code=400,
                         content={"valid": False, "error": error_msg}
                     )
-        
+
         else:
             # Provider not yet supported for validation
             return JSONResponse(content={
                 "valid": "unknown",
                 "message": f"Validation not implemented for {key_data.provider}"
             })
-            
+
     except Exception as e:
         logger.error(f"Failed to validate API key: {e}")
         background_tasks.add_task(
@@ -267,10 +266,10 @@ async def get_active_key_status(
             status_code=404,
             content={"error": "No active API key configured"}
         )
-    
+
     key_id, _, provider = active_key
     key_details = service.get_key(key_id)
-    
+
     return JSONResponse(content={
         "active_key_id": key_id,
         "provider": provider,

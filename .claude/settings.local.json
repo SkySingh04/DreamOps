@@ -59,7 +59,9 @@
       "Bash(cat:*)",
       "Bash(mkdir:*)",
       "Bash(npx tsc:*)",
-      "Bash(git rebase:*)"
+      "Bash(git rebase:*)",
+      "Bash(kill:*)",
+      "Bash(pnpm dev:*)"
     ],
     "deny": []
   }
