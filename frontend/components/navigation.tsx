@@ -16,22 +16,20 @@ import {
   Activity,
   Shield,
   X,
-  Home
+  Home,
+  LogOut,
+  User as UserIcon
 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
+  DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { signOut } from '@/app/(login)/actions';
 import { useRouter } from 'next/navigation';
-import { User } from '@/lib/db/schema';
-import useSWR, { mutate } from 'swr';
-import { LogOut } from 'lucide-react';
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+import { useAuth } from '@/lib/firebase/auth-context';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', hideWhenLoggedOut: true },
@@ -45,12 +43,11 @@ export function Navigation() {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const { data: user } = useSWR<User>('/api/user', fetcher);
+  const { user, signOut: firebaseSignOut, loading } = useAuth();
   const router = useRouter();
 
   async function handleSignOut() {
-    await signOut();
-    mutate('/api/user');
+    await firebaseSignOut();
     router.push('/');
   }
 
@@ -89,7 +86,11 @@ export function Navigation() {
 
           {/* User Menu / Auth Buttons */}
           <div className="flex items-center space-x-4">
-            {!user ? (
+            {loading ? (
+              <div className="animate-pulse">
+                <div className="h-8 w-8 bg-gray-200 rounded-full"></div>
+              </div>
+            ) : !user ? (
               <>
                 <Link
                   href="/pricing"
@@ -106,19 +107,30 @@ export function Navigation() {
               </>
             ) : (
               <DropdownMenu open={isUserMenuOpen} onOpenChange={setIsUserMenuOpen}>
-                <DropdownMenuTrigger>
-                  <Avatar className="cursor-pointer size-8">
-                    <AvatarImage alt={user.name || ''} />
-                    <AvatarFallback>
-                      {user.email
-                        .split(' ')
-                        .map((n) => n[0])
-                        .join('')
-                        .toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="flex items-center gap-2">
+                    <Avatar className="size-8">
+                      <AvatarImage src={user.photoURL || undefined} alt={user.displayName || user.email || ''} />
+                      <AvatarFallback className="bg-orange-100 text-orange-700">
+                        {(user.displayName || user.email || 'U')
+                          .split(' ')
+                          .map((n) => n[0])
+                          .join('')
+                          .toUpperCase()
+                          .slice(0, 2)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="hidden sm:inline-block text-sm font-medium">
+                      {user.displayName || user.email?.split('@')[0] || 'User'}
+                    </span>
+                  </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuContent align="end" className="w-56">
+                  <div className="px-2 py-1.5">
+                    <p className="text-sm font-medium">{user.displayName || 'User'}</p>
+                    <p className="text-xs text-gray-500">{user.email}</p>
+                  </div>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <Link href="/dashboard" className="w-full cursor-pointer">
                       <LayoutDashboard className="mr-2 h-4 w-4" />
@@ -131,7 +143,8 @@ export function Navigation() {
                       Settings
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-red-600">
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-red-600 focus:text-red-700 focus:bg-red-50">
                     <LogOut className="mr-2 h-4 w-4" />
                     Sign Out
                   </DropdownMenuItem>
@@ -177,7 +190,25 @@ export function Navigation() {
                 </div>
               </Link>
             ))}
-            {!user && (
+            {user ? (
+              <div className="border-t border-gray-200 mt-2 pt-2">
+                <div className="px-3 py-2">
+                  <p className="text-sm font-medium text-gray-900">{user.displayName || 'User'}</p>
+                  <p className="text-xs text-gray-500">{user.email}</p>
+                </div>
+                <Button
+                  onClick={() => {
+                    handleSignOut();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  variant="ghost"
+                  className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 mt-2"
+                >
+                  <LogOut className="h-5 w-5 mr-2" />
+                  Sign Out
+                </Button>
+              </div>
+            ) : (
               <>
                 <Link
                   href="/pricing"

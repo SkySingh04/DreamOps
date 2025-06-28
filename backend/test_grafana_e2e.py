@@ -10,8 +10,7 @@ from pathlib import Path
 # Add the src directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from oncall_agent.agent import OncallAgent
-from oncall_agent.models import PagerAlert
+from oncall_agent.agent import OncallAgent, PagerAlert
 from oncall_agent.config import get_config
 from oncall_agent.utils.logger import setup_logging
 
@@ -49,7 +48,7 @@ async def test_grafana_with_agent():
     
     # Create agent
     print("\n📡 Initializing OnCall Agent...")
-    agent = OnCallAgent(config)
+    agent = OncallAgent(config)
     
     try:
         # Initialize agent (this will connect integrations)

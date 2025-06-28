@@ -12,15 +12,31 @@ import {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+// Dynamically import Firebase auth to avoid SSR issues
+let firebaseAuth: any = null;
+if (typeof window !== 'undefined') {
+  import('./firebase/config').then(module => {
+    firebaseAuth = module.auth;
+  });
+}
+
 class APIClient {
   private baseURL: string;
-  private headers: HeadersInit;
 
   constructor() {
     this.baseURL = API_BASE_URL;
-    this.headers = {
-      'Content-Type': 'application/json',
-    };
+  }
+
+  private async getAuthToken(): Promise<string | null> {
+    try {
+      if (firebaseAuth && firebaseAuth.currentUser) {
+        return await firebaseAuth.currentUser.getIdToken();
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting auth token:', error);
+      return null;
+    }
   }
 
   private async request<T>(
@@ -28,18 +44,27 @@ class APIClient {
     options: RequestInit = {}
   ): Promise<APIResponse<T>> {
     try {
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      };
+
+      // Add authorization header
+      const token = await this.getAuthToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${this.baseURL}${endpoint}`, {
         ...options,
-        headers: {
-          ...this.headers,
-          ...options.headers,
-        },
+        headers,
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error?.message || 'API request failed');
+        console.error(`API Error ${response.status}:`, data);
+        throw new Error(data.detail || data.error?.message || 'API request failed');
       }
 
       return {
@@ -56,29 +81,29 @@ class APIClient {
     }
   }
 
-  // Generic HTTP methods for flexibility
-  async get<T = any>(endpoint: string): Promise<APIResponse<T>> {
-    return this.request<T>(endpoint);
+  // Convenience methods
+  async get<T = any>(endpoint: string, options?: RequestInit): Promise<APIResponse<T>> {
+    return this.request<T>(endpoint, { ...options, method: 'GET' });
   }
 
-  async post<T = any>(endpoint: string, body?: any): Promise<APIResponse<T>> {
+  async post<T = any>(endpoint: string, data?: any, options?: RequestInit): Promise<APIResponse<T>> {
     return this.request<T>(endpoint, {
+      ...options,
       method: 'POST',
-      body: body ? JSON.stringify(body) : undefined,
+      body: data ? JSON.stringify(data) : undefined,
     });
   }
 
-  async put<T = any>(endpoint: string, body?: any): Promise<APIResponse<T>> {
+  async put<T = any>(endpoint: string, data?: any, options?: RequestInit): Promise<APIResponse<T>> {
     return this.request<T>(endpoint, {
+      ...options,
       method: 'PUT',
-      body: body ? JSON.stringify(body) : undefined,
+      body: data ? JSON.stringify(data) : undefined,
     });
   }
 
-  async delete<T = any>(endpoint: string): Promise<APIResponse<T>> {
-    return this.request<T>(endpoint, {
-      method: 'DELETE',
-    });
+  async delete<T = any>(endpoint: string, options?: RequestInit): Promise<APIResponse<T>> {
+    return this.request<T>(endpoint, { ...options, method: 'DELETE' });
   }
 
   // Dashboard endpoints

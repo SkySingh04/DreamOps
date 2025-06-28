@@ -18,6 +18,8 @@ from src.oncall_agent.api.routers import (
     agent_router,
     analytics_router,
     api_keys,
+    auth,
+    auth_setup,
     dashboard_router,
     incidents_router,
     integrations_router,
@@ -25,6 +27,7 @@ from src.oncall_agent.api.routers import (
     security_router,
     settings_router,
     team_integrations,
+    firebase_auth,
 )
 from src.oncall_agent.config import get_config
 from src.oncall_agent.utils import get_logger, setup_logging
@@ -87,6 +90,14 @@ async def log_requests(request: Request, call_next):
     """Log all incoming requests for debugging."""
     # Log request details
     logger.info(f"Incoming request: {request.method} {request.url.path}")
+    
+    # Log authorization header for debugging authentication issues
+    auth_header = request.headers.get("authorization")
+    if request.url.path.startswith("/api/v1/auth/"):
+        logger.info(f"Auth endpoint called: {request.url.path}")
+        logger.info(f"Authorization header present: {bool(auth_header)}")
+        if auth_header:
+            logger.info(f"Authorization header format: {auth_header[:20]}...")
 
     # Log webhook requests in detail
     if request.url.path == "/webhook/pagerduty":
@@ -125,6 +136,20 @@ async def root():
             "kubernetes_integration": config.k8s_enabled,
         }
     }
+
+
+@app.get("/routes")
+async def list_routes():
+    """List all registered routes for debugging."""
+    routes = []
+    for route in app.routes:
+        if hasattr(route, "path") and hasattr(route, "methods"):
+            routes.append({
+                "path": route.path,
+                "methods": list(route.methods),
+                "name": route.name
+            })
+    return {"routes": sorted(routes, key=lambda x: x["path"])}
 
 
 @app.get("/health")
@@ -171,6 +196,10 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Include routers
 # Always include core routers
+# Note: Both firebase_auth and auth_setup have /api/v1/auth prefix
+# FastAPI will merge routes from both routers under the same prefix
+app.include_router(firebase_auth.router)  # Firebase auth endpoints
+app.include_router(auth_setup.router)  # Auth and setup flow endpoints
 app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(incidents_router, prefix="/api/v1")
 app.include_router(agent_router, prefix="/api/v1")

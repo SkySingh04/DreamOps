@@ -23,7 +23,7 @@ export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
   // Default credentials
   const defaultCredentials = mode === 'signin' 
     ? { email: 'admin@oncall.ai', password: 'AdminPass123!' }
-    : { email: 'user@example.com', password: 'TestPass123!' };
+    : { email: 'admin@oncall.ai', password: 'AdminPass123!' };
 
   return (
     <div className="min-h-[100dvh] flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
