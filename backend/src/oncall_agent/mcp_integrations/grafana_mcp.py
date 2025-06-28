@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import os
 import subprocess
 from datetime import datetime
 from typing import Any
@@ -188,7 +187,7 @@ class GrafanaMCPIntegration(MCPIntegration):
             raise RuntimeError("MCP process streams not available")
 
         message_id = self._generate_message_id()
-        
+
         # Create tool call message
         tool_message = {
             "jsonrpc": "2.0",
@@ -210,18 +209,18 @@ class GrafanaMCPIntegration(MCPIntegration):
             asyncio.create_task(asyncio.to_thread(self.process.stdout.readline)),
             timeout=10.0
         )
-        
+
         if not response_line:
             raise RuntimeError(f"No response for tool call: {tool_name}")
 
         response = json.loads(response_line.decode().strip())
-        
+
         if "error" in response:
             raise RuntimeError(f"MCP tool error: {response['error']}")
-        
+
         if "result" in response:
             return response["result"]
-        
+
         raise RuntimeError(f"Invalid response for tool call: {tool_name}")
 
     async def disconnect(self) -> None:
@@ -348,7 +347,7 @@ class GrafanaMCPIntegration(MCPIntegration):
                         "folder_id": kwargs.get("folder_id"),
                         "tags": kwargs.get("tags", [])
                     })
-                    
+
                     # Extract dashboards from MCP response
                     if isinstance(result, dict) and "content" in result:
                         for content in result["content"]:
@@ -360,12 +359,12 @@ class GrafanaMCPIntegration(MCPIntegration):
                                         "dashboards": dashboards,
                                         "count": len(dashboards) if isinstance(dashboards, list) else 0
                                     }
-                    
+
                     return {"dashboards": [], "count": 0}
-                    
+
                 except Exception as e:
                     self.logger.warning(f"MCP call failed, falling back to direct API: {e}")
-            
+
             # Fall back to direct API
             if not self.client:
                 raise ConnectionError("Client not initialized")
@@ -394,7 +393,7 @@ class GrafanaMCPIntegration(MCPIntegration):
                         "end": kwargs.get("end", "now"),
                         "step": kwargs.get("step", "15s")
                     })
-                    
+
                     # Extract metrics from MCP response
                     if isinstance(result, dict) and "content" in result:
                         for content in result["content"]:
@@ -402,12 +401,12 @@ class GrafanaMCPIntegration(MCPIntegration):
                                 resource = content["resource"]
                                 if "metrics" in resource:
                                     return resource["metrics"]
-                    
+
                     return {}
-                    
+
                 except Exception as e:
                     self.logger.warning(f"MCP call failed, falling back to direct API: {e}")
-            
+
             # Fall back to direct API
             if not self.client:
                 raise ConnectionError("Client not initialized")
@@ -437,7 +436,7 @@ class GrafanaMCPIntegration(MCPIntegration):
                     result = await self._call_mcp_tool("list_alerts", {
                         "state": kwargs.get("state", "")
                     })
-                    
+
                     # Extract alerts from MCP response
                     if isinstance(result, dict) and "content" in result:
                         for content in result["content"]:
@@ -445,12 +444,12 @@ class GrafanaMCPIntegration(MCPIntegration):
                                 resource = content["resource"]
                                 if "alerts" in resource:
                                     return {"alerts": resource["alerts"]}
-                    
+
                     return {"alerts": []}
-                    
+
                 except Exception as e:
                     self.logger.warning(f"MCP call failed, falling back to direct API: {e}")
-            
+
             # Fall back to direct API
             if not self.client:
                 raise ConnectionError("Client not initialized")

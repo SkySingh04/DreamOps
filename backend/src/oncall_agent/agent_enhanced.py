@@ -16,7 +16,7 @@ from .frontend_integration import (
     send_ai_action_to_dashboard,
 )
 from .mcp_integrations.base import MCPIntegration
-from .mcp_integrations.kubernetes_mcp import KubernetesMCPServerIntegration
+from .mcp_integrations.kubernetes_mcp_only import KubernetesMCPOnlyIntegration
 from .pagerduty_client import (
     acknowledge_pagerduty_incident,
     resolve_pagerduty_incident,
@@ -53,7 +53,7 @@ class EnhancedOncallAgent:
             self.agent_executor = AgentExecutor(None)
 
             # Still keep k8s_mcp for context gathering if needed
-            self.k8s_mcp = KubernetesMCPServerIntegration()
+            self.k8s_mcp = KubernetesMCPOnlyIntegration()
             self.register_mcp_integration("kubernetes_mcp", self.k8s_mcp)
 
             # Initialize resolvers

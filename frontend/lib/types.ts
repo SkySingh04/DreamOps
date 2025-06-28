@@ -2,7 +2,7 @@
 
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
 export type IncidentStatus = 'active' | 'resolved' | 'monitoring' | 'acknowledged';
-export type IntegrationStatus = 'connected' | 'error' | 'pending' | 'disconnected';
+export type IntegrationStatus = 'connected' | 'error' | 'pending' | 'disconnected' | 'not_configured';
 export type AIMode = 'yolo' | 'plan' | 'approval';
 export type RiskLevel = 'low' | 'medium' | 'high';
 

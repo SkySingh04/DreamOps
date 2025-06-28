@@ -29,6 +29,22 @@ INTEGRATION_CONFIGS: dict[str, IntegrationConfig] = {
             "kubeconfig_path": "/etc/kubernetes/config"
         }
     ),
+    "kubernetes_mcp": IntegrationConfig(
+        enabled=True,
+        config={
+            "cluster": "production",
+            "namespace": "default",
+            "kubeconfig_path": "/etc/kubernetes/config"
+        }
+    ),
+    "notion": IntegrationConfig(
+        enabled=False,
+        config={
+            "token": "",
+            "database_id": "",
+            "version": "2022-06-28"
+        }
+    ),
     "github": IntegrationConfig(
         enabled=True,
         config={
@@ -161,6 +177,45 @@ async def get_integration_templates() -> JSONResponse:
     }
 
     return JSONResponse(content={"templates": templates})
+
+
+@router.get("/available")
+async def get_available_integrations() -> JSONResponse:
+    """Get list of available integrations that can be added."""
+    available = [
+        {
+            "name": "prometheus",
+            "description": "Prometheus monitoring and alerting",
+            "category": "monitoring",
+            "status": "available"
+        },
+        {
+            "name": "jira",
+            "description": "Jira issue tracking",
+            "category": "ticketing",
+            "status": "available"
+        },
+        {
+            "name": "opsgenie",
+            "description": "OpsGenie incident management",
+            "category": "incident_management",
+            "status": "coming_soon"
+        },
+        {
+            "name": "aws",
+            "description": "AWS services integration",
+            "category": "cloud",
+            "status": "available"
+        },
+        {
+            "name": "grafana",
+            "description": "Grafana dashboards and alerts",
+            "category": "monitoring",
+            "status": "available"
+        }
+    ]
+
+    return JSONResponse(content={"integrations": available})
 
 
 @router.get("/{integration_name}", response_model=Integration)
@@ -429,56 +484,17 @@ async def get_integration_logs(
     })
 
 
-@router.get("/available")
-async def get_available_integrations() -> JSONResponse:
-    """Get list of available integrations that can be added."""
-    available = [
-        {
-            "name": "prometheus",
-            "description": "Prometheus monitoring and alerting",
-            "category": "monitoring",
-            "status": "available"
-        },
-        {
-            "name": "jira",
-            "description": "Jira issue tracking",
-            "category": "ticketing",
-            "status": "available"
-        },
-        {
-            "name": "opsgenie",
-            "description": "OpsGenie incident management",
-            "category": "incident_management",
-            "status": "coming_soon"
-        },
-        {
-            "name": "aws",
-            "description": "AWS services integration",
-            "category": "cloud",
-            "status": "available"
-        },
-        {
-            "name": "grafana",
-            "description": "Grafana dashboards and alerts",
-            "category": "monitoring",
-            "status": "available"
-        }
-    ]
-
-    return JSONResponse(content={"integrations": available})
-
-
 # Kubernetes-specific endpoints
 @router.get("/kubernetes/discover")
 async def discover_kubernetes_contexts() -> JSONResponse:
     """Discover available Kubernetes contexts from kubeconfig."""
     try:
-        from src.oncall_agent.mcp_integrations.kubernetes_enhanced import (
-            EnhancedKubernetesMCPIntegration,
+        from src.oncall_agent.mcp_integrations.kubernetes_mcp_only import (
+            KubernetesMCPOnlyIntegration,
         )
 
         # Create temporary integration instance for discovery
-        k8s_integration = EnhancedKubernetesMCPIntegration()
+        k8s_integration = KubernetesMCPOnlyIntegration()
         contexts = await k8s_integration.discover_contexts()
 
         return JSONResponse(content={"contexts": contexts})
@@ -494,12 +510,12 @@ async def test_kubernetes_connection(
 ) -> JSONResponse:
     """Test connection to a specific Kubernetes cluster."""
     try:
-        from src.oncall_agent.mcp_integrations.kubernetes_enhanced import (
-            EnhancedKubernetesMCPIntegration,
+        from src.oncall_agent.mcp_integrations.kubernetes_mcp_only import (
+            KubernetesMCPOnlyIntegration,
         )
 
         # Create temporary integration instance for testing
-        k8s_integration = EnhancedKubernetesMCPIntegration()
+        k8s_integration = KubernetesMCPOnlyIntegration()
         test_result = await k8s_integration.test_connection(context_name, namespace)
 
         return JSONResponse(content=test_result)
@@ -690,12 +706,12 @@ async def verify_kubernetes_permissions(
 ) -> JSONResponse:
     """Verify RBAC permissions for a Kubernetes context."""
     try:
-        from src.oncall_agent.mcp_integrations.kubernetes_enhanced import (
-            EnhancedKubernetesMCPIntegration,
+        from src.oncall_agent.mcp_integrations.kubernetes_mcp_only import (
+            KubernetesMCPOnlyIntegration,
         )
 
         # Create temporary integration instance
-        k8s_integration = EnhancedKubernetesMCPIntegration()
+        k8s_integration = KubernetesMCPOnlyIntegration()
         permissions = await k8s_integration.verify_permissions(context_name)
 
         return JSONResponse(content=permissions)
@@ -710,12 +726,12 @@ async def get_kubernetes_cluster_info(
 ) -> JSONResponse:
     """Get detailed information about a Kubernetes cluster."""
     try:
-        from src.oncall_agent.mcp_integrations.kubernetes_enhanced import (
-            EnhancedKubernetesMCPIntegration,
+        from src.oncall_agent.mcp_integrations.kubernetes_mcp_only import (
+            KubernetesMCPOnlyIntegration,
         )
 
         # Create temporary integration instance
-        k8s_integration = EnhancedKubernetesMCPIntegration()
+        k8s_integration = KubernetesMCPOnlyIntegration()
         cluster_info = await k8s_integration.get_cluster_info(context_name)
 
         return JSONResponse(content=cluster_info)

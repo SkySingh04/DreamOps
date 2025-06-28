@@ -137,7 +137,7 @@ export default function IntegrationsSettingsPage() {
   const getIntegrationMetadata = (type: string): IntegrationMetadata => {
     return INTEGRATION_METADATA[type] || {
       type,
-      name: type.charAt(0).toUpperCase() + type.slice(1),
+      name: type ? (type.charAt(0).toUpperCase() + type.slice(1)) : 'Unknown',
       description: 'Integration',
       icon: '🔧',
       category: 'other'

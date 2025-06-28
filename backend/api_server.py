@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from src.oncall_agent.api import webhooks
 from src.oncall_agent.api.routers import (
+    admin_integrations,
     agent_logs,
     agent_router,
     analytics_router,
@@ -190,32 +191,137 @@ async def get_mcp_integrations():
     """Get MCP integration status for frontend."""
     try:
         integrations = []
+
+        # Define all available MCP integrations
+        available_mcp_integrations = {
+            "kubernetes_mcp": {
+                "name": "kubernetes_mcp",
+                "display_name": "Kubernetes MCP",
+                "description": "Kubernetes cluster management and monitoring",
+                "capabilities": {
+                    "context_types": ["pods", "deployments", "services", "events", "logs"],
+                    "actions": ["restart_pod", "scale_deployment", "rollback_deployment", "execute_kubectl"],
+                    "features": ["risk_assessment", "dry_run", "auto_approval"],
+                    "execution_modes": ["direct", "dry_run", "approval_required"],
+                    "risk_assessment": ["low", "medium", "high"],
+                    "command_types": ["get", "describe", "logs", "version", "cluster-info", "top", "api-resources", "explain", "scale", "rollout", "restart", "label", "annotate", "set", "expose", "delete", "apply", "create", "replace", "patch", "edit", "exec", "port-forward", "proxy", "drain", "cordon", "uncordon"]
+                }
+            },
+            "notion": {
+                "name": "notion",
+                "display_name": "Notion MCP",
+                "description": "Notion database integration for incident documentation",
+                "capabilities": {
+                    "context_types": ["pages", "databases", "blocks"],
+                    "actions": ["create_page", "update_page", "query_database", "search_content"],
+                    "features": ["documentation", "knowledge_base", "incident_logs"],
+                    "content_types": ["text", "code", "tables", "lists", "media"]
+                }
+            },
+            "github": {
+                "name": "github",
+                "display_name": "GitHub MCP",
+                "description": "GitHub repository and issue management",
+                "capabilities": {
+                    "context_types": ["repositories", "issues", "pull_requests", "commits", "actions"],
+                    "actions": ["create_issue", "update_issue", "create_pr", "merge_pr", "trigger_action"],
+                    "features": ["code_review", "issue_tracking", "ci_cd", "version_control"],
+                    "repository_operations": ["read", "write", "admin"]
+                }
+            },
+            "grafana": {
+                "name": "grafana",
+                "display_name": "Grafana MCP",
+                "description": "Grafana dashboards and alerting",
+                "capabilities": {
+                    "context_types": ["dashboards", "panels", "alerts", "datasources"],
+                    "actions": ["create_dashboard", "update_panel", "create_alert", "query_metrics"],
+                    "features": ["visualization", "alerting", "monitoring", "analytics"],
+                    "data_sources": ["prometheus", "influxdb", "elasticsearch", "mysql", "postgres"]
+                }
+            },
+            "pagerduty": {
+                "name": "pagerduty",
+                "display_name": "PagerDuty MCP",
+                "description": "PagerDuty incident management and escalation",
+                "capabilities": {
+                    "context_types": ["incidents", "services", "users", "schedules"],
+                    "actions": ["create_incident", "update_incident", "acknowledge", "resolve"],
+                    "features": ["incident_management", "escalation", "on_call", "notifications"],
+                    "incident_operations": ["create", "update", "acknowledge", "resolve", "escalate"]
+                }
+            },
+            "datadog": {
+                "name": "datadog",
+                "display_name": "Datadog MCP",
+                "description": "Datadog monitoring and APM",
+                "capabilities": {
+                    "context_types": ["metrics", "logs", "traces", "dashboards", "monitors"],
+                    "actions": ["query_metrics", "search_logs", "create_monitor", "update_dashboard"],
+                    "features": ["monitoring", "apm", "log_management", "alerting"],
+                    "data_types": ["metrics", "logs", "traces", "events"]
+                }
+            }
+        }
         
-        # Try to get agent instance
+        # Try to get agent instance for real status
         try:
-            from src.oncall_agent.api.webhooks import agent_trigger
+            from src.oncall_agent.api.webhooks import agent_trigger, get_agent_trigger
             if agent_trigger and hasattr(agent_trigger, 'agent') and agent_trigger.agent:
                 agent = agent_trigger.agent
-                
-                # Get MCP integrations from agent
-                for name, integration in agent.mcp_integrations.items():
-                    try:
+            else:
+                # Initialize agent if not already done
+                trigger = await get_agent_trigger()
+                agent = trigger.agent
+
+            # Get real status from agent if available
+            for mcp_name, mcp_info in available_mcp_integrations.items():
+                try:
+                    if agent and mcp_name in agent.mcp_integrations:
+                        integration = agent.mcp_integrations[mcp_name]
                         is_healthy = await integration.health_check()
+                        real_capabilities = await integration.get_capabilities()
                         integrations.append({
-                            "name": name,
-                            "capabilities": await integration.get_capabilities(),
-                            "connected": is_healthy
+                            "name": mcp_name,
+                            "display_name": mcp_info["display_name"],
+                            "description": mcp_info["description"],
+                            "capabilities": real_capabilities if real_capabilities else mcp_info["capabilities"],
+                            "connected": is_healthy,
+                            "configured": True
                         })
-                    except Exception as e:
-                        logger.error(f"Error checking integration {name}: {e}")
+                    else:
+                        # Show as available but not configured
                         integrations.append({
-                            "name": name,
-                            "capabilities": [],
-                            "connected": False
+                            "name": mcp_name,
+                            "display_name": mcp_info["display_name"],
+                            "description": mcp_info["description"],
+                            "capabilities": mcp_info["capabilities"],
+                            "connected": False,
+                            "configured": False
                         })
+                except Exception as e:
+                    logger.error(f"Error checking integration {mcp_name}: {e}")
+                    integrations.append({
+                        "name": mcp_name,
+                        "display_name": mcp_info["display_name"],
+                        "description": mcp_info["description"],
+                        "capabilities": mcp_info["capabilities"],
+                        "connected": False,
+                        "configured": False
+                    })
         except Exception as e:
             logger.error(f"Error getting agent instance: {e}")
-        
+            # Fallback: return all available integrations as not configured
+            for mcp_name, mcp_info in available_mcp_integrations.items():
+                integrations.append({
+                    "name": mcp_name,
+                    "display_name": mcp_info["display_name"],
+                    "description": mcp_info["description"],
+                    "capabilities": mcp_info["capabilities"],
+                    "connected": False,
+                    "configured": False
+                })
+
         return {"integrations": integrations}
     except Exception as e:
         logger.error(f"Error getting MCP integrations: {e}")
@@ -256,6 +362,7 @@ app.include_router(alert_tracking, prefix="/api/v1")
 app.include_router(alert_crud, prefix="/api/v1")
 app.include_router(api_keys.router)
 app.include_router(user_integrations.router)  # Already has /api/v1 prefix
+app.include_router(admin_integrations.router)  # Admin integration verification routes
 
 # Include dev config router only in development mode
 if os.getenv("NODE_ENV") == "development":

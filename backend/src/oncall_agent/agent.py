@@ -16,7 +16,7 @@ from .frontend_integration import (
 from .mcp_integrations.base import MCPIntegration
 from .mcp_integrations.github_mcp import GitHubMCPIntegration
 from .mcp_integrations.grafana_mcp import GrafanaMCPIntegration
-from .mcp_integrations.kubernetes import KubernetesMCPIntegration
+from .mcp_integrations.kubernetes_mcp_only import KubernetesMCPOnlyIntegration
 from .mcp_integrations.notion_direct import NotionDirectIntegration
 from .models.api_key import LLMProvider
 from .services.api_key_service import APIKeyService
@@ -72,39 +72,20 @@ class OncallAgent:
 
         # Initialize Kubernetes integration if enabled
         if self.config.k8s_enabled:
-            # Try to use enhanced integration if available
-            try:
-                from .mcp_integrations.kubernetes_enhanced import (
-                    EnhancedKubernetesMCPIntegration,
-                )
-                # Use enhanced integration with auto-discovery
-                context = self.config.k8s_context if self.config.k8s_context != "default" else None
-                self.k8s_integration = EnhancedKubernetesMCPIntegration(
-                    context_name=context,
-                    namespace=self.config.k8s_namespace
-                )
-                self.register_mcp_integration("kubernetes", self.k8s_integration)
-                self.logger.info("Using enhanced Kubernetes integration with auto-discovery")
-            except ImportError:
-                # Check if we should use the MCP server integration
-                use_enhanced = self.config.get("k8s_enable_destructive_operations", False)
-                if use_enhanced:
-                    try:
-                        from .mcp_integrations.kubernetes_mcp import (
-                            KubernetesMCPServerIntegration,
-                        )
-                        self.k8s_integration = KubernetesMCPServerIntegration()
-                        self.register_mcp_integration("kubernetes", self.k8s_integration)
-                        self.logger.info("Using enhanced K8s integration with command execution")
-                    except ImportError:
-                        # Fallback to basic integration
-                        self.k8s_integration = KubernetesMCPIntegration()
-                        self.register_mcp_integration("kubernetes", self.k8s_integration)
-                        self.logger.warning("Enhanced integration not available, using basic K8s integration")
-                else:
-                    self.k8s_integration = KubernetesMCPIntegration()
-                    self.register_mcp_integration("kubernetes", self.k8s_integration)
-                    self.logger.info("Using read-only K8s integration")
+            # Use MCP-only integration - no kubectl subprocess calls
+            contexts = []
+            if self.config.k8s_context and self.config.k8s_context != "default":
+                contexts = [self.config.k8s_context]
+            
+            enable_destructive = self.config.get("k8s_enable_destructive_operations", False)
+            
+            self.k8s_integration = KubernetesMCPOnlyIntegration(
+                contexts=contexts,
+                namespace=self.config.k8s_namespace,
+                enable_destructive_operations=enable_destructive
+            )
+            self.register_mcp_integration("kubernetes", self.k8s_integration)
+            self.logger.info("Using MCP-only Kubernetes integration (no kubectl subprocess calls)")
 
         # Initialize Notion integration if configured
         if self.config.notion_token:
@@ -113,6 +94,11 @@ class OncallAgent:
                 "database_id": self.config.notion_database_id,
                 "notion_version": self.config.notion_version
             })
+            self.register_mcp_integration("notion", self.notion_integration)
+        else:
+            # Register placeholder for Notion
+            from .mcp_integrations.placeholder import PlaceholderMCPIntegration
+            self.notion_integration = PlaceholderMCPIntegration("notion", "Notion integration requires NOTION_TOKEN and NOTION_DATABASE_ID")
             self.register_mcp_integration("notion", self.notion_integration)
 
         # Initialize Grafana integration if configured
@@ -127,6 +113,11 @@ class OncallAgent:
                 "server_port": self.config.grafana_mcp_port
             })
             self.register_mcp_integration("grafana", self.grafana_integration)
+        else:
+            # Register placeholder for Grafana
+            from .mcp_integrations.placeholder import PlaceholderMCPIntegration
+            self.grafana_integration = PlaceholderMCPIntegration("grafana", "Grafana integration requires GRAFANA_URL and GRAFANA_API_KEY")
+            self.register_mcp_integration("grafana", self.grafana_integration)
 
         # Initialize GitHub integration if configured
         if self.config.github_token:
@@ -136,6 +127,11 @@ class OncallAgent:
                 "server_host": self.config.github_mcp_host,
                 "server_port": self.config.github_mcp_port
             })
+            self.register_mcp_integration("github", self.github_integration)
+        else:
+            # Register placeholder for GitHub
+            from .mcp_integrations.placeholder import PlaceholderMCPIntegration
+            self.github_integration = PlaceholderMCPIntegration("github", "GitHub integration requires GITHUB_TOKEN")
             self.register_mcp_integration("github", self.github_integration)
 
     def register_mcp_integration(self, name: str, integration: MCPIntegration) -> None:
