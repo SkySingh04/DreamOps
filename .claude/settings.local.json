@@ -61,7 +61,10 @@
       "Bash(npx tsc:*)",
       "Bash(git rebase:*)",
       "Bash(kill:*)",
-      "Bash(pnpm dev:*)"
+      "Bash(pnpm dev:*)",
+      "Bash(npm --version)",
+      "Bash(npm search:*)",
+      "Bash(mcp-server-kubernetes:*)"
     ],
     "deny": []
   }

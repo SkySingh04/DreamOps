@@ -1,0 +1,130 @@
+{
+  "assessment_timestamp": "2025-06-28T17:57:15.211694",
+  "server_status": {
+    "available": false,
+    "binary_path": null,
+    "version": null,
+    "error_message": "kubernetes-mcp-server not found in PATH or standard locations"
+  },
+  "installation_options": [
+    {
+      "method": "npm",
+      "description": "Install via npm package manager",
+      "command": "npm install -g @modelcontextprotocol/server-kubernetes",
+      "requirements": [
+        "Node.js >= 16",
+        "npm"
+      ],
+      "estimated_time": "1-2 minutes"
+    },
+    {
+      "method": "docker",
+      "description": "Run as Docker container",
+      "command": "docker run -d --name k8s-mcp-server modelcontextprotocol/kubernetes-server",
+      "requirements": [
+        "Docker",
+        "Kubernetes config mounted"
+      ],
+      "estimated_time": "2-3 minutes"
+    },
+    {
+      "method": "github_release",
+      "description": "Download pre-built binary from GitHub releases",
+      "command": "curl -L https://github.com/modelcontextprotocol/servers/releases/latest/download/kubernetes-mcp-server-{os}-{arch} -o kubernetes-mcp-server",
+      "requirements": [
+        "curl or wget",
+        "GitHub access"
+      ],
+      "estimated_time": "1 minute"
+    },
+    {
+      "method": "source",
+      "description": "Build from source code",
+      "command": "git clone https://github.com/modelcontextprotocol/servers && cd servers/kubernetes && go build",
+      "requirements": [
+        "Go >= 1.19",
+        "git",
+        "make (optional)"
+      ],
+      "estimated_time": "3-5 minutes"
+    },
+    {
+      "method": "homebrew",
+      "description": "Install via Homebrew",
+      "command": "brew install modelcontextprotocol/tap/kubernetes-mcp-server",
+      "requirements": [
+        "Homebrew",
+        "macOS"
+      ],
+      "estimated_time": "2-3 minutes"
+    }
+  ],
+  "functionality_report": {
+    "startup_test": false,
+    "tool_listing": false,
+    "cluster_connection": false,
+    "basic_operations": {},
+    "advanced_operations": {},
+    "streaming_support": false,
+    "error_handling": false,
+    "overall_score": 0.0
+  },
+  "compatibility_report": {
+    "protocol_version_match": true,
+    "tool_interface_compatible": true,
+    "auth_flow_compatible": true,
+    "error_handling_compatible": true,
+    "performance_acceptable": false,
+    "latency_ms": 127.85673141479492,
+    "throughput_ops_per_sec": 7.821254218956868
+  },
+  "dependency_report": {
+    "all_satisfied": true,
+    "dependencies": {
+      "kubectl": {
+        "available": true,
+        "version": "v1.32.3",
+        "required": true
+      },
+      "kubeconfig": {
+        "available": true,
+        "path": "/Users/akashsingh/.kube/config",
+        "required": true
+      },
+      "nodejs": {
+        "available": true,
+        "version": "v23.11.0",
+        "required": false
+      },
+      "cluster_connectivity": {
+        "available": true,
+        "required": true
+      },
+      "rbac_permissions": {
+        "available": true,
+        "required": true
+      },
+      "mcp_client": {
+        "available": true,
+        "version": "unknown",
+        "required": true
+      }
+    },
+    "missing_dependencies": [],
+    "recommendations": []
+  },
+  "performance_benchmarks": {
+    "latency_ms": 127.85673141479492,
+    "throughput_ops_per_sec": 7.821254218956868,
+    "acceptable_for_incident_response": false
+  },
+  "recommendation": {
+    "go_no_go": "NO-GO",
+    "production_ready": false,
+    "reasons": [
+      "MCP server not installed or not found",
+      "Functionality score too low: 0.0%",
+      "Performance does not meet requirements"
+    ]
+  }
+}

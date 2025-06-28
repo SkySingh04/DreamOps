@@ -947,6 +947,7 @@ wheels = [
 ]
 
 [[package]]
+>>>>>>> 774ecf1b1c338af276393cc9d43c9fd0856a6504
 name = "gunicorn"
 version = "23.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1421,11 +1422,17 @@ dependencies = [
     { name = "anthropic" },
     { name = "asyncio" },
     { name = "asyncpg" },
+<<<<<<< HEAD
+=======
     { name = "bcrypt" },
+>>>>>>> 774ecf1b1c338af276393cc9d43c9fd0856a6504
     { name = "cryptography" },
     { name = "email-validator" },
     { name = "fastapi" },
+<<<<<<< HEAD
+=======
     { name = "firebase-admin" },
+>>>>>>> 774ecf1b1c338af276393cc9d43c9fd0856a6504
     { name = "gunicorn" },
     { name = "httpx" },
     { name = "kubernetes" },
@@ -1437,7 +1444,10 @@ dependencies = [
     { name = "python-multipart" },
     { name = "pyyaml" },
     { name = "requests" },
+<<<<<<< HEAD
+=======
     { name = "sqlalchemy" },
+>>>>>>> 774ecf1b1c338af276393cc9d43c9fd0856a6504
     { name = "sse-starlette" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -1458,11 +1468,17 @@ requires-dist = [
     { name = "anthropic", specifier = ">=0.54.0" },
     { name = "asyncio", specifier = ">=3.4.3" },
     { name = "asyncpg", specifier = ">=0.30.0" },
+<<<<<<< HEAD
+=======
     { name = "bcrypt", specifier = ">=4.3.0" },
+>>>>>>> 774ecf1b1c338af276393cc9d43c9fd0856a6504
     { name = "cryptography", specifier = ">=45.0.4" },
     { name = "email-validator", specifier = ">=2.0.0" },
     { name = "fastapi", specifier = ">=0.115.13" },
+<<<<<<< HEAD
+=======
     { name = "firebase-admin", specifier = ">=6.9.0" },
+>>>>>>> 774ecf1b1c338af276393cc9d43c9fd0856a6504
     { name = "gunicorn", specifier = ">=20.1.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "kubernetes", specifier = ">=30.1.0" },
@@ -1474,7 +1490,10 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.5" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "requests", specifier = ">=2.32.0" },
+<<<<<<< HEAD
+=======
     { name = "sqlalchemy", specifier = ">=2.0.0" },
+>>>>>>> 774ecf1b1c338af276393cc9d43c9fd0856a6504
     { name = "sse-starlette", specifier = ">=2.3.6" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.3" },
 ]

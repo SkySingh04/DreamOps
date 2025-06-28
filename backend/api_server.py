@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from src.oncall_agent.api import webhooks
 from src.oncall_agent.api.routers import (
+    admin_integrations,
     agent_logs,
     agent_router,
     analytics_router,
@@ -186,13 +187,13 @@ async def get_mcp_integrations():
     """Get MCP integration status for frontend."""
     try:
         integrations = []
-        
+
         # Try to get agent instance
         try:
             from src.oncall_agent.api.webhooks import agent_trigger
             if agent_trigger and hasattr(agent_trigger, 'agent') and agent_trigger.agent:
                 agent = agent_trigger.agent
-                
+
                 # Get MCP integrations from agent
                 for name, integration in agent.mcp_integrations.items():
                     try:
@@ -211,7 +212,7 @@ async def get_mcp_integrations():
                         })
         except Exception as e:
             logger.error(f"Error getting agent instance: {e}")
-        
+
         return {"integrations": integrations}
     except Exception as e:
         logger.error(f"Error getting MCP integrations: {e}")
@@ -248,6 +249,7 @@ app.include_router(monitoring_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
 app.include_router(api_keys.router)
 app.include_router(user_integrations.router)  # Already has /api/v1 prefix
+app.include_router(admin_integrations.router)  # Admin integration verification routes
 
 # Include dev config router only in development mode
 if os.getenv("NODE_ENV") == "development":

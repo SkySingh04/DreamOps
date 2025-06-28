@@ -26,45 +26,28 @@ class AgentExecutor:
         self.circuit_breaker = CircuitBreaker()
 
     async def execute_kubectl_direct(self, cmd: list[str], auto_approve: bool = False) -> dict[str, Any]:
-        """Execute kubectl command directly using subprocess."""
-        full_cmd = ["kubectl"] + cmd
-        self.logger.info(f"Executing kubectl command: {' '.join(full_cmd)}")
+        """Execute kubectl command via MCP server integration."""
+        self.logger.info(f"Executing command via MCP: {' '.join(cmd[:3])}...")
 
-        # Stream log for kubectl command
+        # Stream log for command
         await log_stream_manager.log_info(
-            f"🔨 Running kubectl: {' '.join(cmd[:3])}...",  # Show first 3 parts of command
-            action_type="kubectl_command",
-            metadata={"command": ' '.join(full_cmd), "auto_approve": auto_approve}
+            f"🔨 Running MCP command: {' '.join(cmd[:3])}...",  # Show first 3 parts of command
+            action_type="mcp_command",
+            metadata={"command": ' '.join(cmd), "auto_approve": auto_approve}
         )
 
-        try:
-            result = subprocess.run(
-                full_cmd,
-                capture_output=True,
-                text=True,
-                timeout=30
+        # Use MCP integration if available
+        if self.k8s_integration:
+            return await self.k8s_integration.execute_kubectl_command(
+                cmd, 
+                dry_run=False,
+                auto_approve=auto_approve
             )
-
-            success = result.returncode == 0
-            output = result.stdout if success else result.stderr
-
-            return {
-                "success": success,
-                "output": output,
-                "error": result.stderr if not success else None,
-                "command": " ".join(full_cmd)
-            }
-        except subprocess.TimeoutExpired:
+        else:
             return {
                 "success": False,
-                "error": "Command timed out after 30 seconds",
-                "command": " ".join(full_cmd)
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "error": str(e),
-                "command": " ".join(full_cmd)
+                "error": "No Kubernetes MCP integration available. Please ensure mcp-server-kubernetes is installed.",
+                "command": " ".join(cmd)
             }
 
     async def execute_remediation_plan(

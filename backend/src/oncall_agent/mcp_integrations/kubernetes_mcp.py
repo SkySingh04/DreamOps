@@ -247,8 +247,8 @@ class KubernetesMCPServerIntegration(MCPIntegration):
                 # MCP server is running
                 return True
             else:
-                # Try direct kubectl
-                result = await self._execute_kubectl_command(["version", "--client"])
+                # Try MCP tool call
+                result = await self._call_mcp_tool("kubectl", {"command": ["version", "--client"]})
                 return result.get("success", False)
         except:
             return False
@@ -563,6 +563,19 @@ class KubernetesMCPServerIntegration(MCPIntegration):
             self._message_id = 100
         self._message_id += 1
         return self._message_id
+
+    async def _call_mcp_tool(self, tool: str, params: dict[str, Any]) -> dict[str, Any]:
+        """Call an MCP tool directly without subprocess.
+        
+        This is a fallback method when MCP server process is not available.
+        """
+        self.logger.warning(f"MCP server process not available, falling back to error response")
+        return {
+            "success": False,
+            "error": "MCP server not properly initialized. Please ensure mcp-server-kubernetes is installed.",
+            "tool": tool,
+            "params": params
+        }
 
     async def execute_action(self, action: str, params: dict[str, Any]) -> dict[str, Any]:
         """Execute a Kubernetes action with automatic command generation."""

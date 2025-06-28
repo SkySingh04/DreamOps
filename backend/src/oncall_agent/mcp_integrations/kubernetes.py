@@ -488,46 +488,19 @@ class KubernetesMCPIntegration(MCPIntegration):
     # Helper methods
 
     async def _execute_k8s_command(self, *args) -> dict[str, Any]:
-        """Execute a kubectl command via MCP server."""
-        try:
-            # Construct kubectl command
-            cmd = ["kubectl"]
-            if self.k8s_context:
-                cmd.extend(["--context", self.k8s_context])
-            cmd.extend(args)
-
-            # Log the command
-            self.logger.debug(f"Executing: {' '.join(cmd)}")
-
-            # Execute command
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-
-            stdout, stderr = await process.communicate()
-
-            if process.returncode == 0:
-                return {
-                    "success": True,
-                    "output": stdout.decode(),
-                    "command": ' '.join(cmd)
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": stderr.decode(),
-                    "command": ' '.join(cmd)
-                }
-
-        except Exception as e:
-            self.logger.error(f"Error executing kubectl command: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "command": ' '.join(args)
-            }
+        """Execute a Kubernetes command via MCP server.
+        
+        This method should be replaced with MCP tool calls.
+        Returning error to force migration to MCP-only integration.
+        """
+        self.logger.error("Direct kubectl execution is deprecated. Use KubernetesMCPOnlyIntegration instead.")
+        return {
+            "success": False,
+            "error": "Direct kubectl execution is no longer supported. Please use the MCP server integration.",
+            "command": ' '.join(args),
+            "migration_required": True,
+            "use_integration": "KubernetesMCPOnlyIntegration"
+        }
 
     def _log_action(self, action: str, params: dict[str, Any]) -> None:
         """Log an action for audit trail."""

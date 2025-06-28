@@ -2,8 +2,8 @@
 """Test to verify Grafana MCP setup is correct."""
 
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 # Add the src directory to the Python path
@@ -14,15 +14,15 @@ def check_environment():
     """Check environment and configuration."""
     print("🔍 Checking Grafana MCP Setup")
     print("=" * 50)
-    
+
     # Check MCP server binary
     mcp_path = Path(__file__).parent.parent / "mcp-grafana" / "dist" / "mcp-grafana"
-    print(f"\n1️⃣ MCP Server Binary:")
+    print("\n1️⃣ MCP Server Binary:")
     print(f"   Path: {mcp_path}")
-    
+
     if mcp_path.exists():
         print("   ✅ Binary exists")
-        
+
         # Check if it's executable
         try:
             result = subprocess.run(
@@ -31,7 +31,7 @@ def check_environment():
                 text=True,
                 timeout=5
             )
-            
+
             if result.returncode == 0:
                 print(f"   ✅ Binary is executable: {result.stdout.strip()}")
             else:
@@ -44,18 +44,18 @@ def check_environment():
         print("      cd ../mcp-grafana")
         print("      go mod download")
         print("      make build")
-    
+
     # Check Python integration
-    print(f"\n2️⃣ Python Integration:")
+    print("\n2️⃣ Python Integration:")
     try:
         from oncall_agent.mcp_integrations.grafana_mcp import GrafanaMCPIntegration
         print("   ✅ GrafanaMCPIntegration imported successfully")
     except ImportError as e:
         print(f"   ❌ Failed to import GrafanaMCPIntegration: {e}")
         return
-    
+
     # Check configuration
-    print(f"\n3️⃣ Configuration:")
+    print("\n3️⃣ Configuration:")
     try:
         from oncall_agent.config import get_config
         config = get_config()
@@ -66,33 +66,32 @@ def check_environment():
         print(f"   - grafana_mcp_server_path: {config.grafana_mcp_server_path}")
     except Exception as e:
         print(f"   ❌ Failed to load config: {e}")
-    
+
     # Check environment variables
-    print(f"\n4️⃣ Environment Variables:")
+    print("\n4️⃣ Environment Variables:")
     env_vars = {
         "GRAFANA_ENABLED": os.getenv("GRAFANA_ENABLED", "Not set"),
         "GRAFANA_URL": os.getenv("GRAFANA_URL", "Not set"),
         "GRAFANA_API_KEY": "Set" if os.getenv("GRAFANA_API_KEY") else "Not set",
         "ANTHROPIC_API_KEY": "Set" if os.getenv("ANTHROPIC_API_KEY") else "Not set"
     }
-    
+
     for var, value in env_vars.items():
         status = "✅" if value != "Not set" else "⚠️"
         print(f"   {status} {var}: {value}")
-    
+
     # Check agent integration
-    print(f"\n5️⃣ Agent Integration:")
+    print("\n5️⃣ Agent Integration:")
     try:
-        from oncall_agent.agent import OncallAgent
         print("   ✅ OncallAgent imported successfully")
-        
+
         # Check if it would initialize Grafana
         config = get_config()
         would_init = bool(
-            config.grafana_url and 
+            config.grafana_url and
             (config.grafana_api_key or (config.grafana_username and config.grafana_password))
         )
-        
+
         if would_init:
             print("   ✅ Agent would initialize Grafana integration")
         else:
@@ -100,9 +99,9 @@ def check_environment():
             print("      Need: GRAFANA_URL and (GRAFANA_API_KEY or GRAFANA_USERNAME/PASSWORD)")
     except Exception as e:
         print(f"   ❌ Failed to check agent: {e}")
-    
+
     # Summary
-    print(f"\n📊 Summary:")
+    print("\n📊 Summary:")
     if mcp_path.exists() and env_vars["GRAFANA_URL"] != "Not set":
         print("   ✅ Setup looks good! Ready for testing.")
         print("\n   To run the full test:")
