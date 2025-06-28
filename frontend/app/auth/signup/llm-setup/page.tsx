@@ -82,10 +82,13 @@ export default function LLMSetupPage() {
     if (isDevMode) {
       const devConfig = getDevConfig('llm');
       if (devConfig && 'provider' in devConfig && 'api_key' in devConfig && 'model' in devConfig) {
-        setSelectedProvider(devConfig.provider);
-        setApiKey(devConfig.api_key);
-        setKeyName('Development API Key');
-        setSelectedModel(devConfig.model);
+        // Validate that the provider is one of the expected values
+        if (devConfig.provider === 'anthropic' || devConfig.provider === 'openai') {
+          setSelectedProvider(devConfig.provider);
+          setApiKey(devConfig.api_key);
+          setKeyName('Development API Key');
+          setSelectedModel(devConfig.model);
+        }
       }
     }
   }, [isDevMode]);
