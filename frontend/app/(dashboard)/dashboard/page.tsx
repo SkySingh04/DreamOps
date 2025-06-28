@@ -44,7 +44,7 @@ interface RecentAiAction {
 export default function DashboardPage() {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const [teamId, setTeamId] = useState<number | null>(null);
+  const [userId, setUserId] = useState<number | null>(null);
   const [showRollbackPlan, setShowRollbackPlan] = useState(false);
   const [rollbackPlanData, setRollbackPlanData] = useState<any>(null);
 
@@ -163,31 +163,31 @@ export default function DashboardPage() {
     },
   });
 
-  // Get team ID from user session
+  // Get user ID from user session
   useEffect(() => {
-    async function fetchTeamId() {
+    async function fetchUserId() {
       try {
-        const response = await fetch('/api/user/team');
+        const response = await fetch('/api/user');
         if (response.ok) {
-          const { teamId: userTeamId } = await response.json();
-          setTeamId(userTeamId);
+          const user = await response.json();
+          setUserId(user.id);
         } else {
-          // Fallback to team 1 for testing
-          setTeamId(1);
+          // Fallback to user 1 for testing
+          setUserId(1);
         }
       } catch (error) {
-        console.error('Error fetching team ID:', error);
-        // Fallback to team 1 for testing
-        setTeamId(1);
+        console.error('Error fetching user ID:', error);
+        // Fallback to user 1 for testing
+        setUserId(1);
       }
     }
     
-    fetchTeamId();
+    fetchUserId();
   }, []);
 
   // Set up WebSocket for real-time updates
   const { isConnected } = useWebSocket({
-    teamId: teamId || undefined,
+    userId: userId || undefined,
     onMetricsUpdate: (newMetrics) => {
       queryClient.setQueryData(['dashboard-metrics'], newMetrics);
     },
@@ -249,7 +249,7 @@ export default function DashboardPage() {
       
       {/* Alert Usage Card */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <AlertUsageCard teamId="team_123" className="lg:col-span-1" />
+        <AlertUsageCard userId={userId?.toString()} className="lg:col-span-1" />
       </div>
       
       {/* Metrics Grid with Recent Incidents */}
