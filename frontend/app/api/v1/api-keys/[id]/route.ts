@@ -176,7 +176,7 @@ export async function DELETE(
     const allKeys = await db
       .select({ id: apiKeys.id })
       .from(apiKeys)
-      .where(eq(apiKeys.teamId, teamId));
+      .where(eq(apiKeys.userId, user.id));
 
     if (allKeys.length <= 1) {
       return NextResponse.json(
