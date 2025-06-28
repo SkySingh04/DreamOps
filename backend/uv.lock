@@ -1438,6 +1438,7 @@ dependencies = [
     { name = "httpx" },
     { name = "kubernetes" },
     { name = "mcp" },
+    { name = "phonepe" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyjwt" },
@@ -1476,6 +1477,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "kubernetes", specifier = ">=30.1.0" },
     { name = "mcp", specifier = ">=1.0.0" },
+    { name = "phonepe", specifier = ">=1.0.0" },
     { name = "pydantic", specifier = ">=2.11.7" },
     { name = "pydantic-settings", specifier = ">=2.0.0" },
     { name = "pyjwt", specifier = ">=2.10.1" },
@@ -1514,6 +1516,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ca/bc/f35b8446f4531a7cb215605d100cd88b7ac6f44ab3fc94870c120ab3adbf/pathspec-0.12.1.tar.gz", hash = "sha256:a482d51503a1ab33b1c67a6c3813a26953dbdc71c31dacaef9a838c4e29f5712", size = 51043, upload-time = "2023-12-10T22:30:45Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cc/20/ff623b09d963f88bfde16306a54e12ee5ea43e9b597108672ff3a408aad6/pathspec-0.12.1-py3-none-any.whl", hash = "sha256:a0d503e138a4c123b27490a4f7beda6a01c6f288df0e4a8b79c7eb0dc7b4cc08", size = 31191, upload-time = "2023-12-10T22:30:43.14Z" },
+]
+
+[[package]]
+name = "phonepe"
+version = "1.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9e/a8/9fbfcf6bb2c764ed6a1ac607e27959e66e398e6fec0a855f3cc0e60be7d2/phonepe-1.0.1.tar.gz", hash = "sha256:94eccc1207784ea2a01cb9febecad1fae585548131a9995052c0cd5d18318d9a", size = 5710, upload-time = "2023-07-12T16:33:01.635Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/88/df/0a27a3cf20b3f36309b186e967402430b0d7d999dbca37dae1d860e9a29c/phonepe-1.0.1-py3-none-any.whl", hash = "sha256:37bf4196608933430856324013ba2ab67a484362c08f4d68e044f2b9ca84fdc9", size = 5893, upload-time = "2023-07-12T16:33:00.194Z" },
 ]
 
 [[package]]
