@@ -81,7 +81,7 @@ export default function LLMSetupPage() {
   useEffect(() => {
     if (isDevMode) {
       const devConfig = getDevConfig('llm');
-      if (devConfig) {
+      if (devConfig && 'provider' in devConfig && 'api_key' in devConfig && 'model' in devConfig) {
         setSelectedProvider(devConfig.provider);
         setApiKey(devConfig.api_key);
         setKeyName('Development API Key');
