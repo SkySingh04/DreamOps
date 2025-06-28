@@ -489,12 +489,12 @@ async def get_integration_logs(
 async def discover_kubernetes_contexts() -> JSONResponse:
     """Discover available Kubernetes contexts from kubeconfig."""
     try:
-        from src.oncall_agent.mcp_integrations.kubernetes_enhanced import (
-            EnhancedKubernetesMCPIntegration,
+        from src.oncall_agent.mcp_integrations.kubernetes_mcp_only import (
+            KubernetesMCPOnlyIntegration,
         )
 
         # Create temporary integration instance for discovery
-        k8s_integration = EnhancedKubernetesMCPIntegration()
+        k8s_integration = KubernetesMCPOnlyIntegration()
         contexts = await k8s_integration.discover_contexts()
 
         return JSONResponse(content={"contexts": contexts})
@@ -510,12 +510,12 @@ async def test_kubernetes_connection(
 ) -> JSONResponse:
     """Test connection to a specific Kubernetes cluster."""
     try:
-        from src.oncall_agent.mcp_integrations.kubernetes_enhanced import (
-            EnhancedKubernetesMCPIntegration,
+        from src.oncall_agent.mcp_integrations.kubernetes_mcp_only import (
+            KubernetesMCPOnlyIntegration,
         )
 
         # Create temporary integration instance for testing
-        k8s_integration = EnhancedKubernetesMCPIntegration()
+        k8s_integration = KubernetesMCPOnlyIntegration()
         test_result = await k8s_integration.test_connection(context_name, namespace)
 
         return JSONResponse(content=test_result)
@@ -706,12 +706,12 @@ async def verify_kubernetes_permissions(
 ) -> JSONResponse:
     """Verify RBAC permissions for a Kubernetes context."""
     try:
-        from src.oncall_agent.mcp_integrations.kubernetes_enhanced import (
-            EnhancedKubernetesMCPIntegration,
+        from src.oncall_agent.mcp_integrations.kubernetes_mcp_only import (
+            KubernetesMCPOnlyIntegration,
         )
 
         # Create temporary integration instance
-        k8s_integration = EnhancedKubernetesMCPIntegration()
+        k8s_integration = KubernetesMCPOnlyIntegration()
         permissions = await k8s_integration.verify_permissions(context_name)
 
         return JSONResponse(content=permissions)
@@ -726,12 +726,12 @@ async def get_kubernetes_cluster_info(
 ) -> JSONResponse:
     """Get detailed information about a Kubernetes cluster."""
     try:
-        from src.oncall_agent.mcp_integrations.kubernetes_enhanced import (
-            EnhancedKubernetesMCPIntegration,
+        from src.oncall_agent.mcp_integrations.kubernetes_mcp_only import (
+            KubernetesMCPOnlyIntegration,
         )
 
         # Create temporary integration instance
-        k8s_integration = EnhancedKubernetesMCPIntegration()
+        k8s_integration = KubernetesMCPOnlyIntegration()
         cluster_info = await k8s_integration.get_cluster_info(context_name)
 
         return JSONResponse(content=cluster_info)

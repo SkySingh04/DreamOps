@@ -20,9 +20,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.oncall_agent.config import get_config
 from src.oncall_agent.mcp_integrations.github_mcp import GitHubMCPIntegration
-from src.oncall_agent.mcp_integrations.kubernetes_enhanced import EnhancedKubernetesMCPIntegration as KubernetesIntegration
+from src.oncall_agent.mcp_integrations.kubernetes_mcp_only import KubernetesMCPOnlyIntegration as KubernetesIntegration
 from src.oncall_agent.mcp_integrations.notion_direct import NotionDirectIntegration
-from src.oncall_agent.mcp_integrations.pagerduty import PagerDutyIntegration
+# PagerDuty integration not available as MCP integration
 from src.oncall_agent.security.encryption import EncryptionService
 from src.oncall_agent.utils.logger import get_logger
 
@@ -501,13 +501,16 @@ class IntegrationDataVerifier:
 
             # Test connection based on integration type
             if integration_type == IntegrationType.PAGERDUTY:
-                # Initialize PagerDuty integration and test
-                integration = PagerDutyIntegration(
-                    api_key=stored_config.get("api_key", ""),
-                    user_email=stored_config.get("user_email", "")
+                # PagerDuty integration not available as MCP integration
+                connected = False
+                capabilities = []
+                result = ConnectionResult(
+                    integration_type=integration_type,
+                    success=False,
+                    error="PagerDuty MCP integration not implemented",
+                    connected_at=datetime.utcnow()
                 )
-                connected = await integration.connect()
-                capabilities = integration.get_capabilities() if connected else []
+                return result
 
             elif integration_type == IntegrationType.KUBERNETES:
                 # Initialize Kubernetes integration and test

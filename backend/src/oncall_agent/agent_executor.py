@@ -9,8 +9,8 @@ from typing import Any
 
 from src.oncall_agent.api.log_streaming import log_stream_manager
 from src.oncall_agent.api.schemas import AIMode
-from src.oncall_agent.mcp_integrations.kubernetes_mcp import (
-    KubernetesMCPServerIntegration,
+from src.oncall_agent.mcp_integrations.kubernetes_mcp_only import (
+    KubernetesMCPOnlyIntegration,
 )
 from src.oncall_agent.strategies.kubernetes_resolver import ResolutionAction
 
@@ -18,7 +18,7 @@ from src.oncall_agent.strategies.kubernetes_resolver import ResolutionAction
 class AgentExecutor:
     """Handles execution of remediation actions based on AI mode and risk assessment."""
 
-    def __init__(self, k8s_integration: KubernetesMCPServerIntegration | None = None):
+    def __init__(self, k8s_integration: KubernetesMCPOnlyIntegration | None = None):
         """Initialize the agent executor."""
         self.logger = logging.getLogger(__name__)
         self.k8s_integration = k8s_integration
