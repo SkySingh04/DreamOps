@@ -50,7 +50,7 @@ class KubernetesDirectIntegration(MCPIntegration):
         """Connect to Kubernetes cluster."""
         try:
             self.logger.info(f"Attempting to connect to Kubernetes - context: '{self.context}', namespace: '{self.namespace}'")
-            
+
             if self.kubeconfig_content:
                 # Use provided kubeconfig
                 with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:

@@ -342,20 +342,20 @@ async def test_kubernetes_integration(config: dict[str, Any]) -> dict[str, Any]:
         # Handle both single context and multiple contexts format
         context = config.get('context')
         namespace = config.get('namespace', 'default')
-        
+
         # If contexts array is provided, use the first selected one
         if 'contexts' in config and config['contexts']:
             context = config['contexts'][0]
             # Get namespace for this context from namespaces mapping
             if 'namespaces' in config and context in config['namespaces']:
                 namespace = config['namespaces'][context]
-        
+
         # If context is "default" or empty, use None to use current context
         if context == 'default' or not context:
             context = None
-            
+
         kubeconfig_content = config.get('kubeconfig_content')
-        
+
         logger.info(f"Testing Kubernetes connection with context: {context}, namespace: {namespace}")
 
         # Create integration instance
