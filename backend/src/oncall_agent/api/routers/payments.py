@@ -36,8 +36,13 @@ def get_payment_service():
         logger.info("Using PhonePe Mock Service for testing")
         return get_phonepe_mock_service()
     else:
-        logger.info("Using PhonePe SDK Service")
-        return get_phonepe_sdk_service()
+        # Try to use SDK service, fall back to mock if SDK is not available
+        try:
+            logger.info("Attempting to use PhonePe SDK Service")
+            return get_phonepe_sdk_service()
+        except ImportError as e:
+            logger.warning(f"PhonePe SDK not available: {e}. Using mock service instead.")
+            return get_phonepe_mock_service()
 
 
 @router.post("/initiate", response_model=PaymentResponse)

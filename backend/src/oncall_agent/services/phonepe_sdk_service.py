@@ -2,12 +2,28 @@
 import uuid
 from typing import Any, Optional
 
-from phonepe.sdk.pg.common.exceptions import PhonePeException
-from phonepe.sdk.pg.env import Env
-from phonepe.sdk.pg.payments.v2.models.request.standard_checkout_pay_request import (
-    StandardCheckoutPayRequest,
-)
-from phonepe.sdk.pg.payments.v2.standard_checkout_client import StandardCheckoutClient
+# Try to import PhonePe SDK, fall back to mock if not available
+try:
+    from phonepe.sdk.pg.common.exceptions import PhonePeException
+    from phonepe.sdk.pg.env import Env
+    from phonepe.sdk.pg.payments.v2.models.request.standard_checkout_pay_request import (
+        StandardCheckoutPayRequest,
+    )
+    from phonepe.sdk.pg.payments.v2.standard_checkout_client import StandardCheckoutClient
+    PHONEPE_SDK_AVAILABLE = True
+except ImportError:
+    # SDK not available, we'll use the mock service
+    PHONEPE_SDK_AVAILABLE = False
+    # Define dummy classes to prevent errors
+    class PhonePeException(Exception):
+        pass
+    class Env:
+        PRODUCTION = "PRODUCTION"
+        TEST = "TEST"
+    class StandardCheckoutPayRequest:
+        pass
+    class StandardCheckoutClient:
+        pass
 
 from ..api.payment_models import (
     PaymentCheckStatusResponse,
@@ -25,6 +41,12 @@ class PhonePeSDKService:
     """PhonePe payment gateway service using official SDK"""
 
     def __init__(self):
+        if not PHONEPE_SDK_AVAILABLE:
+            raise ImportError(
+                "PhonePe SDK is not available. Please install it or use the mock service. "
+                "The SDK may need to be installed from a private repository."
+            )
+            
         config = get_config()
 
         # PhonePe SDK configuration - Use proper test credentials
@@ -33,7 +55,7 @@ class PhonePeSDKService:
         self.client_version = 1
 
         # Set environment
-        self.env = Env.SANDBOX if config.environment == "development" else Env.PRODUCTION
+        self.env = Env.TEST if config.environment == "development" else Env.PRODUCTION
         self.should_publish_events = False
 
         # URLs
