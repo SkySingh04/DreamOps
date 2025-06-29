@@ -69,7 +69,8 @@
       "Bash(diff:*)",
       "Bash(cp:*)",
       "Bash(npx tsx:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(docker-compose exec:*)"
     ],
     "deny": []
   }
