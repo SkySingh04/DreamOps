@@ -405,18 +405,137 @@ async def test_notion_integration(config: dict[str, Any]) -> dict[str, Any]:
 
 async def test_grafana_integration(config: dict[str, Any]) -> dict[str, Any]:
     """Test Grafana integration."""
-    # Mock test for Grafana
-    return {
-        "success": True,
-        "status": "success",
-        "details": {
-            "api_key_valid": True,
-            "dashboards_accessible": True,
-            "datasources_count": 3,
-            "alerts_enabled": True
-        },
-        "latency_ms": 167
-    }
+    import httpx
+    import time
+    
+    try:
+        # Validate required config
+        if not config.get('url'):
+            return {
+                "success": False,
+                "status": "failed",
+                "error": "Grafana URL is required",
+                "details": {}
+            }
+        
+        if not config.get('api_key'):
+            return {
+                "success": False,
+                "status": "failed", 
+                "error": "Grafana API key is required",
+                "details": {}
+            }
+        
+        # Clean up URL
+        grafana_url = config['url'].rstrip('/')
+        api_key = config['api_key']
+        
+        # Test connection with API key
+        start_time = time.time()
+        
+        async with httpx.AsyncClient() as client:
+            # Test API key validity by fetching org info
+            response = await client.get(
+                f"{grafana_url}/api/org",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Accept": "application/json"
+                },
+                timeout=10.0
+            )
+            
+            if response.status_code == 401:
+                return {
+                    "success": False,
+                    "status": "failed",
+                    "error": "Invalid API key",
+                    "details": {
+                        "api_key_valid": False
+                    }
+                }
+            
+            if response.status_code != 200:
+                return {
+                    "success": False,
+                    "status": "failed",
+                    "error": f"Grafana API returned status {response.status_code}",
+                    "details": {
+                        "status_code": response.status_code,
+                        "response": response.text[:200]
+                    }
+                }
+            
+            # Get org info
+            org_info = response.json()
+            
+            # Try to fetch dashboards
+            dashboards_response = await client.get(
+                f"{grafana_url}/api/search?type=dash-db",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Accept": "application/json"
+                },
+                timeout=10.0
+            )
+            
+            dashboards_count = len(dashboards_response.json()) if dashboards_response.status_code == 200 else 0
+            
+            # Try to fetch data sources
+            datasources_response = await client.get(
+                f"{grafana_url}/api/datasources",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Accept": "application/json"
+                },
+                timeout=10.0
+            )
+            
+            datasources_count = len(datasources_response.json()) if datasources_response.status_code == 200 else 0
+            
+            # Calculate latency
+            latency_ms = int((time.time() - start_time) * 1000)
+            
+            return {
+                "success": True,
+                "status": "success",
+                "details": {
+                    "api_key_valid": True,
+                    "dashboards_accessible": dashboards_response.status_code == 200,
+                    "datasources_accessible": datasources_response.status_code == 200,
+                    "org_name": org_info.get('name', 'Unknown'),
+                    "org_id": org_info.get('id', 0),
+                    "dashboards_count": dashboards_count,
+                    "datasources_count": datasources_count,
+                    "grafana_url": grafana_url
+                },
+                "latency_ms": latency_ms
+            }
+            
+    except httpx.ConnectError:
+        return {
+            "success": False,
+            "status": "failed",
+            "error": f"Failed to connect to Grafana at {config.get('url')}",
+            "details": {
+                "connection_error": True
+            }
+        }
+    except httpx.TimeoutException:
+        return {
+            "success": False,
+            "status": "failed",
+            "error": "Connection to Grafana timed out",
+            "details": {
+                "timeout_error": True
+            }
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "status": "failed",
+            "error": str(e),
+            "details": {}
+        }
 
 
 @router.post("/integrations/test-all")

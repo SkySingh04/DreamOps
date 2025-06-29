@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 from ...config import get_config
 from ...services.phonepe_mock_service import get_phonepe_mock_service
-from ...services.phonepe_sdk_service import get_phonepe_sdk_service
+from ...services.phonepe_service import get_phonepe_service
 from ..payment_models import (
     PaymentCheckStatusRequest,
     PaymentCheckStatusResponse,
@@ -36,8 +36,8 @@ def get_payment_service():
         logger.info("Using PhonePe Mock Service for testing")
         return get_phonepe_mock_service()
     else:
-        logger.info("Using PhonePe SDK Service")
-        return get_phonepe_sdk_service()
+        logger.info("Using PhonePe Service")
+        return get_phonepe_service()
 
 
 @router.post("/initiate", response_model=PaymentResponse)
