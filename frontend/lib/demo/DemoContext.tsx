@@ -313,7 +313,10 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
       switch (currentAction.type) {
         case 'navigate':
           if (currentAction.target) {
-            router.push(currentAction.target);
+            router.push(currentAction.target).catch((error) => {
+              console.error('Demo navigation failed:', error);
+              toast.error('Navigation failed during demo');
+            });
           }
           break;
         
@@ -337,13 +340,30 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
         
         case 'wait':
           // Just wait for the delay
-          break;
-      }
+// In the DemoAction interface (e.g. at the top of DemoContext.tsx)
+export interface DemoAction {
+  type: 'navigate'
+    | 'click'
+    | 'type'
+    | 'wait'
+    | 'highlight'
+    | 'toast'
+    | 'trigger_incident'
+    | 'show_analysis'
+    | 'show_resolution';
+  target?: string;
+  value?: string;
+  delay?: number;
+  message?: string;
+  integration?: string;
+}
 
-      // Enable integrations during integration step
-      if (currentStep.id === 'integrations' && currentAction.type === 'toast' && currentAction.message?.includes('✅')) {
-        const integrationName = currentAction.message.split(' ')[1].toLowerCase();
-        if (MOCK_INTEGRATIONS[integrationName]) {
+// …later, in your integration-step handling…
+
+// Enable integrations during integration step
+if (currentAction.type === 'toast' && currentAction.integration) {
+  dispatch({ type: 'ENABLE_INTEGRATION', name: currentAction.integration });
+}
           dispatch({ type: 'ENABLE_INTEGRATION', name: integrationName });
         }
       }

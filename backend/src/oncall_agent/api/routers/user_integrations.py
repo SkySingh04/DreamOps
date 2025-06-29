@@ -1,7 +1,7 @@
 """User integration management API endpoints."""
 
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -123,8 +123,8 @@ async def create_user_integration(
             "is_required": integration.is_required,
             "created_by": current_user_id,
             "updated_by": current_user_id,
-            "created_at": datetime.now(UTC).isoformat(),
-            "updated_at": datetime.now(UTC).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }
 
         # Save to mock database
@@ -141,7 +141,7 @@ async def create_user_integration(
             "performed_by": current_user_id,
             "new_config": encrypt_config(integration.config),
             "result": "success",
-            "created_at": datetime.now(UTC).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }
         INTEGRATION_AUDIT_LOGS_DB.append(audit_log)
 
@@ -189,7 +189,7 @@ async def update_user_integration(
             integration['is_enabled'] = update.is_enabled
 
         integration['updated_by'] = current_user_id
-        integration['updated_at'] = datetime.now(UTC).isoformat()
+        integration['updated_at'] = datetime.now(timezone.utc).isoformat()
 
         # Update last test status if disabling
         if update.is_enabled is False:
@@ -206,7 +206,7 @@ async def update_user_integration(
             "previous_config": encrypt_config(previous_config),
             "new_config": integration['config_encrypted'] if update.config else None,
             "result": "success",
-            "created_at": datetime.now(UTC).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }
         INTEGRATION_AUDIT_LOGS_DB.append(audit_log)
 
@@ -255,7 +255,7 @@ async def delete_user_integration(
             "action": "deleted",
             "performed_by": current_user_id,
             "result": "success",
-            "created_at": datetime.now(UTC).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }
         INTEGRATION_AUDIT_LOGS_DB.append(audit_log)
 
@@ -428,6 +428,16 @@ async def test_grafana_integration(config: dict[str, Any]) -> dict[str, Any]:
         
         # Clean up URL
         grafana_url = config['url'].rstrip('/')
+
+        # Validate URL format
+        if not grafana_url.startswith(('http://', 'https://')):
+            return {
+                "success": False,
+                "status": "failed",
+                "error": "Invalid URL format. URL must start with http:// or https://",
+                "details": {}
+            }
+
         api_key = config['api_key']
         
         # Test connection with API key
@@ -461,7 +471,7 @@ async def test_grafana_integration(config: dict[str, Any]) -> dict[str, Any]:
                     "error": f"Grafana API returned status {response.status_code}",
                     "details": {
                         "status_code": response.status_code,
-                        "response": response.text[:200]
+                        "error_type": "api_error"
                     }
                 }
             
@@ -515,7 +525,7 @@ async def test_grafana_integration(config: dict[str, Any]) -> dict[str, Any]:
         return {
             "success": False,
             "status": "failed",
-            "error": f"Failed to connect to Grafana at {config.get('url')}",
+            "error": f"Failed to connect to Grafana",
             "details": {
                 "connection_error": True
             }
@@ -563,7 +573,7 @@ async def test_all_user_integrations(
             test_result = await perform_integration_test(integration['integration_type'], config)
 
             # Update integration test status
-            integration['last_test_at'] = datetime.now(UTC).isoformat()
+            integration['last_test_at'] = datetime.now(timezone.utc).isoformat()
             integration['last_test_status'] = "success" if test_result['success'] else "failed"
             integration['last_test_error'] = test_result.get('error')
 
