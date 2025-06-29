@@ -16,14 +16,31 @@ except ImportError:
     PHONEPE_SDK_AVAILABLE = False
     # Define dummy classes to prevent errors
     class PhonePeException(Exception):
-        pass
+        def __init__(self, message="", code=None, http_status_code=None):
+            super().__init__(message)
+            self.message = message
+            self.code = code
+            self.http_status_code = http_status_code
     class Env:
         PRODUCTION = "PRODUCTION"
         TEST = "TEST"
     class StandardCheckoutPayRequest:
         pass
     class StandardCheckoutClient:
-        pass
+        _instance = None
+        
+        @classmethod
+        def get_instance(cls, **kwargs):
+            return cls()
+        
+        def pay(self, request):
+            pass
+        
+        def get_order_status(self, **kwargs):
+            pass
+        
+        def validate_callback(self, **kwargs):
+            pass
 
 from ..api.payment_models import (
     PaymentCheckStatusResponse,
@@ -55,7 +72,7 @@ class PhonePeSDKService:
         self.client_version = 1
 
         # Set environment
-        self.env = Env.TEST if config.environment == "development" else Env.PRODUCTION
+        self.env = Env.SANDBOX if config.environment == "development" else Env.PRODUCTION
         self.should_publish_events = False
 
         # URLs
