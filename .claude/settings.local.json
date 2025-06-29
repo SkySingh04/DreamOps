@@ -69,7 +69,9 @@
       "Bash(diff:*)",
       "Bash(cp:*)",
       "Bash(npx tsx:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(-H \"Content-Type: application/json\" )",
+      "Bash(-d @test_notion_webhook.json -s)"
     ],
     "deny": []
   }

@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import re
+from datetime import datetime
 from typing import Any
 
 from anthropic import AsyncAnthropic
@@ -710,6 +711,138 @@ class OncallAgent:
             # Log summary
             self.logger.info(f"✅ Alert {alert.alert_id} analyzed successfully")
             self.logger.info(f"📊 Context gathered from: {', '.join(k for k, v in all_context.items() if v and 'error' not in v)}")
+
+            # Create Notion page for the incident
+            if "notion" in self.mcp_integrations and hasattr(self, 'notion_integration'):
+                try:
+                    self.logger.info("📝 Creating Notion page for incident documentation...")
+                    
+                    # Prepare the page content
+                    notion_content = {
+                        "title": f"Incident #{alert.alert_id}: {alert.service_name}",
+                        "properties": {
+                            "Status": {"select": {"name": "Resolved" if result.get("status") == "analyzed_and_executed" else "Active"}},
+                            "Severity": {"select": {"name": alert.severity.capitalize()}},
+                            "Service": {"title": [{"text": {"content": alert.service_name}}]},
+                            "Alert ID": {"rich_text": [{"text": {"content": alert.alert_id}}]},
+                            "Created": {"date": {"start": datetime.now().isoformat()}},
+                        },
+                        "children": [
+                            {
+                                "object": "block",
+                                "type": "heading_2",
+                                "heading_2": {
+                                    "rich_text": [{"text": {"content": "📊 Incident Summary"}}]
+                                }
+                            },
+                            {
+                                "object": "block",
+                                "type": "paragraph",
+                                "paragraph": {
+                                    "rich_text": [{"text": {"content": alert.description[:2000]}}]
+                                }
+                            },
+                            {
+                                "object": "block",
+                                "type": "heading_2",
+                                "heading_2": {
+                                    "rich_text": [{"text": {"content": "🤖 AI Analysis"}}]
+                                }
+                            },
+                            {
+                                "object": "block",
+                                "type": "paragraph",
+                                "paragraph": {
+                                    "rich_text": [{"text": {"content": result.get("analysis", "No analysis available")[:2000]}}]
+                                }
+                            }
+                        ]
+                    }
+                    
+                    # Add context information if available
+                    if all_context:
+                        notion_content["children"].append({
+                            "object": "block",
+                            "type": "heading_2",
+                            "heading_2": {
+                                "rich_text": [{"text": {"content": "🔍 Context Gathered"}}]
+                            }
+                        })
+                        
+                        context_text = self._format_context_for_prompt(all_context)
+                        notion_content["children"].append({
+                            "object": "block",
+                            "type": "code",
+                            "code": {
+                                "rich_text": [{"text": {"content": context_text[:2000]}}],
+                                "language": "plain text"
+                            }
+                        })
+                    
+                    # Add resolution actions if any were executed
+                    if result.get("resolution_actions"):
+                        notion_content["children"].append({
+                            "object": "block",
+                            "type": "heading_2",
+                            "heading_2": {
+                                "rich_text": [{"text": {"content": "⚡ Resolution Actions"}}]
+                            }
+                        })
+                        
+                        for action in result["resolution_actions"]:
+                            notion_content["children"].append({
+                                "object": "block",
+                                "type": "bulleted_list_item",
+                                "bulleted_list_item": {
+                                    "rich_text": [{"text": {"content": f"{action.get('action_type', 'Unknown')}: {action.get('description', 'No description')}"}}]
+                                }
+                            })
+                    
+                    # Add execution results if in YOLO mode
+                    if result.get("execution_results"):
+                        notion_content["children"].append({
+                            "object": "block",
+                            "type": "heading_2",
+                            "heading_2": {
+                                "rich_text": [{"text": {"content": "🚀 YOLO Mode Execution Results"}}]
+                            }
+                        })
+                        
+                        exec_details = result["execution_results"].get("execution_details", [])
+                        for detail in exec_details:
+                            status_icon = "✅" if detail.get("result", {}).get("success") else "❌"
+                            notion_content["children"].append({
+                                "object": "block",
+                                "type": "paragraph",
+                                "paragraph": {
+                                    "rich_text": [{"text": {"content": f"{status_icon} {detail.get('action', {}).get('action_type', 'Unknown action')}"}}]
+                                }
+                            })
+                    
+                    # Create the page
+                    notion_result = await self.notion_integration.execute_action("create_page", notion_content)
+                    
+                    if notion_result.get("success"):
+                        page_url = notion_result.get("url", "")
+                        self.logger.info(f"✅ Notion page created successfully: {page_url}")
+                        result["notion_page_url"] = page_url
+                        
+                        # Send notification to dashboard
+                        try:
+                            await send_ai_action_to_dashboard(
+                                action="notion_page_created",
+                                description=f"Incident documented in Notion: {page_url}",
+                                incident_id=incident_id
+                            )
+                        except Exception as e:
+                            self.logger.error(f"Failed to send Notion notification to dashboard: {e}")
+                    else:
+                        self.logger.error(f"❌ Failed to create Notion page: {notion_result.get('error', 'Unknown error')}")
+                        
+                except Exception as e:
+                    self.logger.error(f"❌ Error creating Notion page: {e}")
+                    # Don't fail the entire operation if Notion fails
+                    result["notion_error"] = str(e)
 
             return result
 
