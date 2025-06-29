@@ -14,11 +14,12 @@ export interface DemoStep {
 }
 
 export interface DemoAction {
-  type: 'navigate' | 'click' | 'type' | 'wait' | 'highlight' | 'toast' | 'trigger_incident' | 'show_analysis' | 'show_resolution';
+  type: 'navigate' | 'click' | 'type' | 'wait' | 'highlight' | 'toast' | 'trigger_incident' | 'show_analysis' | 'show_resolution' | 'start_analysis' | 'start_resolution';
   target?: string;
   value?: string;
   delay?: number;
   message?: string;
+  integration?: string;
 }
 
 export interface DemoState {
@@ -340,32 +341,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
         
         case 'wait':
           // Just wait for the delay
-// In the DemoAction interface (e.g. at the top of DemoContext.tsx)
-export interface DemoAction {
-  type: 'navigate'
-    | 'click'
-    | 'type'
-    | 'wait'
-    | 'highlight'
-    | 'toast'
-    | 'trigger_incident'
-    | 'show_analysis'
-    | 'show_resolution';
-  target?: string;
-  value?: string;
-  delay?: number;
-  message?: string;
-  integration?: string;
-}
-
-// …later, in your integration-step handling…
-
-// Enable integrations during integration step
-if (currentAction.type === 'toast' && currentAction.integration) {
-  dispatch({ type: 'ENABLE_INTEGRATION', name: currentAction.integration });
-}
-          dispatch({ type: 'ENABLE_INTEGRATION', name: integrationName });
-        }
+          break;
       }
 
       setTimeout(() => {

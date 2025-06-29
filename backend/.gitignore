@@ -17,6 +17,10 @@ venv.bak/
 .env.staging
 .env.production
 
+# Firebase credentials
+firebase-service-account-key.json
+firebase-service-account-key*.json
+
 # IDE
 .vscode/
 .idea/

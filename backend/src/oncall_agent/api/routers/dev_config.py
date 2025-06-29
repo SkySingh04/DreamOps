@@ -79,9 +79,9 @@ async def get_dev_config():
             "org": os.getenv("GITHUB_MCP_ORG", ""),
         },
         "notion": {
-            "enabled": bool(os.getenv("NOTION_TOKEN")),
-            "token": os.getenv("NOTION_TOKEN", ""),
-            "database_id": os.getenv("NOTION_DATABASE_ID", ""),
+            "enabled": bool(os.getenv("NOTION_MCP_TOKEN", os.getenv("NOTION_TOKEN"))),
+            "token": os.getenv("NOTION_MCP_TOKEN", os.getenv("NOTION_TOKEN", "")),
+            "database_id": os.getenv("NOTION_MCP_DATABASE_ID", os.getenv("NOTION_DATABASE_ID", "")),
         },
         "grafana": {
             "enabled": bool(os.getenv("GRAFANA_MCP_URL")),
