@@ -89,11 +89,26 @@ async def get_agent_instance() -> OncallAgent | None:
 
 
 @router.get("/", response_model=list[Integration])
-async def list_integrations() -> list[Integration]:
+async def list_integrations(user_id: str = Query(None, description="User ID to check plan restrictions")) -> list[Integration]:
     """List all available integrations."""
     try:
         integrations = []
         agent = await get_agent_instance()
+        
+        # Import alert tracking to check user plan
+        from src.oncall_agent.api.routers.alert_tracking import USER_DATA, INTEGRATION_RESTRICTIONS
+        import os
+        
+        # Check if in development mode
+        is_dev_mode = os.getenv("NEXT_PUBLIC_DEV_MODE", "false").lower() == "true" or os.getenv("NODE_ENV", "") == "development"
+        
+        # Get user's plan if user_id provided
+        user_plan = "pro" if is_dev_mode else "free"  # Default to pro in dev mode
+        if user_id and user_id in USER_DATA:
+            user_plan = USER_DATA[user_id].get("account_tier", user_plan)
+        
+        # Get allowed integrations for the plan
+        allowed_integrations = INTEGRATION_RESTRICTIONS.get(user_plan, [])
 
         for name, config in INTEGRATION_CONFIGS.items():
             # Get real status from agent if available
@@ -131,14 +146,26 @@ async def list_integrations() -> list[Integration]:
                     }
                 )
 
-            integrations.append(Integration(
+            # Check if integration is allowed for user's plan
+            is_allowed = name in allowed_integrations if user_id else True
+            
+            # Add plan restriction info to the integration
+            integration_data = Integration(
                 name=name,
                 type=name,  # Could be more specific
-                status=status if config.enabled else IntegrationStatus.DISCONNECTED,
+                status=status if (config.enabled and is_allowed) else IntegrationStatus.DISCONNECTED,
                 capabilities=capabilities,
                 config=config,
                 health=health
-            ))
+            )
+            
+            # Add custom fields for plan restrictions
+            integration_dict = integration_data.model_dump()
+            integration_dict["is_allowed"] = is_allowed
+            integration_dict["requires_plan"] = "pro" if name not in ["kubernetes_mcp", "pagerduty"] else "free"
+            integration_dict["user_plan"] = user_plan
+            
+            integrations.append(integration_dict)
 
         return integrations
 

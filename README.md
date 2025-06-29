@@ -9,6 +9,10 @@
 - [Architecture & Technical Details](#architecture--technical-details)
 - [Installation & Setup](#installation--setup)
 - [Configuration](#configuration)
+  - [PagerDuty Integration](#pagerduty-integration)
+  - [Kubernetes Integration](#kubernetes-integration)
+  - [PhonePe Payment Integration](#phonepe-payment-integration)
+  - [Environment Separation](#environment-separation)
 - [Features & Integrations](#features--integrations)
 - [Payment System](#payment-system)
 - [Deployment](#deployment)
@@ -347,6 +351,109 @@ When `K8S_ENABLE_DESTRUCTIVE_OPERATIONS=true`:
    PHONEPE_CALLBACK_URL=https://your-domain.com/api/v1/payments/callback
    PHONEPE_REDIRECT_URL=https://your-domain.com/payment/callback
    ```
+
+### Environment Separation
+
+DreamOps uses strict environment separation to ensure development features don't leak into production.
+
+#### Environment Detection
+
+The system uses two environment variables to determine the current mode:
+
+1. **`NODE_ENV`** - Standard Node.js environment variable
+   - `development` - Local development
+   - `staging` - Staging environment
+   - `production` - Production environment
+
+2. **`NEXT_PUBLIC_DEV_MODE`** - Explicit dev mode flag
+   - `true` - Enable development features
+   - `false` - Disable development features (default)
+
+#### Development Mode Features
+
+When `NEXT_PUBLIC_DEV_MODE=true` OR `NODE_ENV=development`:
+
+- **Automatic Pro Plan**: All new users start with Pro plan
+- **All Integrations Enabled**: No plan restrictions for integrations
+- **Mock Payments**: Use mock payment system
+- **Debug Logging**: Enhanced logging for debugging
+- **Hot Reload**: API server auto-reloads on file changes
+
+#### Environment Files
+
+```
+.env.local          # Local development (NEXT_PUBLIC_DEV_MODE=true)
+.env.staging        # Staging environment (NEXT_PUBLIC_DEV_MODE=false)
+.env.production     # Production environment (NEXT_PUBLIC_DEV_MODE=false)
+```
+
+#### Configuration Loading Order
+
+The config loader checks for environment files in this order:
+
+1. `.env.{NODE_ENV}` (e.g., .env.production)
+2. `.env.local`
+3. `.env`
+
+#### Production Safety
+
+**Explicit Production Settings**:
+```env
+# .env.production
+NODE_ENV=production
+NEXT_PUBLIC_DEV_MODE=false
+```
+
+**Code Checks**:
+```python
+# Check if in development mode
+is_dev_mode = (
+    os.getenv("NEXT_PUBLIC_DEV_MODE", "false").lower() == "true" 
+    or os.getenv("NODE_ENV", "") == "development"
+)
+```
+
+#### Deployment Configuration
+
+**Local Development**:
+```bash
+NODE_ENV=development ./start-dev-server.sh
+# OR
+NODE_ENV=development uv run python api_server.py
+```
+
+**Production Deployment**:
+```bash
+NODE_ENV=production uv run python api_server.py
+```
+
+**AWS/Render Environment Variables**:
+- `NODE_ENV=production`
+- `NEXT_PUBLIC_DEV_MODE=false`
+
+#### Integration Plan Restrictions
+
+| Integration | Free/Starter | Pro/Enterprise | Dev Mode |
+|------------|--------------|----------------|----------|
+| Kubernetes | ✅ | ✅ | ✅ |
+| PagerDuty  | ✅ | ✅ | ✅ |
+| Notion     | ❌ | ✅ | ✅ |
+| GitHub     | ❌ | ✅ | ✅ |
+| Grafana    | ❌ | ✅ | ✅ |
+| Datadog    | ❌ | ✅ | ✅ |
+
+#### Verifying Environment
+
+```bash
+# Check current environment
+curl http://localhost:8000/api/v1/alert-tracking/usage/test-user | jq .account_tier
+# Dev mode: "pro", Prod mode: "free"
+
+# Check integration access
+curl "http://localhost:8000/api/v1/alert-tracking/check-integration-access/test-user/notion"
+# Dev mode: {"has_access": true, "reason": "Development mode - all integrations enabled"}
+# Prod mode: {"has_access": false, "reason": "Integration 'notion' is not allowed on free plan"}
+```
 
 ## Features & Integrations
 

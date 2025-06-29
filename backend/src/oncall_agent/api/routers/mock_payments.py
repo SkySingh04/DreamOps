@@ -113,35 +113,45 @@ async def mock_check_payment_status(request: Request):
         txn_data = MOCK_TRANSACTIONS.get(transaction_id, {})
 
         # Use stored data or fallback to body/defaults
-        team_id = txn_data.get("team_id") or body.get("team_id", "team_123")
+        user_id = txn_data.get("user_id") or body.get("user_id", "1")
         amount = txn_data.get("amount") or body.get("amount", 10000)
         plan = txn_data.get("plan") or body.get("plan", "starter")
 
         # Determine plan based on amount or explicit plan
         plan_id = plan.lower()
-        if plan_id not in ["starter", "pro", "enterprise"]:
+        
+        # Map frontend plan names to backend plan IDs
+        plan_mapping = {
+            "starter": "starter",
+            "professional": "pro",
+            "pro": "pro",
+            "enterprise": "enterprise"
+        }
+        
+        # Use mapping if available, otherwise fallback to amount-based detection
+        if plan_id in plan_mapping:
+            plan_id = plan_mapping[plan_id]
+        else:
             # Fallback to amount-based detection
             if amount == 99900:  # ₹999 in paise
                 plan_id = "starter"
-            elif amount == 299900:  # ₹2999 in paise
+            elif amount == 299900 or amount == 499900:  # ₹2999 or ₹4999 in paise
                 plan_id = "pro"
             elif amount == 999900:  # ₹9999 in paise
                 plan_id = "enterprise"
+            else:
+                # Default to starter if amount doesn't match
+                plan_id = "starter"
 
         # Auto-upgrade account for mock payments
         try:
             async with httpx.AsyncClient() as client:
                 upgrade_response = await client.post(
-                    "http://localhost:8000/api/v1/alert-tracking/upgrade",
-                    json={
-                        "team_id": team_id,
-                        "plan_id": plan_id,
-                        "transaction_id": transaction_id
-                    },
+                    f"http://localhost:8000/api/v1/alert-tracking/upgrade-plan?user_id={user_id}&plan_id={plan_id}&transaction_id={transaction_id}",
                     headers={"Content-Type": "application/json"}
                 )
                 if upgrade_response.status_code == 200:
-                    logger.info(f"Mock payment: Successfully upgraded team {team_id} to {plan_id}")
+                    logger.info(f"Mock payment: Successfully upgraded user {user_id} to {plan_id}")
                     # Update transaction status
                     if transaction_id in MOCK_TRANSACTIONS:
                         MOCK_TRANSACTIONS[transaction_id]["status"] = "completed"
@@ -159,7 +169,7 @@ async def mock_check_payment_status(request: Request):
                 "amount": amount,
                 "merchantTransactionId": transaction_id,
                 "paymentState": "SUCCESS",
-                "team_id": team_id,
+                "user_id": user_id,
                 "plan_id": plan_id
             },
             "message": "Mock payment successful"

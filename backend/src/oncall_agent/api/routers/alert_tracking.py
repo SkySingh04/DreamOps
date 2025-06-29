@@ -20,6 +20,7 @@ class AlertUsageResponse(BaseModel):
     alerts_limit: int
     alerts_remaining: int
     account_tier: str
+    plan_name: str
     billing_cycle_end: str
     is_limit_reached: bool
 
@@ -49,18 +50,34 @@ SUBSCRIPTION_PLANS = {
     "enterprise": {"name": "Enterprise", "alerts_limit": -1, "price": 9999},
 }
 
+# Integration restrictions by plan
+INTEGRATION_RESTRICTIONS = {
+    "free": ["kubernetes_mcp", "pagerduty"],  # Only K8s and PagerDuty
+    "starter": ["kubernetes_mcp", "pagerduty"],  # Only K8s and PagerDuty
+    "pro": ["kubernetes_mcp", "pagerduty", "notion", "github", "grafana", "datadog"],  # All integrations
+    "enterprise": ["kubernetes_mcp", "pagerduty", "notion", "github", "grafana", "datadog"],  # All integrations
+}
+
 
 @router.get("/usage/{user_id}", response_model=AlertUsageResponse)
 async def get_alert_usage(user_id: str):
     """Get alert usage for a user."""
     logger.info(f"Getting alert usage for user: {user_id}")
+    
+    # Check if in development mode
+    import os
+    is_dev_mode = os.getenv("NEXT_PUBLIC_DEV_MODE", "false").lower() == "true" or os.getenv("NODE_ENV", "") == "development"
 
     # Initialize user data if not exists
     if user_id not in USER_DATA:
+        # In dev mode, start with Pro plan
+        default_plan = "pro" if is_dev_mode else "free"
+        default_limit = SUBSCRIPTION_PLANS[default_plan]["alerts_limit"]
+        
         USER_DATA[user_id] = {
             "alerts_used": 0,
-            "alerts_limit": 3,
-            "account_tier": "free",
+            "alerts_limit": default_limit,
+            "account_tier": default_plan,
             "billing_cycle_start": datetime.now().replace(day=1),
             "incidents_processed": set()  # Track processed incident IDs
         }
@@ -81,12 +98,17 @@ async def get_alert_usage(user_id: str):
 
     alerts_remaining = max(0, user_data["alerts_limit"] - user_data["alerts_used"])
     is_limit_reached = user_data["alerts_used"] >= user_data["alerts_limit"]
+    
+    # Get plan name from SUBSCRIPTION_PLANS
+    plan_info = SUBSCRIPTION_PLANS.get(user_data["account_tier"], {"name": "Free"})
+    plan_name = plan_info["name"]
 
     return AlertUsageResponse(
         alerts_used=user_data["alerts_used"],
         alerts_limit=user_data["alerts_limit"],
         alerts_remaining=alerts_remaining,
         account_tier=user_data["account_tier"],
+        plan_name=plan_name,
         billing_cycle_end=billing_cycle_end.isoformat(),
         is_limit_reached=is_limit_reached
     )
@@ -97,12 +119,20 @@ async def record_alert_usage(request: RecordAlertRequest):
     """Record alert usage for a user."""
     logger.info(f"Recording alert usage for user: {request.user_id}, type: {request.alert_type}, incident: {request.incident_id}")
 
+    # Check if in development mode
+    import os
+    is_dev_mode = os.getenv("NEXT_PUBLIC_DEV_MODE", "false").lower() == "true" or os.getenv("NODE_ENV", "") == "development"
+    
     # Initialize user data if not exists
     if request.user_id not in USER_DATA:
+        # In dev mode, start with Pro plan
+        default_plan = "pro" if is_dev_mode else "free"
+        default_limit = SUBSCRIPTION_PLANS[default_plan]["alerts_limit"]
+        
         USER_DATA[request.user_id] = {
             "alerts_used": 0,
-            "alerts_limit": 3,
-            "account_tier": "free",
+            "alerts_limit": default_limit,
+            "account_tier": default_plan,
             "billing_cycle_start": datetime.now().replace(day=1),
             "incidents_processed": set()
         }
@@ -195,9 +225,65 @@ async def get_subscription_plans():
                 "id": plan_id,
                 "name": plan["name"],
                 "price": plan["price"],
+                "price_display": f"₹{plan['price']}" if plan["price"] > 0 else "Free",
                 "alerts_limit": plan["alerts_limit"],
+                "alerts_limit_display": "Unlimited" if plan["alerts_limit"] == -1 else str(plan["alerts_limit"]),
                 "features": []
             }
             for plan_id, plan in SUBSCRIPTION_PLANS.items()
         ]
+    }
+
+
+@router.get("/current-plan/{user_id}")
+async def get_current_plan(user_id: str):
+    """Get current plan details for a user."""
+    if user_id not in USER_DATA:
+        # Default to free plan
+        return {
+            "plan_id": "free",
+            "plan_name": "Free",
+            "alerts_limit": 3,
+            "alerts_limit_display": "3",
+            "price_display": "Free"
+        }
+    
+    user_data = USER_DATA[user_id]
+    plan_id = user_data.get("account_tier", "free")
+    plan_info = SUBSCRIPTION_PLANS.get(plan_id, SUBSCRIPTION_PLANS["free"])
+    
+    return {
+        "plan_id": plan_id,
+        "plan_name": plan_info["name"],
+        "alerts_limit": plan_info["alerts_limit"],
+        "alerts_limit_display": "Unlimited" if plan_info["alerts_limit"] == -1 else str(plan_info["alerts_limit"]),
+        "price_display": f"₹{plan_info['price']}" if plan_info["price"] > 0 else "Free"
+    }
+
+
+@router.get("/check-integration-access/{user_id}/{integration_name}")
+async def check_integration_access(user_id: str, integration_name: str):
+    """Check if a user has access to a specific integration based on their plan."""
+    # Check if in development mode - always allow if NEXT_PUBLIC_DEV_MODE is true
+    import os
+    if os.getenv("NEXT_PUBLIC_DEV_MODE", "false").lower() == "true":
+        return {"has_access": True, "reason": "Development mode - all integrations enabled"}
+    
+    # Get user's current plan
+    if user_id not in USER_DATA:
+        plan_id = "free"
+    else:
+        plan_id = USER_DATA[user_id].get("account_tier", "free")
+    
+    # Get allowed integrations for the plan
+    allowed_integrations = INTEGRATION_RESTRICTIONS.get(plan_id, [])
+    
+    # Check if integration is allowed
+    has_access = integration_name in allowed_integrations
+    
+    return {
+        "has_access": has_access,
+        "user_plan": plan_id,
+        "allowed_integrations": allowed_integrations,
+        "reason": f"Integration '{integration_name}' is {'allowed' if has_access else 'not allowed'} on {plan_id} plan"
     }
