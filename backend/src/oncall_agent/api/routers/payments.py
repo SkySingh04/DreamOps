@@ -7,7 +7,15 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 from ...config import get_config
 from ...services.phonepe_mock_service import get_phonepe_mock_service
-from ...services.phonepe_service import get_phonepe_service
+
+# Try to import SDK service, but don't fail if it's not available
+try:
+    from ...services.phonepe_sdk_service import get_phonepe_sdk_service
+    PHONEPE_SDK_AVAILABLE = True
+except ImportError:
+    PHONEPE_SDK_AVAILABLE = False
+    get_phonepe_sdk_service = None
+
 from ..payment_models import (
     PaymentCheckStatusRequest,
     PaymentCheckStatusResponse,
@@ -36,8 +44,18 @@ def get_payment_service():
         logger.info("Using PhonePe Mock Service for testing")
         return get_phonepe_mock_service()
     else:
-        logger.info("Using PhonePe Service")
-        return get_phonepe_service()
+        # Check if SDK is available
+        if not PHONEPE_SDK_AVAILABLE:
+            logger.warning("PhonePe SDK not available. Using mock service instead.")
+            return get_phonepe_mock_service()
+        
+        # Try to use SDK service, fall back to mock if initialization fails
+        try:
+            logger.info("Attempting to use PhonePe SDK Service")
+            return get_phonepe_sdk_service()
+        except Exception as e:
+            logger.warning(f"Failed to initialize PhonePe SDK: {e}. Using mock service instead.")
+            return get_phonepe_mock_service()
 
 
 @router.post("/initiate", response_model=PaymentResponse)
