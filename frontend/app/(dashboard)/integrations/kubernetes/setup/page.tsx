@@ -507,7 +507,6 @@ export default function KubernetesSetupPage() {
                   rows={4}
                   value={config.clientKey || ''}
                   onChange={(e) => setConfig({ ...config, clientKey: e.target.value })}
-                  type={showTokens ? 'text' : 'password'}
                 />
               </div>
 
