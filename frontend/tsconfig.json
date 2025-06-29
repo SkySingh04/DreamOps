@@ -6,6 +6,12 @@
       "dom.iterable",
       "esnext"
     ],
+    "types": [
+      "node",
+      "react",
+      "react-dom",
+      "react-syntax-highlighter"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,

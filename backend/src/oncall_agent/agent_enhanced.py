@@ -18,7 +18,7 @@ from .frontend_integration import (
 )
 from .mcp_integrations.base import MCPIntegration
 from .mcp_integrations.github_mcp import GitHubMCPIntegration
-from .mcp_integrations.kubernetes_mcp_only import KubernetesMCPOnlyIntegration
+from .mcp_integrations.kubernetes_manusa_mcp import KubernetesManusaMCPIntegration
 from .mcp_integrations.notion_direct import NotionDirectIntegration
 from .pagerduty_client import (
     acknowledge_pagerduty_incident,
@@ -52,12 +52,15 @@ class EnhancedOncallAgent:
         self.agent_executor = None
 
         if self.config.k8s_enabled:
-            # Initialize agent executor without MCP integration - uses direct kubectl
-            self.agent_executor = AgentExecutor(None)
+            # Initialize k8s_mcp first for context gathering
+            self.k8s_mcp = KubernetesManusaMCPIntegration(
+                namespace=self.config.k8s_namespace,
+                enable_destructive_operations=self.config.k8s_enable_destructive_operations
+            )
+            self.register_mcp_integration("kubernetes", self.k8s_mcp)
 
-            # Still keep k8s_mcp for context gathering if needed
-            self.k8s_mcp = KubernetesMCPOnlyIntegration()
-            self.register_mcp_integration("kubernetes_mcp", self.k8s_mcp)
+            # Initialize agent executor with MCP integration
+            self.agent_executor = AgentExecutor(self.k8s_mcp)
 
             # Initialize resolvers
             self.k8s_resolver = KubernetesResolver(self.k8s_mcp)
@@ -472,9 +475,11 @@ class EnhancedOncallAgent:
 
             elif alert_type == "service_down":
                 service_name = metadata.get("service_name", alert.service_name)
-                # Check service endpoints
-                cmd = ["get", "endpoints", service_name, "-n", namespace, "-o", "json"]
-                ep_result = await self.k8s_mcp.execute_kubectl_command(cmd, auto_approve=True)
+                # Check service endpoints using MCP
+                ep_result = await self.k8s_mcp.execute_action(
+                    "describe_resource",
+                    {"kind": "endpoints", "name": service_name, "namespace": namespace}
+                )
                 context["service_endpoints"] = ep_result
 
             # Add more context gathering as needed

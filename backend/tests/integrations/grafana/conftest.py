@@ -3,15 +3,15 @@
 import asyncio
 import os
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta
-from typing import Any, AsyncGenerator, Dict, List
+from typing import Any
 
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 
 from oncall_agent.mcp_integrations.grafana_mcp import GrafanaMCPIntegration
-
 
 # Test configuration
 TEST_DASHBOARD_PREFIX = "test_oncall_"
@@ -27,14 +27,14 @@ def event_loop():
 
 
 @pytest.fixture(scope="session")
-def grafana_config() -> Dict[str, Any]:
+def grafana_config() -> dict[str, Any]:
     """Load Grafana configuration from environment variables."""
     grafana_url = os.getenv("GRAFANA_MCP_URL") or os.getenv("GRAFANA_URL")
     grafana_api_key = os.getenv("GRAFANA_MCP_API_KEY") or os.getenv("GRAFANA_API_KEY")
-    
+
     if not grafana_url or not grafana_api_key:
         pytest.skip("Grafana credentials not configured. Set GRAFANA_MCP_URL and GRAFANA_MCP_API_KEY")
-    
+
     return {
         "grafana_url": grafana_url,
         "grafana_api_key": grafana_api_key,
@@ -46,7 +46,7 @@ def grafana_config() -> Dict[str, Any]:
 async def grafana_integration(grafana_config) -> AsyncGenerator[GrafanaMCPIntegration, None]:
     """Create and connect Grafana integration instance."""
     integration = GrafanaMCPIntegration(grafana_config)
-    
+
     try:
         await integration.connect()
         yield integration
@@ -58,7 +58,7 @@ async def grafana_integration(grafana_config) -> AsyncGenerator[GrafanaMCPIntegr
 async def grafana_client(grafana_config) -> AsyncGenerator[AsyncClient, None]:
     """Create direct Grafana API client for test setup/teardown."""
     headers = {"Authorization": f"Bearer {grafana_config['grafana_api_key']}"}
-    
+
     async with AsyncClient(
         base_url=grafana_config["grafana_url"],
         headers=headers,
@@ -68,10 +68,10 @@ async def grafana_client(grafana_config) -> AsyncGenerator[AsyncClient, None]:
 
 
 @pytest.fixture
-def test_dashboard_data() -> Dict[str, Any]:
+def test_dashboard_data() -> dict[str, Any]:
     """Generate test dashboard data."""
     test_id = str(uuid.uuid4())[:8]
-    
+
     return {
         "uid": f"{TEST_DASHBOARD_PREFIX}{test_id}",
         "title": f"Test Dashboard {test_id}",
@@ -99,10 +99,10 @@ def test_dashboard_data() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def test_alert_rule_data() -> Dict[str, Any]:
+def test_alert_rule_data() -> dict[str, Any]:
     """Generate test alert rule data."""
     test_id = str(uuid.uuid4())[:8]
-    
+
     return {
         "uid": f"{TEST_DASHBOARD_PREFIX}alert_{test_id}",
         "title": f"Test Alert {test_id}",
@@ -134,10 +134,10 @@ def test_alert_rule_data() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def test_annotation_data() -> Dict[str, Any]:
+def test_annotation_data() -> dict[str, Any]:
     """Generate test annotation data."""
     now = datetime.utcnow()
-    
+
     return {
         "time": int(now.timestamp() * 1000),  # Milliseconds
         "timeEnd": int((now + timedelta(minutes=5)).timestamp() * 1000),
@@ -148,7 +148,7 @@ def test_annotation_data() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def prometheus_queries() -> List[Dict[str, str]]:
+def prometheus_queries() -> list[dict[str, str]]:
     """Common Prometheus queries for testing."""
     return [
         {
@@ -188,39 +188,39 @@ def prometheus_queries() -> List[Dict[str, str]]:
 async def cleanup_test_dashboards(grafana_client):
     """Cleanup any test dashboards created during tests."""
     yield
-    
+
     # Cleanup after tests
     try:
         # Search for test dashboards
         response = await grafana_client.get(f"/api/search?query={TEST_DASHBOARD_PREFIX}")
         dashboards = response.json()
-        
+
         # Delete each test dashboard
         for dashboard in dashboards:
             if dashboard.get("uid", "").startswith(TEST_DASHBOARD_PREFIX):
                 delete_response = await grafana_client.delete(f"/api/dashboards/uid/{dashboard['uid']}")
                 if delete_response.status_code == 200:
                     print(f"Cleaned up test dashboard: {dashboard['uid']}")
-                    
+
     except Exception as e:
         print(f"Warning: Failed to cleanup test dashboards: {e}")
 
 
 @pytest_asyncio.fixture
-async def test_dashboard(grafana_client, test_dashboard_data, cleanup_test_dashboards) -> Dict[str, Any]:
+async def test_dashboard(grafana_client, test_dashboard_data, cleanup_test_dashboards) -> dict[str, Any]:
     """Create a test dashboard and ensure cleanup."""
     # Create dashboard
     response = await grafana_client.post(
         "/api/dashboards/db",
         json={"dashboard": test_dashboard_data, "overwrite": False}
     )
-    
+
     if response.status_code != 200:
         pytest.fail(f"Failed to create test dashboard: {response.text}")
-    
+
     result = response.json()
     dashboard_uid = result.get("uid")
-    
+
     # Return dashboard info
     return {
         "uid": dashboard_uid,
@@ -231,10 +231,10 @@ async def test_dashboard(grafana_client, test_dashboard_data, cleanup_test_dashb
 
 
 @pytest.fixture
-def mock_metrics_data() -> Dict[str, Any]:
+def mock_metrics_data() -> dict[str, Any]:
     """Generate mock metrics data for testing."""
     now = datetime.utcnow()
-    
+
     return {
         "status": "success",
         "data": {
@@ -257,7 +257,7 @@ def mock_metrics_data() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def performance_threshold() -> Dict[str, float]:
+def performance_threshold() -> dict[str, float]:
     """Performance thresholds for query operations."""
     return {
         "dashboard_list": 2.0,  # seconds

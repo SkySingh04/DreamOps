@@ -7,8 +7,8 @@ from typing import Any
 
 from src.oncall_agent.api.log_streaming import log_stream_manager
 from src.oncall_agent.api.schemas import AIMode
-from src.oncall_agent.mcp_integrations.kubernetes_mcp_only import (
-    KubernetesMCPOnlyIntegration,
+from src.oncall_agent.mcp_integrations.kubernetes_manusa_mcp import (
+    KubernetesManusaMCPIntegration,
 )
 from src.oncall_agent.strategies.kubernetes_resolver import ResolutionAction
 
@@ -16,7 +16,7 @@ from src.oncall_agent.strategies.kubernetes_resolver import ResolutionAction
 class AgentExecutorMCP:
     """Handles execution of remediation actions using MCP server exclusively."""
 
-    def __init__(self, k8s_integration: KubernetesMCPOnlyIntegration | None = None):
+    def __init__(self, k8s_integration: KubernetesManusaMCPIntegration | None = None):
         """Initialize the agent executor with MCP-only integration."""
         self.logger = logging.getLogger(__name__)
         self.k8s_integration = k8s_integration

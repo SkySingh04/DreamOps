@@ -50,6 +50,7 @@ import { toast } from 'sonner';
 import { apiClient, queryKeys } from '@/lib/api-client';
 import { Integration, IntegrationStatus } from '@/lib/types';
 import { format } from 'date-fns';
+import { useDemoIntegrations } from '@/components/demo/DemoIntegrationsData';
 
 // Extended Integration interface for the integrations page
 interface ExtendedIntegration extends Integration {
@@ -141,6 +142,9 @@ export default function IntegrationsPage() {
     queryFn: () => apiClient.getIntegrations(),
   });
 
+  // Use demo data when demo mode is active
+  const demoMcpIntegrations = useDemoIntegrations(mcpIntegrations);
+
   // Fetch available integrations
   const { data: availableIntegrations = [] } = useQuery({
     queryKey: queryKeys.availableIntegrations,
@@ -159,7 +163,7 @@ export default function IntegrationsPage() {
   const allIntegrations: ExtendedIntegration[] = [
     // Add MCP integrations only - these are the main integrations we want to show
     // Team integrations are hidden to avoid duplicates since MCP integrations provide the same functionality
-    ...mcpIntegrations.map((mcp: MCPIntegration): ExtendedIntegration => ({
+    ...(demoMcpIntegrations?.data || demoMcpIntegrations || []).map((mcp: MCPIntegration): ExtendedIntegration => ({
       id: mcp.name || 'unknown',
       name: mcp.display_name || (mcp.name ? (mcp.name.charAt(0).toUpperCase() + mcp.name.slice(1)) : 'Unknown Integration'),
       description: mcp.description || (mcp.name ? `${mcp.name.charAt(0).toUpperCase() + mcp.name.slice(1)} Integration` : 'Unknown Integration'),

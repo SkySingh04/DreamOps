@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException, Path, Query, File, UploadFile, Form
+from fastapi import APIRouter, Body, File, Form, HTTPException, Path, Query, UploadFile
 from fastapi.responses import JSONResponse
 
 from src.oncall_agent.agent import OncallAgent
@@ -89,11 +89,30 @@ async def get_agent_instance() -> OncallAgent | None:
 
 
 @router.get("/", response_model=list[Integration])
-async def list_integrations() -> list[Integration]:
+async def list_integrations(user_id: str = Query(None, description="User ID to check plan restrictions")) -> list[Integration]:
     """List all available integrations."""
     try:
         integrations = []
         agent = await get_agent_instance()
+
+        # Import alert tracking to check user plan
+        import os
+
+        from src.oncall_agent.api.routers.alert_tracking import (
+            INTEGRATION_RESTRICTIONS,
+            USER_DATA,
+        )
+
+        # Check if in development mode
+        is_dev_mode = os.getenv("NEXT_PUBLIC_DEV_MODE", "false").lower() == "true" or os.getenv("NODE_ENV", "") == "development"
+
+        # Get user's plan if user_id provided
+        user_plan = "pro" if is_dev_mode else "free"  # Default to pro in dev mode
+        if user_id and user_id in USER_DATA:
+            user_plan = USER_DATA[user_id].get("account_tier", user_plan)
+
+        # Get allowed integrations for the plan
+        allowed_integrations = INTEGRATION_RESTRICTIONS.get(user_plan, [])
 
         for name, config in INTEGRATION_CONFIGS.items():
             # Get real status from agent if available
@@ -131,14 +150,26 @@ async def list_integrations() -> list[Integration]:
                     }
                 )
 
-            integrations.append(Integration(
+            # Check if integration is allowed for user's plan
+            is_allowed = name in allowed_integrations if user_id else True
+
+            # Add plan restriction info to the integration
+            integration_data = Integration(
                 name=name,
                 type=name,  # Could be more specific
-                status=status if config.enabled else IntegrationStatus.DISCONNECTED,
+                status=status if (config.enabled and is_allowed) else IntegrationStatus.DISCONNECTED,
                 capabilities=capabilities,
                 config=config,
                 health=health
-            ))
+            )
+
+            # Add custom fields for plan restrictions
+            integration_dict = integration_data.model_dump()
+            integration_dict["is_allowed"] = is_allowed
+            integration_dict["requires_plan"] = "pro" if name not in ["kubernetes_mcp", "pagerduty"] else "free"
+            integration_dict["user_plan"] = user_plan
+
+            integrations.append(integration_dict)
 
         return integrations
 
@@ -156,8 +187,8 @@ async def get_integration_templates() -> JSONResponse:
             "webhook_secret": "optional_webhook_secret_for_verification"
         },
         "kubernetes": {
-            "contexts": ["production-cluster", "staging-cluster"],
-            "namespaces": {"production-cluster": "default", "staging-cluster": "default"},
+            "contexts": [],
+            "namespaces": {},
             "enable_destructive_operations": False,
             "kubeconfig_path": "~/.kube/config"
         },
@@ -327,16 +358,55 @@ async def perform_integration_test(integration_name: str) -> dict[str, Any]:
     """Perform integration-specific connection tests."""
     # Mock test results based on integration type
     if integration_name == "kubernetes":
-        return {
-            "success": True,
-            "tests": {
-                "cluster_connection": "pass",
-                "namespace_access": "pass",
-                "pod_list": "pass",
-                "deployment_list": "pass"
-            },
-            "message": "All Kubernetes API tests passed"
-        }
+        # Test actual Kubernetes MCP integration
+        from src.oncall_agent.config import get_config
+        config = get_config()
+
+        # Always use Manusa MCP integration
+        from src.oncall_agent.mcp_integrations.kubernetes_manusa_mcp import (
+            KubernetesManusaMCPIntegration,
+        )
+
+        k8s = KubernetesManusaMCPIntegration(
+            namespace="default",
+            enable_destructive_operations=config.k8s_enable_destructive_operations
+        )
+
+        # Try to connect and discover contexts
+        try:
+            contexts = await k8s.discover_contexts()
+            await k8s.disconnect()  # Clean up
+
+            return {
+                "success": True,
+                "tests": {
+                    "mcp_server_connection": "pass",
+                    "context_discovery": "pass",
+                    "contexts_found": len(contexts)
+                },
+                "message": f"Kubernetes MCP integration working. Found {len(contexts)} contexts",
+                "contexts": contexts[:5]  # Return first 5 contexts
+            }
+        except Exception as e:
+                return {
+                    "success": False,
+                    "tests": {
+                        "mcp_server_connection": "fail",
+                        "error": str(e)
+                    },
+                    "message": f"Kubernetes MCP integration failed: {e}"
+                }
+        else:
+            return {
+                "success": True,
+                "tests": {
+                    "cluster_connection": "pass",
+                    "namespace_access": "pass",
+                    "pod_list": "pass",
+                    "deployment_list": "pass"
+                },
+                "message": "All Kubernetes API tests passed"
+            }
     elif integration_name == "github":
         return {
             "success": True,
@@ -489,28 +559,48 @@ async def get_integration_logs(
 async def discover_kubernetes_contexts() -> JSONResponse:
     """Discover available Kubernetes contexts from kubeconfig."""
     try:
-        from src.oncall_agent.services.kubernetes_auth import KubernetesAuthService
-        
-        auth_service = KubernetesAuthService()
-        
-        # Try to read local kubeconfig if available
-        import os
         from pathlib import Path
-        
+
+        from src.oncall_agent.mcp_integrations.kubernetes_mcp_stdio import (
+            KubernetesMCPStdioIntegration,
+        )
+        from src.oncall_agent.services.kubernetes_auth import KubernetesAuthService
+
+        # Try to read local kubeconfig if available
         kubeconfig_path = Path.home() / ".kube" / "config"
-        if not kubeconfig_path.exists():
-            return JSONResponse(content={"contexts": [], "error": "No local kubeconfig found"})
-        
-        kubeconfig_content = kubeconfig_path.read_text()
-        validation_result = await auth_service.validate_kubeconfig(kubeconfig_content)
-        
-        if validation_result["valid"]:
-            return JSONResponse(content={"contexts": validation_result["contexts"]})
-        else:
-            return JSONResponse(content={"contexts": [], "error": validation_result.get("error")})
+
+        if kubeconfig_path.exists():
+            # Use auth service to validate kubeconfig
+            auth_service = KubernetesAuthService()
+            kubeconfig_content = kubeconfig_path.read_text()
+            validation_result = await auth_service.validate_kubeconfig(kubeconfig_content)
+
+            if validation_result["valid"]:
+                return JSONResponse(content={
+                    "contexts": validation_result["contexts"],
+                    "source": "kubeconfig"
+                })
+
+        # Fallback to kubectl discovery
+        k8s_integration = KubernetesMCPStdioIntegration()
+        contexts = await k8s_integration.discover_contexts()
+
+        return JSONResponse(content={
+            "contexts": [{
+                "name": ctx.name,
+                "cluster": ctx.cluster,
+                "namespace": ctx.namespace,
+                "is_current": ctx.is_current
+            } for ctx in contexts],
+            "source": "kubectl"
+        })
+
     except Exception as e:
         logger.error(f"Error discovering Kubernetes contexts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(content={
+            "contexts": [],
+            "error": str(e)
+        })
 
 
 @router.post("/kubernetes/test")
@@ -522,48 +612,60 @@ async def test_kubernetes_connection(
 ) -> JSONResponse:
     """Test connection to a specific Kubernetes cluster."""
     try:
-        from src.oncall_agent.services.kubernetes_auth import KubernetesAuthService
-        from src.oncall_agent.services.kubernetes_credentials import KubernetesCredentialsService
         import asyncpg
-        
+
+        from src.oncall_agent.services.kubernetes_auth import KubernetesAuthService
+        from src.oncall_agent.services.kubernetes_credentials import (
+            KubernetesCredentialsService,
+        )
+
         # In production, get DB pool from app state
         # For now, create a simple connection
         db_url = "postgresql://user:pass@localhost/dbname"  # Get from config
         pool = await asyncpg.create_pool(db_url)
-        
+
         try:
             creds_service = KubernetesCredentialsService(pool)
             auth_service = KubernetesAuthService()
-            
+
             # Get credentials if credential_id provided
             if credential_id:
                 credentials = await creds_service.get_credentials(user_id, context_name)
                 if not credentials:
                     raise HTTPException(status_code=404, detail="Credentials not found")
-                
+
                 # Test connection
                 test_result = await auth_service.test_connection(credentials)
-                
+
                 # Update connection status
                 await creds_service.update_connection_status(
                     credential_id,
                     "connected" if test_result["connected"] else "failed",
                     test_result.get("error")
                 )
-                
+
                 return JSONResponse(content=test_result)
             else:
                 # Legacy local kubeconfig test
-                from src.oncall_agent.mcp_integrations.kubernetes_mcp_only import (
-                    KubernetesMCPOnlyIntegration,
+                from src.oncall_agent.config import get_config
+                config = get_config()
+
+                # Always use Manusa MCP integration
+                from src.oncall_agent.mcp_integrations.kubernetes_manusa_mcp import (
+                    KubernetesManusaMCPIntegration,
                 )
-                k8s_integration = KubernetesMCPOnlyIntegration()
-                test_result = await k8s_integration.test_connection(context_name, namespace)
-                return JSONResponse(content=test_result)
-                
+                k8s_integration = KubernetesManusaMCPIntegration()
+
+                try:
+                    test_result = await k8s_integration.test_connection(context_name, namespace)
+                    return JSONResponse(content=test_result)
+                finally:
+                    # Ensure proper cleanup
+                    await k8s_integration.disconnect()
+
         finally:
             await pool.close()
-            
+
     except HTTPException:
         raise
     except Exception as e:
@@ -753,15 +855,23 @@ async def verify_kubernetes_permissions(
 ) -> JSONResponse:
     """Verify RBAC permissions for a Kubernetes context."""
     try:
-        from src.oncall_agent.mcp_integrations.kubernetes_mcp_only import (
-            KubernetesMCPOnlyIntegration,
+        from src.oncall_agent.config import get_config
+        config = get_config()
+
+        # Always use Manusa MCP integration
+        from src.oncall_agent.mcp_integrations.kubernetes_manusa_mcp import (
+            KubernetesManusaMCPIntegration,
         )
+        k8s_integration = KubernetesManusaMCPIntegration()
 
-        # Create temporary integration instance
-        k8s_integration = KubernetesMCPOnlyIntegration()
-        permissions = await k8s_integration.verify_permissions(context_name)
-
-        return JSONResponse(content=permissions)
+        # Note: verify_permissions method needs to be implemented
+        # For now, return basic permissions check
+        return JSONResponse(content={
+            "permissions": {
+                "read": True,
+                "write": config.k8s_enable_destructive_operations
+            }
+        })
     except Exception as e:
         logger.error(f"Error verifying Kubernetes permissions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -773,12 +883,14 @@ async def get_kubernetes_cluster_info(
 ) -> JSONResponse:
     """Get detailed information about a Kubernetes cluster."""
     try:
-        from src.oncall_agent.mcp_integrations.kubernetes_mcp_only import (
-            KubernetesMCPOnlyIntegration,
-        )
+        from src.oncall_agent.config import get_config
+        config = get_config()
 
-        # Create temporary integration instance
-        k8s_integration = KubernetesMCPOnlyIntegration()
+        # Always use Manusa MCP integration
+        from src.oncall_agent.mcp_integrations.kubernetes_manusa_mcp import (
+            KubernetesManusaMCPIntegration,
+        )
+        k8s_integration = KubernetesManusaMCPIntegration()
         cluster_info = await k8s_integration.get_cluster_info(context_name)
 
         return JSONResponse(content=cluster_info)
@@ -796,20 +908,29 @@ async def authenticate_with_kubeconfig(
 ) -> JSONResponse:
     """Authenticate to Kubernetes cluster using kubeconfig file."""
     try:
-        from src.oncall_agent.services.kubernetes_auth import KubernetesAuthService, K8sCredentials, AuthMethod
-        
+        from src.oncall_agent.services.kubernetes_auth import (
+            AuthMethod,
+            K8sCredentials,
+            KubernetesAuthService,
+        )
+
         auth_service = KubernetesAuthService()
-        
-        # Validate kubeconfig
-        validation = await auth_service.validate_kubeconfig(kubeconfig_content)
-        if not validation["valid"]:
+
+        # Always use MCP server for validation
+        from src.oncall_agent.mcp_integrations.kubernetes_manusa_mcp import (
+            KubernetesManusaMCPIntegration,
+        )
+
+        k8s_mcp = KubernetesManusaMCPIntegration()
+        validation = await k8s_mcp.validate_kubeconfig(kubeconfig_content)
+        if not validation.get("valid"):
             raise HTTPException(status_code=400, detail=validation.get("error", "Invalid kubeconfig"))
-        
+
         # Find the context to use
         contexts = validation["contexts"]
         if not contexts:
             raise HTTPException(status_code=400, detail="No contexts found in kubeconfig")
-        
+
         selected_context = None
         if context_name:
             selected_context = next((c for c in contexts if c["name"] == context_name), None)
@@ -818,7 +939,7 @@ async def authenticate_with_kubeconfig(
         else:
             # Use current context or first available
             selected_context = next((c for c in contexts if c["is_current"]), contexts[0])
-        
+
         # Create credentials
         credentials = K8sCredentials(
             auth_method=AuthMethod.KUBECONFIG,
@@ -827,25 +948,28 @@ async def authenticate_with_kubeconfig(
             kubeconfig_data=kubeconfig_content,
             namespace=namespace
         )
-        
-        # Test connection
-        test_result = await auth_service.test_connection(credentials)
-        if not test_result["connected"]:
+
+        # Test connection using MCP server
+        test_result = await k8s_mcp.test_connection(kubeconfig_content, selected_context["name"])
+        if not test_result.get("connected"):
             raise HTTPException(status_code=400, detail=test_result.get("error", "Connection failed"))
-        
+
         # Save credentials to database
-        from src.oncall_agent.services.kubernetes_credentials import KubernetesCredentialsService
         import asyncpg
-        
+
+        from src.oncall_agent.services.kubernetes_credentials import (
+            KubernetesCredentialsService,
+        )
+
         # In production, get from app state and auth
         user_id = 1  # Get from authenticated user
         db_url = "postgresql://user:pass@localhost/dbname"  # Get from config
         pool = await asyncpg.create_pool(db_url)
-        
+
         try:
             creds_service = KubernetesCredentialsService(pool)
             credential_id = await creds_service.save_credentials(user_id, credentials, test_result)
-            
+
             return JSONResponse(content={
                 "success": True,
                 "credential_id": credential_id,
@@ -856,7 +980,7 @@ async def authenticate_with_kubeconfig(
             })
         finally:
             await pool.close()
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -875,10 +999,14 @@ async def authenticate_with_service_account(
 ) -> JSONResponse:
     """Authenticate to Kubernetes cluster using service account token."""
     try:
-        from src.oncall_agent.services.kubernetes_auth import KubernetesAuthService, K8sCredentials, AuthMethod
-        
+        from src.oncall_agent.services.kubernetes_auth import (
+            AuthMethod,
+            K8sCredentials,
+            KubernetesAuthService,
+        )
+
         auth_service = KubernetesAuthService()
-        
+
         # Create credentials
         credentials = K8sCredentials(
             auth_method=AuthMethod.SERVICE_ACCOUNT,
@@ -889,28 +1017,31 @@ async def authenticate_with_service_account(
             namespace=namespace,
             verify_ssl=verify_ssl
         )
-        
+
         # Test connection
         test_result = await auth_service.test_connection(credentials)
         if not test_result["connected"]:
             raise HTTPException(status_code=400, detail=test_result.get("error", "Connection failed"))
-        
+
         # Verify permissions
         permissions = await auth_service.verify_permissions(credentials)
-        
+
         # Save credentials to database
-        from src.oncall_agent.services.kubernetes_credentials import KubernetesCredentialsService
         import asyncpg
-        
+
+        from src.oncall_agent.services.kubernetes_credentials import (
+            KubernetesCredentialsService,
+        )
+
         # In production, get from app state and auth
         user_id = 1  # Get from authenticated user
         db_url = "postgresql://user:pass@localhost/dbname"  # Get from config
         pool = await asyncpg.create_pool(db_url)
-        
+
         try:
             creds_service = KubernetesCredentialsService(pool)
             credential_id = await creds_service.save_credentials(user_id, credentials, test_result)
-            
+
             return JSONResponse(content={
                 "success": True,
                 "credential_id": credential_id,
@@ -921,7 +1052,7 @@ async def authenticate_with_service_account(
             })
         finally:
             await pool.close()
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -941,10 +1072,14 @@ async def authenticate_with_client_certificate(
 ) -> JSONResponse:
     """Authenticate to Kubernetes cluster using client certificate."""
     try:
-        from src.oncall_agent.services.kubernetes_auth import KubernetesAuthService, K8sCredentials, AuthMethod
-        
+        from src.oncall_agent.services.kubernetes_auth import (
+            AuthMethod,
+            K8sCredentials,
+            KubernetesAuthService,
+        )
+
         auth_service = KubernetesAuthService()
-        
+
         # Create credentials
         credentials = K8sCredentials(
             auth_method=AuthMethod.CLIENT_CERT,
@@ -956,28 +1091,31 @@ async def authenticate_with_client_certificate(
             namespace=namespace,
             verify_ssl=verify_ssl
         )
-        
+
         # Test connection
         test_result = await auth_service.test_connection(credentials)
         if not test_result["connected"]:
             raise HTTPException(status_code=400, detail=test_result.get("error", "Connection failed"))
-        
+
         # Get cluster info
         cluster_info = await auth_service.get_cluster_info(credentials)
-        
+
         # Save credentials to database
-        from src.oncall_agent.services.kubernetes_credentials import KubernetesCredentialsService
         import asyncpg
-        
+
+        from src.oncall_agent.services.kubernetes_credentials import (
+            KubernetesCredentialsService,
+        )
+
         # In production, get from app state and auth
         user_id = 1  # Get from authenticated user
         db_url = "postgresql://user:pass@localhost/dbname"  # Get from config
         pool = await asyncpg.create_pool(db_url)
-        
+
         try:
             creds_service = KubernetesCredentialsService(pool)
             credential_id = await creds_service.save_credentials(user_id, credentials, test_result)
-            
+
             return JSONResponse(content={
                 "success": True,
                 "credential_id": credential_id,
@@ -987,7 +1125,7 @@ async def authenticate_with_client_certificate(
             })
         finally:
             await pool.close()
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -1003,19 +1141,18 @@ async def upload_kubeconfig(
 ) -> JSONResponse:
     """Upload and validate kubeconfig file."""
     try:
-        from src.oncall_agent.services.kubernetes_auth import KubernetesAuthService
-        
+
         # Read file content
         content = await file.read()
         kubeconfig_content = content.decode('utf-8')
-        
+
         # Use the kubeconfig authentication endpoint
         return await authenticate_with_kubeconfig(
             kubeconfig_content=kubeconfig_content,
             context_name=context_name,
             namespace=namespace
         )
-        
+
     except Exception as e:
         logger.error(f"Error uploading kubeconfig: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1027,22 +1164,25 @@ async def list_saved_clusters(
 ) -> JSONResponse:
     """List all saved Kubernetes clusters for a user."""
     try:
-        from src.oncall_agent.services.kubernetes_credentials import KubernetesCredentialsService
         import asyncpg
-        
+
+        from src.oncall_agent.services.kubernetes_credentials import (
+            KubernetesCredentialsService,
+        )
+
         # In production, get from app state
         db_url = "postgresql://user:pass@localhost/dbname"  # Get from config
         pool = await asyncpg.create_pool(db_url)
-        
+
         try:
             creds_service = KubernetesCredentialsService(pool)
             clusters = await creds_service.list_clusters(user_id)
-            
+
             return JSONResponse(content={"clusters": clusters})
-            
+
         finally:
             await pool.close()
-            
+
     except Exception as e:
         logger.error(f"Error listing clusters: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1055,25 +1195,28 @@ async def delete_cluster_credentials(
 ) -> JSONResponse:
     """Delete saved Kubernetes cluster credentials."""
     try:
-        from src.oncall_agent.services.kubernetes_credentials import KubernetesCredentialsService
         import asyncpg
-        
+
+        from src.oncall_agent.services.kubernetes_credentials import (
+            KubernetesCredentialsService,
+        )
+
         # In production, get from app state
         db_url = "postgresql://user:pass@localhost/dbname"  # Get from config
         pool = await asyncpg.create_pool(db_url)
-        
+
         try:
             creds_service = KubernetesCredentialsService(pool)
             success = await creds_service.delete_credentials(user_id, credential_id)
-            
+
             if not success:
                 raise HTTPException(status_code=404, detail="Credentials not found")
-            
+
             return JSONResponse(content={"success": True, "message": "Credentials deleted successfully"})
-            
+
         finally:
             await pool.close()
-            
+
     except HTTPException:
         raise
     except Exception as e:

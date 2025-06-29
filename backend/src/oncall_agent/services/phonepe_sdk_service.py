@@ -1,13 +1,48 @@
 """PhonePe Payment Gateway Integration using Official SDK"""
 import uuid
-from typing import Any, Optional
+from typing import Any
 
-from phonepe.sdk.pg.common.exceptions import PhonePeException
-from phonepe.sdk.pg.env import Env
-from phonepe.sdk.pg.payments.v2.models.request.standard_checkout_pay_request import (
-    StandardCheckoutPayRequest,
-)
-from phonepe.sdk.pg.payments.v2.standard_checkout_client import StandardCheckoutClient
+# Try to import PhonePe SDK, fall back to mock if not available
+try:
+    from phonepe.sdk.pg.common.exceptions import PhonePeException
+    from phonepe.sdk.pg.env import Env
+    from phonepe.sdk.pg.payments.v2.models.request.standard_checkout_pay_request import (
+        StandardCheckoutPayRequest,
+    )
+    from phonepe.sdk.pg.payments.v2.standard_checkout_client import (
+        StandardCheckoutClient,
+    )
+    PHONEPE_SDK_AVAILABLE = True
+except ImportError:
+    # SDK not available, we'll use the mock service
+    PHONEPE_SDK_AVAILABLE = False
+    # Define dummy classes to prevent errors
+    class PhonePeException(Exception):
+        def __init__(self, message="", code=None, http_status_code=None):
+            super().__init__(message)
+            self.message = message
+            self.code = code
+            self.http_status_code = http_status_code
+    class Env:
+        PRODUCTION = "PRODUCTION"
+        TEST = "TEST"
+    class StandardCheckoutPayRequest:
+        pass
+    class StandardCheckoutClient:
+        _instance = None
+
+        @classmethod
+        def get_instance(cls, **kwargs):
+            return cls()
+
+        def pay(self, request):
+            pass
+
+        def get_order_status(self, **kwargs):
+            pass
+
+        def validate_callback(self, **kwargs):
+            pass
 
 from ..api.payment_models import (
     PaymentCheckStatusResponse,
@@ -25,6 +60,12 @@ class PhonePeSDKService:
     """PhonePe payment gateway service using official SDK"""
 
     def __init__(self):
+        if not PHONEPE_SDK_AVAILABLE:
+            raise ImportError(
+                "PhonePe SDK is not available. Please install it or use the mock service. "
+                "The SDK may need to be installed from a private repository."
+            )
+
         config = get_config()
 
         # PhonePe SDK configuration - Use proper test credentials
@@ -261,7 +302,7 @@ class PhonePeSDKService:
 
 
 # Singleton instance
-_phonepe_sdk_service: Optional[PhonePeSDKService] = None
+_phonepe_sdk_service: PhonePeSDKService | None = None
 
 
 def get_phonepe_sdk_service() -> PhonePeSDKService:

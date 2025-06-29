@@ -338,11 +338,10 @@ export default function KubernetesSetupPage() {
               <div className="grid gap-2">
                 <Label htmlFor="sa-token">Service Account Token *</Label>
                 <div className="relative">
-                  <Textarea
+                  <Input
                     id="sa-token"
                     placeholder="Paste your service account token here"
                     className="pr-10 font-mono text-sm"
-                    rows={3}
                     value={config.serviceAccountToken || ''}
                     onChange={(e) => setConfig({ ...config, serviceAccountToken: e.target.value })}
                     type={showTokens ? 'text' : 'password'}
@@ -508,7 +507,6 @@ export default function KubernetesSetupPage() {
                   rows={4}
                   value={config.clientKey || ''}
                   onChange={(e) => setConfig({ ...config, clientKey: e.target.value })}
-                  type={showTokens ? 'text' : 'password'}
                 />
               </div>
 

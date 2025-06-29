@@ -1,0 +1,40 @@
+# Development Dockerfile for backend
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+RUN pip install uv
+
+# Copy dependency files
+COPY pyproject.toml uv.lock ./
+
+# Install dependencies
+RUN uv sync
+
+# Install kubectl for k8s operations (optional for dev)
+RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
+    && chmod +x kubectl \
+    && mv kubectl /usr/local/bin/
+
+# Copy application code
+COPY . .
+
+# Set environment variables for development
+ENV NODE_ENV=development
+ENV NEXT_PUBLIC_DEV_MODE=true
+ENV API_HOST=0.0.0.0
+ENV API_PORT=8000
+
+# Expose port
+EXPOSE 8000
+
+# Run the FastAPI application with hot reload
+CMD ["uv", "run", "uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

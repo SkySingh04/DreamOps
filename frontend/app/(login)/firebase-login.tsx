@@ -54,7 +54,7 @@ export function FirebaseLogin({ mode = 'signin' }: { mode?: 'signin' | 'signup' 
             setError('Incorrect password. Please try again.');
             break;
           case 'auth/email-already-in-use':
-            setError('An account already exists with this email address.');
+            setError('An account already exists with this email. Please use the sign in form instead.');
             break;
           case 'auth/weak-password':
             setError('Password should be at least 6 characters.');
@@ -68,6 +68,9 @@ export function FirebaseLogin({ mode = 'signin' }: { mode?: 'signin' | 'signup' 
           default:
             setError(err.message || 'An error occurred. Please try again.');
         }
+      } else if (err instanceof Error) {
+        // Handle custom error messages from auth-context
+        setError(err.message);
       } else {
         setError('An unexpected error occurred. Please try again.');
       }

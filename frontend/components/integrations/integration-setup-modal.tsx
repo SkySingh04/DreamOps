@@ -19,7 +19,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CopyIcon, CheckCircle2, AlertCircle, Loader2, ExternalLink } from 'lucide-react';
+import { CopyIcon, CheckCircle2, AlertCircle, Loader2, ExternalLink, Info } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { useDevAutofill } from '@/lib/hooks/use-dev-autofill';
@@ -104,6 +104,8 @@ export function IntegrationSetupModal({
   const handleTest = async () => {
     setIsTesting(true);
     setTestResult(null);
+
+    console.log('Testing integration with config:', config);
 
     try {
       const response = await apiClient.post(
@@ -339,8 +341,8 @@ function KubernetesConfig({ config, onChange, requirements }: any) {
       const contextNames = contextObjects.map((ctx: any) => ctx.name);
       setContexts(contextNames);
       
-      // Initialize config with discovered contexts
-      if (contextNames.length > 0) {
+      // Initialize config with discovered contexts only if no contexts are selected yet
+      if (contextNames.length > 0 && (!config.contexts || config.contexts.length === 0)) {
         const selectedContexts = contextNames.slice(0, 1); // Select first by default
         const namespaces: any = {};
         selectedContexts.forEach((ctx: string) => {
@@ -349,8 +351,20 @@ function KubernetesConfig({ config, onChange, requirements }: any) {
         
         onChange('contexts', selectedContexts);
         onChange('namespaces', namespaces);
+      } else if (config.contexts && config.contexts.length > 0) {
+        // Preserve existing namespace selections
+        const existingNamespaces = config.namespaces || {};
+        config.contexts.forEach((ctx: string) => {
+          if (!existingNamespaces[ctx]) {
+            existingNamespaces[ctx] = 'default';
+          }
+        });
+        onChange('namespaces', existingNamespaces);
       }
+      
+      toast.success(`Found ${contextNames.length} Kubernetes context${contextNames.length !== 1 ? 's' : ''}`);
     } catch (error) {
+      console.error('Failed to discover contexts:', error);
       toast.error('Failed to discover Kubernetes contexts');
     } finally {
       setIsDiscovering(false);
@@ -403,25 +417,42 @@ function KubernetesConfig({ config, onChange, requirements }: any) {
                   <div className="flex items-center gap-2">
                     <input
                       type="checkbox"
+                      id={`context-${context}`}
                       checked={config.contexts?.includes(context) || false}
                       onChange={(e) => {
-                        const newContexts = e.target.checked
-                          ? [...(config.contexts || []), context]
-                          : (config.contexts || []).filter((c: string) => c !== context);
+                        const isChecked = e.target.checked;
+                        const currentContexts = config.contexts || [];
+                        
+                        // Create new contexts array
+                        const newContexts = isChecked
+                          ? [...currentContexts, context]
+                          : currentContexts.filter((c: string) => c !== context);
+                        
+                        // Update contexts
                         onChange('contexts', newContexts);
                         
                         // Update namespaces
                         const newNamespaces = { ...(config.namespaces || {}) };
-                        if (e.target.checked) {
-                          newNamespaces[context] = 'default';
+                        if (isChecked) {
+                          // Only set to default if not already set
+                          if (!newNamespaces[context]) {
+                            newNamespaces[context] = 'default';
+                          }
                         } else {
                           delete newNamespaces[context];
                         }
                         onChange('namespaces', newNamespaces);
+                        
+                        console.log('Context selection changed:', {
+                          context,
+                          isChecked,
+                          newContexts,
+                          newNamespaces
+                        });
                       }}
-                      className="rounded"
+                      className="rounded cursor-pointer"
                     />
-                    <Label className="font-medium cursor-pointer">
+                    <Label htmlFor={`context-${context}`} className="font-medium cursor-pointer">
                       {context}
                     </Label>
                   </div>
@@ -438,8 +469,14 @@ function KubernetesConfig({ config, onChange, requirements }: any) {
                             [context]: e.target.value
                           };
                           onChange('namespaces', newNamespaces);
+                          console.log('Namespace changed:', {
+                            context,
+                            namespace: e.target.value,
+                            allNamespaces: newNamespaces
+                          });
                         }}
-                        className="h-8 w-32"
+                        placeholder="default"
+                        className="h-8 w-40"
                       />
                     </div>
                   )}
@@ -453,6 +490,15 @@ function KubernetesConfig({ config, onChange, requirements }: any) {
           </div>
         )}
       </div>
+
+      {config.contexts && config.contexts.length > 0 && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Selected for testing:</strong> Context "{config.contexts[0]}" with namespace "{config.namespaces?.[config.contexts[0]] || 'default'}"
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="flex items-center justify-between">
         <div className="space-y-0.5">
@@ -477,6 +523,30 @@ function KubernetesConfig({ config, onChange, requirements }: any) {
           value={config.kubeconfig_path || ''}
           onChange={(e) => onChange('kubeconfig_path', e.target.value)}
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Upload Kubeconfig File (Optional)</Label>
+        <div className="border-2 border-dashed rounded-lg p-4">
+          <input
+            type="file"
+            accept=".yaml,.yml,.conf,text/*"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                const content = await file.text();
+                // Base64 encode the content
+                const encodedContent = btoa(content);
+                onChange('kubeconfig_content', encodedContent);
+                toast.success('Kubeconfig file uploaded successfully');
+              }
+            }}
+            className="w-full"
+          />
+          <p className="text-sm text-muted-foreground mt-2">
+            Upload a kubeconfig file to connect to remote clusters
+          </p>
+        </div>
       </div>
     </div>
   );
