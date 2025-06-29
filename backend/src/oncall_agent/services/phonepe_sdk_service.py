@@ -1,6 +1,6 @@
 """PhonePe Payment Gateway Integration using Official SDK"""
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 # Try to import PhonePe SDK, fall back to mock if not available
 try:
@@ -300,7 +300,7 @@ class PhonePeSDKService:
 
 
 # Singleton instance
-_phonepe_sdk_service: Optional[PhonePeSDKService] = None
+_phonepe_sdk_service: PhonePeSDKService | None = None
 
 
 def get_phonepe_sdk_service() -> PhonePeSDKService:
