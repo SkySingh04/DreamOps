@@ -29,6 +29,7 @@ from src.oncall_agent.api.routers import (
     incidents_router,
     integrations_router,
     kubernetes_agno,
+    kubernetes_improved,
     mock_payments,
     monitoring_router,
     payments_router,
@@ -407,6 +408,7 @@ app.include_router(api_keys.router)
 app.include_router(user_integrations.router)  # Already has /api/v1 prefix
 app.include_router(admin_integrations.router)  # Admin integration verification routes
 app.include_router(kubernetes_agno.router)  # Kubernetes Agno MCP integration
+app.include_router(kubernetes_improved.router)  # Improved Kubernetes integration with kubeconfig support
 
 # Include dev config router only in development mode
 if os.getenv("NODE_ENV") == "development":

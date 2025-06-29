@@ -12,13 +12,14 @@ This script tests:
 import asyncio
 import json
 import os
+
+# Add backend to path
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Add backend to path
-import sys
 sys.path.insert(0, str(Path(__file__).parent))
 
 from src.oncall_agent.agno_kubernetes_agent import DreamOpsK8sAgent
@@ -36,26 +37,26 @@ async def test_basic_mcp_connection():
     print("\n" + "="*60)
     print("TEST 1: Basic MCP Server Connection")
     print("="*60)
-    
+
     agent = DreamOpsK8sAgent()
-    
+
     try:
         # Initialize with default local MCP server
         initialized = await agent.initialize_with_mcp()
-        
+
         if initialized:
             print("✅ Successfully initialized Agno agent with K8s MCP tools")
-            
+
             # Test the integration
             test_result = await agent.test_mcp_integration()
-            print(f"\nMCP Integration Test Results:")
+            print("\nMCP Integration Test Results:")
             print(json.dumps(test_result, indent=2))
-            
+
             return True
         else:
             print("❌ Failed to initialize Agno agent")
             return False
-            
+
     except Exception as e:
         print(f"❌ Error during basic MCP connection test: {e}")
         return False
@@ -68,7 +69,7 @@ async def test_remote_cluster_connection():
     print("\n" + "="*60)
     print("TEST 2: Remote Cluster Connection (Without Local Kubeconfig)")
     print("="*60)
-    
+
     # Example: Service Account authentication
     credentials = K8sCredentials(
         auth_method=AuthMethod.SERVICE_ACCOUNT,
@@ -79,20 +80,20 @@ async def test_remote_cluster_connection():
         namespace="default",
         verify_ssl=True
     )
-    
+
     agent = DreamOpsK8sAgent()
-    
+
     try:
         print(f"Attempting to connect to remote cluster: {credentials.cluster_name}")
         print(f"Endpoint: {credentials.cluster_endpoint}")
         print(f"Auth method: {credentials.auth_method.value}")
-        
+
         # Connect to remote cluster
         result = await agent.connect_remote_cluster(
             user_id=1,  # Test user ID
             credentials=credentials
         )
-        
+
         if result.get("connected"):
             print("✅ Successfully connected to remote cluster")
             print(f"Cluster version: {result.get('cluster_version')}")
@@ -103,7 +104,7 @@ async def test_remote_cluster_connection():
         else:
             print(f"❌ Failed to connect: {result.get('error')}")
             return False
-            
+
     except Exception as e:
         print(f"❌ Error during remote cluster connection: {e}")
         return False
@@ -116,7 +117,7 @@ async def test_incident_response():
     print("\n" + "="*60)
     print("TEST 3: Incident Response Workflow")
     print("="*60)
-    
+
     # Create test alert
     test_alert = {
         "alert_id": "test-123",
@@ -132,19 +133,19 @@ async def test_incident_response():
             "service": "app-service"
         }
     }
-    
+
     agent = DreamOpsK8sAgent()
-    
+
     try:
         print("Processing test alert:")
         print(json.dumps(test_alert, indent=2))
-        
+
         # Handle the alert
         response = await agent.handle_pagerduty_alert(test_alert)
-        
+
         print("\nAgent Response:")
         print(json.dumps(response, indent=2, default=str))
-        
+
         if response.get("status") == "success":
             print("\n✅ Incident response successful")
             print(f"Actions taken: {response.get('actions_taken', [])}")
@@ -152,7 +153,7 @@ async def test_incident_response():
         else:
             print(f"\n❌ Incident response failed: {response.get('error')}")
             return False
-            
+
     except Exception as e:
         print(f"❌ Error during incident response: {e}")
         return False
@@ -165,12 +166,12 @@ async def test_yolo_mode():
     print("\n" + "="*60)
     print("TEST 4: YOLO Mode Automated Remediation")
     print("="*60)
-    
+
     # Enable YOLO mode
     os.environ["K8S_ENABLE_DESTRUCTIVE_OPERATIONS"] = "true"
-    
+
     agent = DreamOpsK8sAgent()
-    
+
     # OOM Kill alert
     oom_alert = {
         "alert_id": "oom-456",
@@ -185,24 +186,24 @@ async def test_yolo_mode():
             "pod": "backend-api-5f9c8d7b6-abc123"
         }
     }
-    
+
     try:
         print(f"YOLO Mode Enabled: {agent.enable_yolo_mode}")
         print("\nProcessing OOM alert with automated remediation:")
         print(json.dumps(oom_alert, indent=2))
-        
+
         response = await agent.handle_pagerduty_alert(oom_alert)
-        
+
         print("\nYOLO Mode Response:")
         print(json.dumps(response, indent=2, default=str))
-        
+
         if response.get("yolo_mode"):
             print("\n✅ YOLO mode executed automated remediation")
             return True
         else:
             print("\n❌ YOLO mode not active")
             return False
-            
+
     except Exception as e:
         print(f"❌ Error during YOLO mode test: {e}")
         return False
@@ -217,21 +218,21 @@ async def test_multi_cluster_support():
     print("\n" + "="*60)
     print("TEST 5: Multi-Cluster Support")
     print("="*60)
-    
+
     agent = DreamOpsK8sAgent()
-    
+
     try:
         # List available clusters
         clusters = await agent.list_available_clusters(user_id=1)
-        
+
         print(f"Available clusters: {len(clusters)}")
         for cluster in clusters:
             print(f"\n- {cluster['name']} ({cluster['type']})")
             print(f"  Status: {cluster.get('connection_status', 'unknown')}")
             print(f"  Namespace: {cluster.get('namespace', 'default')}")
-            
+
         return True
-        
+
     except Exception as e:
         print(f"❌ Error listing clusters: {e}")
         return False
@@ -243,14 +244,14 @@ async def main():
     """Run all tests."""
     print("🚀 Starting Agno Kubernetes MCP Integration Tests")
     print(f"Timestamp: {datetime.now(UTC).isoformat()}")
-    
+
     # Check environment
     print("\nEnvironment Check:")
     print(f"- ANTHROPIC_API_KEY: {'✅ Set' if os.getenv('ANTHROPIC_API_KEY') else '❌ Not set'}")
     print(f"- K8S_ENABLED: {os.getenv('K8S_ENABLED', 'false')}")
     print(f"- K8S_MCP_SERVER_URL: {os.getenv('K8S_MCP_SERVER_URL', 'Not set')}")
     print(f"- K8S_ENABLE_DESTRUCTIVE_OPERATIONS: {os.getenv('K8S_ENABLE_DESTRUCTIVE_OPERATIONS', 'false')}")
-    
+
     # Run tests
     tests = [
         ("Basic MCP Connection", test_basic_mcp_connection),
@@ -259,7 +260,7 @@ async def main():
         ("YOLO Mode", test_yolo_mode),
         ("Multi-Cluster Support", test_multi_cluster_support)
     ]
-    
+
     results = []
     for test_name, test_func in tests:
         try:
@@ -268,21 +269,21 @@ async def main():
         except Exception as e:
             logger.error(f"Test {test_name} failed with error: {e}")
             results.append((test_name, False))
-    
+
     # Summary
     print("\n" + "="*60)
     print("TEST SUMMARY")
     print("="*60)
-    
+
     total_tests = len(results)
     passed_tests = sum(1 for _, result in results if result)
-    
+
     for test_name, result in results:
         status = "✅ PASSED" if result else "❌ FAILED"
         print(f"{test_name}: {status}")
-    
+
     print(f"\nTotal: {passed_tests}/{total_tests} tests passed")
-    
+
     if passed_tests == total_tests:
         print("\n🎉 All tests passed! Agno K8s MCP integration is working correctly.")
     else:

@@ -119,7 +119,7 @@ async def mock_check_payment_status(request: Request):
 
         # Determine plan based on amount or explicit plan
         plan_id = plan.lower()
-        
+
         # Map frontend plan names to backend plan IDs
         plan_mapping = {
             "starter": "starter",
@@ -127,7 +127,7 @@ async def mock_check_payment_status(request: Request):
             "pro": "pro",
             "enterprise": "enterprise"
         }
-        
+
         # Use mapping if available, otherwise fallback to amount-based detection
         if plan_id in plan_mapping:
             plan_id = plan_mapping[plan_id]

@@ -69,12 +69,15 @@ interface KubernetesContext {
 
 interface KubernetesConfig {
   id: string;
-  name: string;
-  context: string;
-  namespace: string;
-  enabled: boolean;
-  enable_destructive?: boolean;
-  kubeconfig_path?: string;
+  integration_type: string;
+  config: {
+    name: string;
+    context: string;
+    namespace: string;
+    enable_destructive_operations?: boolean;
+    kubeconfig_path?: string;
+  };
+  is_required: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -147,9 +150,13 @@ export default function KubernetesIntegrationPage() {
   const { data: configsData, isLoading: configsLoading } = useQuery({
     queryKey: ['kubernetes', 'configs'],
     queryFn: async () => {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/integrations/kubernetes/configs`);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/user/integrations`);
       if (!response.ok) throw new Error('Failed to fetch configs');
-      return response.json();
+      const data = await response.json();
+      // Filter for kubernetes integrations
+      return {
+        configs: data.integrations?.filter((i: any) => i.integration_type === 'kubernetes') || []
+      };
     },
   });
 
@@ -191,10 +198,20 @@ export default function KubernetesIntegrationPage() {
   // Save configuration mutation
   const saveConfigMutation = useMutation({
     mutationFn: async (config: typeof configForm) => {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/integrations/kubernetes/configs`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/user/integrations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
+        body: JSON.stringify({
+          integration_type: 'kubernetes',
+          config: {
+            name: config.name,
+            context: config.context,
+            namespace: config.namespace,
+            enable_destructive_operations: config.enable_destructive,
+            kubeconfig_path: config.kubeconfig_path,
+          },
+          is_required: false,
+        }),
       });
       if (!response.ok) throw new Error('Failed to save config');
       return response.json();
@@ -493,16 +510,16 @@ export default function KubernetesIntegrationPage() {
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div>
-                      <CardTitle className="text-lg">{config.name}</CardTitle>
+                      <CardTitle className="text-lg">{config.config.name}</CardTitle>
                       <CardDescription className="mt-1">
-                        Context: {config.context} • Namespace: {config.namespace}
+                        Context: {config.config.context} • Namespace: {config.config.namespace}
                       </CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant={config.enabled ? 'default' : 'secondary'}>
-                        {config.enabled ? 'Enabled' : 'Disabled'}
+                      <Badge variant={config.is_required ? 'default' : 'secondary'}>
+                        {config.is_required ? 'Required' : 'Optional'}
                       </Badge>
-                      {config.enable_destructive && (
+                      {config.config.enable_destructive_operations && (
                         <Badge variant="destructive" className="gap-1">
                           <Unlock className="h-3 w-3" />
                           Destructive
@@ -520,7 +537,7 @@ export default function KubernetesIntegrationPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleTest(config.context, config.namespace)}
+                        onClick={() => handleTest(config.config.context, config.config.namespace)}
                       >
                         <TestTube className="h-4 w-4 mr-1" />
                         Test
@@ -529,8 +546,8 @@ export default function KubernetesIntegrationPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          setSelectedCluster(config.context);
-                          getClusterInfoMutation.mutate(config.context);
+                          setSelectedCluster(config.config.context);
+                          getClusterInfoMutation.mutate(config.config.context);
                         }}
                       >
                         <Info className="h-4 w-4 mr-1" />

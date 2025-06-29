@@ -16,7 +16,9 @@ from pydantic import BaseModel
 from src.oncall_agent.agno_kubernetes_agent import DreamOpsK8sAgent
 from src.oncall_agent.api.dependencies import get_db_pool
 from src.oncall_agent.services.kubernetes_auth import AuthMethod, K8sCredentials
-from src.oncall_agent.services.kubernetes_credentials import KubernetesCredentialsService
+from src.oncall_agent.services.kubernetes_credentials import (
+    KubernetesCredentialsService,
+)
 from src.oncall_agent.utils.logger import get_logger
 
 router = APIRouter(prefix="/api/v1/kubernetes/agno", tags=["kubernetes-agno"])
@@ -29,18 +31,18 @@ class K8sCredentialsRequest(BaseModel):
     cluster_name: str
     cluster_endpoint: str
     namespace: str = "default"
-    
+
     # For kubeconfig method
     kubeconfig_data: str | None = None
-    
+
     # For service account method
     service_account_token: str | None = None
     ca_certificate: str | None = None
-    
+
     # For client certificate method
     client_certificate: str | None = None
     client_key: str | None = None
-    
+
     # Additional options
     verify_ssl: bool = True
     proxy_url: str | None = None
@@ -70,7 +72,7 @@ async def test_agno_connection(
     """Test Agno K8s MCP integration connectivity."""
     try:
         agent = DreamOpsK8sAgent()
-        
+
         # Initialize with MCP
         if request.use_remote_cluster and request.cluster_name:
             # Get credentials from database
@@ -79,27 +81,27 @@ async def test_agno_connection(
                 user_id=1,  # TODO: Get from auth
                 cluster_name=request.cluster_name
             )
-            
+
             if not credentials:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"No credentials found for cluster: {request.cluster_name}"
                 )
-            
+
             initialized = await agent.initialize_with_mcp(credentials)
         else:
             # Use local MCP server
             initialized = await agent.initialize_with_mcp()
-        
+
         if not initialized:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Failed to initialize Agno agent with K8s MCP"
             )
-        
+
         # Test the integration
         test_result = await agent.test_mcp_integration()
-        
+
         # Run a test query if provided
         if request.test_query and agent.agent:
             try:
@@ -115,15 +117,15 @@ async def test_agno_connection(
                     "success": False,
                     "error": str(e)
                 }
-        
+
         await agent.cleanup()
-        
+
         return {
             "status": "success",
             "agno_integration": "active",
             "test_results": test_result
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -143,7 +145,7 @@ async def connect_remote_cluster(
     try:
         # Convert request to K8sCredentials
         auth_method = AuthMethod(credentials.auth_method)
-        
+
         k8s_creds = K8sCredentials(
             auth_method=auth_method,
             cluster_endpoint=credentials.cluster_endpoint,
@@ -157,19 +159,19 @@ async def connect_remote_cluster(
             verify_ssl=credentials.verify_ssl,
             proxy_url=credentials.proxy_url
         )
-        
+
         # Initialize agent with credentials service
         creds_service = KubernetesCredentialsService(db_pool)
         agent = DreamOpsK8sAgent(credentials_service=creds_service)
-        
+
         # Connect to remote cluster
         result = await agent.connect_remote_cluster(
             user_id=1,  # TODO: Get from auth
             credentials=k8s_creds
         )
-        
+
         await agent.cleanup()
-        
+
         if result.get("connected"):
             return {
                 "status": "success",
@@ -181,7 +183,7 @@ async def connect_remote_cluster(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Failed to connect to cluster: {result.get('error')}"
             )
-            
+
     except HTTPException:
         raise
     except Exception as e:
@@ -198,13 +200,13 @@ async def list_clusters(db_pool=Depends(get_db_pool)) -> list[dict[str, Any]]:
     try:
         creds_service = KubernetesCredentialsService(db_pool)
         agent = DreamOpsK8sAgent(credentials_service=creds_service)
-        
+
         clusters = await agent.list_available_clusters(
             user_id=1  # TODO: Get from auth
         )
-        
+
         return clusters
-        
+
     except Exception as e:
         logger.error(f"Error listing clusters: {e}")
         raise HTTPException(
@@ -228,11 +230,11 @@ async def process_k8s_incident(
             "severity": incident.severity,
             "metadata": incident.metadata
         }
-        
+
         # Initialize agent
         creds_service = KubernetesCredentialsService(db_pool)
         agent = DreamOpsK8sAgent(credentials_service=creds_service)
-        
+
         # Check if we need to use a specific cluster
         cluster_name = incident.metadata.get("cluster")
         if cluster_name and cluster_name != "local":
@@ -243,18 +245,18 @@ async def process_k8s_incident(
             )
             if credentials:
                 await agent.initialize_with_mcp(credentials)
-        
+
         # Process the incident
         result = await agent.handle_pagerduty_alert(alert_data)
-        
+
         await agent.cleanup()
-        
+
         return {
             "status": "success",
             "incident_id": incident.alert_id,
             "processing_result": result
         }
-        
+
     except Exception as e:
         logger.error(f"Error processing K8s incident: {e}")
         raise HTTPException(
@@ -269,7 +271,7 @@ async def get_agent_status() -> dict[str, Any]:
     try:
         from src.oncall_agent.config import get_config
         config = get_config()
-        
+
         return {
             "agno_version": "1.6.3",  # From pyproject.toml
             "k8s_integration": {
@@ -295,7 +297,7 @@ async def get_agent_status() -> dict[str, Any]:
                 "mcp_integration": True
             }
         }
-        
+
     except Exception as e:
         logger.error(f"Error getting agent status: {e}")
         raise HTTPException(
@@ -312,7 +314,7 @@ async def test_remediation_scenario(
     db_pool=Depends(get_db_pool)
 ) -> dict[str, Any]:
     """Test a specific remediation scenario."""
-    
+
     # Define test scenarios
     scenarios = {
         "pod_crash": {
@@ -331,37 +333,37 @@ async def test_remediation_scenario(
             "metadata": {"pod": "test-app-789", "namespace": namespace}
         }
     }
-    
+
     if scenario not in scenarios:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unknown scenario: {scenario}. Available: {list(scenarios.keys())}"
         )
-    
+
     try:
         # Create test alert
         test_alert = scenarios[scenario]
         test_alert["alert_id"] = f"test-{scenario}-{datetime.utcnow().timestamp()}"
         test_alert["severity"] = "high"
-        
+
         if cluster_name:
             test_alert["metadata"]["cluster"] = cluster_name
-        
+
         # Process with agent
         creds_service = KubernetesCredentialsService(db_pool)
         agent = DreamOpsK8sAgent(credentials_service=creds_service)
-        
+
         result = await agent.handle_pagerduty_alert(test_alert)
-        
+
         await agent.cleanup()
-        
+
         return {
             "status": "success",
             "scenario": scenario,
             "test_alert": test_alert,
             "remediation_result": result
         }
-        
+
     except Exception as e:
         logger.error(f"Error testing remediation: {e}")
         raise HTTPException(

@@ -94,19 +94,23 @@ async def list_integrations(user_id: str = Query(None, description="User ID to c
     try:
         integrations = []
         agent = await get_agent_instance()
-        
+
         # Import alert tracking to check user plan
-        from src.oncall_agent.api.routers.alert_tracking import USER_DATA, INTEGRATION_RESTRICTIONS
         import os
-        
+
+        from src.oncall_agent.api.routers.alert_tracking import (
+            INTEGRATION_RESTRICTIONS,
+            USER_DATA,
+        )
+
         # Check if in development mode
         is_dev_mode = os.getenv("NEXT_PUBLIC_DEV_MODE", "false").lower() == "true" or os.getenv("NODE_ENV", "") == "development"
-        
+
         # Get user's plan if user_id provided
         user_plan = "pro" if is_dev_mode else "free"  # Default to pro in dev mode
         if user_id and user_id in USER_DATA:
             user_plan = USER_DATA[user_id].get("account_tier", user_plan)
-        
+
         # Get allowed integrations for the plan
         allowed_integrations = INTEGRATION_RESTRICTIONS.get(user_plan, [])
 
@@ -148,7 +152,7 @@ async def list_integrations(user_id: str = Query(None, description="User ID to c
 
             # Check if integration is allowed for user's plan
             is_allowed = name in allowed_integrations if user_id else True
-            
+
             # Add plan restriction info to the integration
             integration_data = Integration(
                 name=name,
@@ -158,13 +162,13 @@ async def list_integrations(user_id: str = Query(None, description="User ID to c
                 config=config,
                 health=health
             )
-            
+
             # Add custom fields for plan restrictions
             integration_dict = integration_data.model_dump()
             integration_dict["is_allowed"] = is_allowed
             integration_dict["requires_plan"] = "pro" if name not in ["kubernetes_mcp", "pagerduty"] else "free"
             integration_dict["user_plan"] = user_plan
-            
+
             integrations.append(integration_dict)
 
         return integrations
@@ -183,8 +187,8 @@ async def get_integration_templates() -> JSONResponse:
             "webhook_secret": "optional_webhook_secret_for_verification"
         },
         "kubernetes": {
-            "contexts": ["production-cluster", "staging-cluster"],
-            "namespaces": {"production-cluster": "default", "staging-cluster": "default"},
+            "contexts": [],
+            "namespaces": {},
             "enable_destructive_operations": False,
             "kubeconfig_path": "~/.kube/config"
         },
@@ -555,27 +559,48 @@ async def get_integration_logs(
 async def discover_kubernetes_contexts() -> JSONResponse:
     """Discover available Kubernetes contexts from kubeconfig."""
     try:
-        from src.oncall_agent.services.kubernetes_auth import KubernetesAuthService
-
-        auth_service = KubernetesAuthService()
-
-        # Try to read local kubeconfig if available
         from pathlib import Path
 
+        from src.oncall_agent.mcp_integrations.kubernetes_mcp_stdio import (
+            KubernetesMCPStdioIntegration,
+        )
+        from src.oncall_agent.services.kubernetes_auth import KubernetesAuthService
+
+        # Try to read local kubeconfig if available
         kubeconfig_path = Path.home() / ".kube" / "config"
-        if not kubeconfig_path.exists():
-            return JSONResponse(content={"contexts": [], "error": "No local kubeconfig found"})
 
-        kubeconfig_content = kubeconfig_path.read_text()
-        validation_result = await auth_service.validate_kubeconfig(kubeconfig_content)
+        if kubeconfig_path.exists():
+            # Use auth service to validate kubeconfig
+            auth_service = KubernetesAuthService()
+            kubeconfig_content = kubeconfig_path.read_text()
+            validation_result = await auth_service.validate_kubeconfig(kubeconfig_content)
 
-        if validation_result["valid"]:
-            return JSONResponse(content={"contexts": validation_result["contexts"]})
-        else:
-            return JSONResponse(content={"contexts": [], "error": validation_result.get("error")})
+            if validation_result["valid"]:
+                return JSONResponse(content={
+                    "contexts": validation_result["contexts"],
+                    "source": "kubeconfig"
+                })
+
+        # Fallback to kubectl discovery
+        k8s_integration = KubernetesMCPStdioIntegration()
+        contexts = await k8s_integration.discover_contexts()
+
+        return JSONResponse(content={
+            "contexts": [{
+                "name": ctx.name,
+                "cluster": ctx.cluster,
+                "namespace": ctx.namespace,
+                "is_current": ctx.is_current
+            } for ctx in contexts],
+            "source": "kubectl"
+        })
+
     except Exception as e:
         logger.error(f"Error discovering Kubernetes contexts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(content={
+            "contexts": [],
+            "error": str(e)
+        })
 
 
 @router.post("/kubernetes/test")

@@ -8,7 +8,9 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.oncall_agent.mcp_integrations.kubernetes_manusa_mcp import KubernetesManusaMCPIntegration
+from src.oncall_agent.mcp_integrations.kubernetes_manusa_mcp import (
+    KubernetesManusaMCPIntegration,
+)
 from src.oncall_agent.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -17,13 +19,13 @@ logger = get_logger(__name__)
 async def test_mcp_integration():
     """Test the MCP integration with kubernetes-mcp-server."""
     print("\n🧪 Testing Kubernetes MCP Integration (manusa/kubernetes-mcp-server)\n")
-    
+
     # Create integration
     k8s = KubernetesManusaMCPIntegration(
         namespace="default",
         enable_destructive_operations=False
     )
-    
+
     # Test connection
     print("1️⃣ Testing connection to MCP server...")
     connected = await k8s.connect()
@@ -35,12 +37,12 @@ async def test_mcp_integration():
         print("❌ Failed to connect to MCP server")
         print("   Make sure kubernetes-mcp-server is running on port 8080")
         return
-    
+
     # Test health check
     print("\n2️⃣ Testing health check...")
     healthy = await k8s.health_check()
     print(f"✅ Health check: {'healthy' if healthy else 'unhealthy'}")
-    
+
     # Test capabilities
     print("\n3️⃣ Getting capabilities...")
     capabilities = k8s.get_capabilities()
@@ -49,7 +51,7 @@ async def test_mcp_integration():
         print(f"   - {cap}")
     if len(capabilities) > 5:
         print(f"   ... and {len(capabilities) - 5} more")
-    
+
     # Test fetching namespaces
     print("\n4️⃣ Testing namespace list...")
     try:
@@ -66,7 +68,7 @@ async def test_mcp_integration():
                     print(f"   - {ns}")
     except Exception as e:
         print(f"❌ Error: {e}")
-    
+
     # Test fetching pods
     print("\n5️⃣ Testing pod list...")
     try:
@@ -83,22 +85,22 @@ async def test_mcp_integration():
                     print(f"   - {pod}")
     except Exception as e:
         print(f"❌ Error: {e}")
-    
+
     # Test connection info
     print("\n6️⃣ Connection info:")
     conn_info = k8s.get_connection_info()
-    print(f"✅ Connection details:")
+    print("✅ Connection details:")
     print(f"   - Namespace: {conn_info['namespace']}")
     print(f"   - Destructive ops: {conn_info['destructive_operations_enabled']}")
     print(f"   - MCP mode: {conn_info['mcp_mode']}")
     print(f"   - MCP server: {conn_info['mcp_server']}")
     print(f"   - Available tools: {conn_info['available_tools']}")
-    
+
     # Disconnect
     print("\n7️⃣ Disconnecting...")
     await k8s.disconnect()
     print("✅ Disconnected from MCP server")
-    
+
     print("\n✨ All tests completed!\n")
 
 

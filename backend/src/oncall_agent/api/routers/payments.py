@@ -48,7 +48,7 @@ def get_payment_service():
         if not PHONEPE_SDK_AVAILABLE:
             logger.warning("PhonePe SDK not available. Using mock service instead.")
             return get_phonepe_mock_service()
-        
+
         # Try to use SDK service, fall back to mock if initialization fails
         try:
             logger.info("Attempting to use PhonePe SDK Service")
