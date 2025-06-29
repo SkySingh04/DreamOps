@@ -14,11 +14,12 @@ async function getRequestBody(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  // Check if chaos engineering is enabled
+  // Check if chaos engineering is enabled and we're in dev mode
   const chaosEnabled = process.env.ENABLE_CHAOS_ENGINEERING === 'true';
+  const isDevMode = process.env.NEXT_PUBLIC_DEV_MODE === 'true' || process.env.NODE_ENV === 'development';
   
-  if (!chaosEnabled) {
-    console.log('🚫 Chaos engineering is disabled in this environment');
+  if (!chaosEnabled || !isDevMode) {
+    console.log('🚫 Chaos engineering is disabled (requires both ENABLE_CHAOS_ENGINEERING=true and dev mode)');
     
     // Return mock success response for local development
     return NextResponse.json({
@@ -27,6 +28,7 @@ export async function POST(request: NextRequest) {
       results: [
         '🚫 Chaos engineering is disabled',
         '💡 Set ENABLE_CHAOS_ENGINEERING=true to enable',
+        '🔐 Ensure NEXT_PUBLIC_DEV_MODE=true or NODE_ENV=development',
         '✅ Returning mock success for local development',
         '📋 No actual infrastructure was harmed'
       ],

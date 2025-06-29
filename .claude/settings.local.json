@@ -70,6 +70,10 @@
       "Bash(cp:*)",
       "Bash(npx tsx:*)",
       "Bash(timeout:*)",
+<<<<<<< HEAD
+      "Bash(-H \"Content-Type: application/json\" )",
+      "Bash(-d @test_notion_webhook.json -s)"
+=======
       "Bash(pnpm install:*)",
       "WebFetch(domain:github.com)",
       "Bash(pnpm exec:*)",
@@ -77,6 +81,7 @@
       "Bash(./setup-kind-cluster.sh:*)",
       "Bash(docker start:*)",
       "Bash(kubectl:*)"
+>>>>>>> 6763ce6d7ee28ad0db81b9d8c8ba40498ae53855
     ],
     "deny": []
   }

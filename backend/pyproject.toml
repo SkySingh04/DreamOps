@@ -30,7 +30,10 @@ dependencies = [
     "pyjwt>=2.10.1",
     "firebase-admin>=6.9.0",
     "phonepe>=1.0.0",
+<<<<<<< HEAD
+=======
     "openai>=1.93.0",
+>>>>>>> 6763ce6d7ee28ad0db81b9d8c8ba40498ae53855
 ]
 
 [dependency-groups]
