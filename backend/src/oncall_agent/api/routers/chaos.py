@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from ...config import get_config
 from ...pagerduty_client import trigger_pagerduty_event
-from ..auth import get_current_user
+from ...security.firebase_auth import FirebaseUser, get_current_firebase_user
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ class ChaosEventResponse(BaseModel):
 @router.post("/trigger-alert", response_model=ChaosEventResponse)
 async def trigger_chaos_alert(
     request: ChaosEventRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: FirebaseUser = Depends(get_current_firebase_user)
 ) -> ChaosEventResponse:
     """Trigger a PagerDuty alert for chaos engineering actions.
     
@@ -75,7 +75,7 @@ async def trigger_chaos_alert(
         "chaos_type": request.service or "all_services",
         "action": request.action,
         "affected_services": affected_services,
-        "triggered_by": current_user.get("email", "oncall-agent"),
+        "triggered_by": current_user.email or "oncall-agent",
         "timestamp": datetime.utcnow().isoformat(),
         "environment": "development",
         "namespace": "oncall-test-apps",
@@ -125,7 +125,7 @@ async def trigger_chaos_alert(
 
 @router.get("/status")
 async def get_chaos_status(
-    current_user: dict = Depends(get_current_user)
+    current_user: FirebaseUser = Depends(get_current_firebase_user)
 ) -> dict[str, Any]:
     """Get chaos engineering status and configuration."""
     config = get_config()

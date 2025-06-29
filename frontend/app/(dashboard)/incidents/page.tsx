@@ -286,30 +286,21 @@ export default function IncidentsPage() {
   // Trigger PagerDuty alert for chaos action
   const triggerPagerDutyAlert = async (serviceId?: string) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/chaos/trigger-alert`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}` // Include auth token
-        },
-        body: JSON.stringify({ 
-          service: serviceId,
-          action: serviceId ? 'single' : 'all',
-          description: serviceId 
-            ? `Chaos engineering test: ${chaosServices.find(s => s.id === serviceId)?.name}`
-            : 'Chaos engineering test: All services nuked'
-        })
+      const response = await apiClient.post('/api/v1/chaos/trigger-alert', {
+        service: serviceId,
+        action: serviceId ? 'single' : 'all',
+        description: serviceId 
+          ? `Chaos engineering test: ${chaosServices.find(s => s.id === serviceId)?.name}`
+          : 'Chaos engineering test: All services nuked'
       });
-
-      const data = await response.json();
       
-      if (response.ok && data.success) {
+      if (response.status === 'success' && response.data.success) {
         console.log('✅ PagerDuty alert triggered successfully');
         toast.success('PagerDuty alert triggered!', {
           description: 'The oncall agent should start responding to the incident soon.'
         });
       } else {
-        console.warn('⚠️ Failed to trigger PagerDuty alert:', data.message);
+        console.warn('⚠️ Failed to trigger PagerDuty alert:', response.data?.message || 'Unknown error');
         // Don't fail the chaos action if PagerDuty fails
       }
     } catch (error) {
