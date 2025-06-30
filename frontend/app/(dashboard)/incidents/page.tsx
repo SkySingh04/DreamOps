@@ -318,11 +318,17 @@ export default function IncidentsPage() {
       try {
         console.log(`🔥 Attempting to nuke ${service.name} (attempt ${attempt}/${retries + 1})`);
         
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 35000); // 35 second timeout
+        
         const response = await fetch('/api/chaos-engineering', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ service: serviceId })
+          body: JSON.stringify({ service: serviceId }),
+          signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
 
         const data = await response.json();
 
@@ -454,6 +460,8 @@ export default function IncidentsPage() {
       } else if (service) {
         // Single service execution
         setServiceStatuses({ [service.id]: 'loading' });
+        
+        setChaosResults(prev => [...prev, '🚀 Executing chaos script...']);
         
         const result = await executeServiceChaos(service.id);
         

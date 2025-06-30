@@ -5,6 +5,10 @@
 
 set -e
 
+# Set up Kubernetes environment
+export PATH="$HOME/bin:$PATH"
+export KUBECONFIG="/home/harsh/kubeconfig-oncall"
+
 NAMESPACE="oncall-test-apps"
 TIMESTAMP=$(date +%s)
 
@@ -29,7 +33,7 @@ if [ -z "$PAGERDUTY_INTEGRATION_KEY" ]; then
 fi
 
 # Create namespace if it doesn't exist
-kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f - --validate=false
 
 # Function to send PagerDuty alert
 send_pagerduty_alert() {
@@ -92,7 +96,7 @@ usage() {
 # 1. OOM Kill Issue - Fixed by scaling to 3 replicas
 apply_oom_issue() {
     echo -e "${RED}💥 Creating OOM Kill issue...${NC}"
-    cat <<EOF | kubectl apply -f -
+    cat <<EOF | kubectl apply -f - --validate=false
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -134,7 +138,7 @@ EOF
 # 2. Image Pull Error - Fixed by updating image to nginx:latest
 apply_image_pull_issue() {
     echo -e "${RED}💥 Creating Image Pull Error...${NC}"
-    cat <<EOF | kubectl apply -f -
+    cat <<EOF | kubectl apply -f - --validate=false
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -172,7 +176,7 @@ EOF
 apply_crash_loop_issue() {
     echo -e "${RED}💥 Creating Crash Loop issue...${NC}"
     # First create a working deployment
-    cat <<EOF | kubectl apply -f -
+    cat <<EOF | kubectl apply -f - --validate=false
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -208,7 +212,7 @@ EOF
 # 4. Resource Limits Too Low - Fixed by patching memory to 256Mi
 apply_resource_limit_issue() {
     echo -e "${RED}💥 Creating Resource Limit issue...${NC}"
-    cat <<EOF | kubectl apply -f -
+    cat <<EOF | kubectl apply -f - --validate=false
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -250,7 +254,7 @@ EOF
 # 5. Service Down - Fixed by scaling from 0 to 2 replicas
 apply_service_down_issue() {
     echo -e "${RED}💥 Creating Service Down issue...${NC}"
-    cat <<EOF | kubectl apply -f -
+    cat <<EOF | kubectl apply -f - --validate=false
 apiVersion: apps/v1
 kind: Deployment
 metadata:
