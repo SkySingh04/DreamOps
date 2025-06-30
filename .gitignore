@@ -67,6 +67,10 @@ frontend/yarn-error.log*
 .vscode/
 *.code-workspace
 
+# Claude settings
+.claude/
+settings.local.json
+
 # macOS
 .DS_Store
 .AppleDouble
