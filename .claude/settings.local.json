@@ -69,7 +69,11 @@
       "Bash(diff:*)",
       "Bash(cp:*)",
       "Bash(npx tsx:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(pnpm install:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(pnpm exec:*)",
+      "Bash(docker-compose exec:*)"
     ],
     "deny": []
   }

@@ -1,0 +1,78 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      kubernetes-mcp-server:
+        specifier: latest
+        version: 0.0.43
+
+packages:
+
+  kubernetes-mcp-server-darwin-amd64@0.0.43:
+    resolution: {integrity: sha512-eKMT2I7xWswDFZNDVeMvyQFhyRScyblBhUMKxKbYy1OpYVnUDvBff+IGs4G8Je5Sww+cWcI19oQq4REMTmotVQ==}
+    cpu: [x64]
+    os: [darwin]
+
+  kubernetes-mcp-server-darwin-arm64@0.0.43:
+    resolution: {integrity: sha512-t6fbVrZopdV8zMmND/MsoBx/SXNOTVYpNnTuZ5RtHhPW9ArHmQuO4ZHYKzmaGO94Y7yVc7+BDhp1IcpM+Ni4fQ==}
+    cpu: [arm64]
+    os: [darwin]
+
+  kubernetes-mcp-server-linux-amd64@0.0.43:
+    resolution: {integrity: sha512-Ax1mi9mKwkDr7AeC1ERwpsvzxyHOpNU8R6EAwzxUzgvDqXhsNlLpj83QNVjUKLwZbUqO39/ez/RQfr/Ks+xcEA==}
+    cpu: [x64]
+    os: [linux]
+
+  kubernetes-mcp-server-linux-arm64@0.0.43:
+    resolution: {integrity: sha512-ROlNjckadJepTDn2tsqs7DPvuURHskmodCF8WdOBfB9ld53UEH042E+6xsp53Su8G1QX/ZOMog6579Y/HgeI1g==}
+    cpu: [arm64]
+    os: [linux]
+
+  kubernetes-mcp-server-windows-amd64@0.0.43:
+    resolution: {integrity: sha512-efAeSNEOmkDsMb15DuC6Mu65DRAhC0tf9Ae4fh9Gxgmi47QM0E8hob4mfC4Q8kYgcHvmjMGlGOVnLlhQRp0SQg==}
+    cpu: [x64]
+    os: [win32]
+
+  kubernetes-mcp-server-windows-arm64@0.0.43:
+    resolution: {integrity: sha512-OsTJJvMSE1l/MZGum80feFcL+h3SHA7EcEUJPPUuRfDOE+gosxu8zFPfSQg6gsRZ3G81VHX8dOoXApnv7NDB5A==}
+    cpu: [arm64]
+    os: [win32]
+
+  kubernetes-mcp-server@0.0.43:
+    resolution: {integrity: sha512-wDqJB5V22LosArq3kl8DMu6lLRFPc9o7dop0Cvd89kZjlykJowXorVBUhsywxMUh5rDgJBZu7DUqoi72zv6N0w==}
+    hasBin: true
+
+snapshots:
+
+  kubernetes-mcp-server-darwin-amd64@0.0.43:
+    optional: true
+
+  kubernetes-mcp-server-darwin-arm64@0.0.43:
+    optional: true
+
+  kubernetes-mcp-server-linux-amd64@0.0.43:
+    optional: true
+
+  kubernetes-mcp-server-linux-arm64@0.0.43:
+    optional: true
+
+  kubernetes-mcp-server-windows-amd64@0.0.43:
+    optional: true
+
+  kubernetes-mcp-server-windows-arm64@0.0.43:
+    optional: true
+
+  kubernetes-mcp-server@0.0.43:
+    optionalDependencies:
+      kubernetes-mcp-server-darwin-amd64: 0.0.43
+      kubernetes-mcp-server-darwin-arm64: 0.0.43
+      kubernetes-mcp-server-linux-amd64: 0.0.43
+      kubernetes-mcp-server-linux-arm64: 0.0.43
+      kubernetes-mcp-server-windows-amd64: 0.0.43
+      kubernetes-mcp-server-windows-arm64: 0.0.43

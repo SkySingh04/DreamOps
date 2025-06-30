@@ -64,6 +64,38 @@ async def lifespan(app: FastAPI):
         trigger = await get_agent_trigger()
         logger.info("OncallAgent initialized for webhook handling")
 
+    # Start Kubernetes MCP server if enabled
+    if config.k8s_enabled and config.k8s_use_mcp_server:
+        logger.info("Starting Kubernetes MCP server...")
+        try:
+            import asyncio
+            import subprocess
+
+            # Extract port from MCP server URL
+            mcp_port = '8080'
+            if config.k8s_mcp_server_url:
+                parts = config.k8s_mcp_server_url.split(':')
+                if len(parts) >= 3:
+                    mcp_port = parts[-1]
+
+            # Start the official MCP Kubernetes server
+            env = os.environ.copy()
+            env['K8S_MCP_SERVER_PORT'] = mcp_port
+
+            # Use the kubernetes-mcp-server by manusa with HTTP port
+            mcp_process = subprocess.Popen(
+                ['pnpm', 'exec', 'kubernetes-mcp-server', '--http-port', mcp_port],
+                env=env
+            )
+            app.state.mcp_process = mcp_process
+
+            # Wait for server to start
+            await asyncio.sleep(2)
+            logger.info(f"Kubernetes MCP server started on port {mcp_port}")
+        except Exception as e:
+            logger.error(f"Failed to start Kubernetes MCP server: {e}")
+            app.state.mcp_process = None
+
     yield
 
     # Shutdown
@@ -72,6 +104,15 @@ async def lifespan(app: FastAPI):
         from src.oncall_agent.api.webhooks import agent_trigger
         if agent_trigger:
             await agent_trigger.shutdown()
+
+    # Stop MCP server if running
+    if hasattr(app.state, 'mcp_process') and app.state.mcp_process:
+        logger.info("Stopping Kubernetes MCP server...")
+        try:
+            app.state.mcp_process.terminate()
+            app.state.mcp_process.wait(timeout=5)
+        except:
+            app.state.mcp_process.kill()
 
 
 # Create FastAPI app

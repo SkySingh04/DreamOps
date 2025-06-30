@@ -364,12 +364,12 @@ async def test_pagerduty_integration(config: dict[str, Any]) -> dict[str, Any]:
 async def test_kubernetes_integration(config: dict[str, Any]) -> dict[str, Any]:
     """Test Kubernetes integration."""
     try:
-        from src.oncall_agent.mcp_integrations.kubernetes_mcp_only import (
-            KubernetesMCPOnlyIntegration,
+        from src.oncall_agent.mcp_integrations.kubernetes_manusa_mcp import (
+            KubernetesManusaMCPIntegration,
         )
 
         # Create temporary integration instance
-        k8s = KubernetesMCPOnlyIntegration()
+        k8s = KubernetesManusaMCPIntegration()
 
         # Discover contexts first if testing multiple contexts
         contexts = config.get('contexts', [])

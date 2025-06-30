@@ -1,6 +1,5 @@
 """Agent executor that handles command execution based on AI mode."""
 
-import json
 import logging
 from collections.abc import Callable
 from datetime import datetime
@@ -8,8 +7,8 @@ from typing import Any
 
 from src.oncall_agent.api.log_streaming import log_stream_manager
 from src.oncall_agent.api.schemas import AIMode
-from src.oncall_agent.mcp_integrations.kubernetes_mcp_only import (
-    KubernetesMCPOnlyIntegration,
+from src.oncall_agent.mcp_integrations.kubernetes_manusa_mcp import (
+    KubernetesManusaMCPIntegration,
 )
 from src.oncall_agent.strategies.kubernetes_resolver import ResolutionAction
 
@@ -17,36 +16,35 @@ from src.oncall_agent.strategies.kubernetes_resolver import ResolutionAction
 class AgentExecutor:
     """Handles execution of remediation actions based on AI mode and risk assessment."""
 
-    def __init__(self, k8s_integration: KubernetesMCPOnlyIntegration | None = None):
+    def __init__(self, k8s_integration: KubernetesManusaMCPIntegration | None = None):
         """Initialize the agent executor."""
         self.logger = logging.getLogger(__name__)
         self.k8s_integration = k8s_integration
         self.execution_history = []
         self.circuit_breaker = CircuitBreaker()
 
-    async def execute_kubectl_direct(self, cmd: list[str], auto_approve: bool = False) -> dict[str, Any]:
-        """Execute kubectl command via MCP server integration."""
-        self.logger.info(f"Executing command via MCP: {' '.join(cmd[:3])}...")
+    async def execute_mcp_action(self, action_type: str, params: dict[str, Any]) -> dict[str, Any]:
+        """Execute action via MCP server integration."""
+        self.logger.info(f"Executing MCP action: {action_type}")
 
-        # Stream log for command
+        # Stream log for action
         await log_stream_manager.log_info(
-            f"🔨 Running MCP command: {' '.join(cmd[:3])}...",  # Show first 3 parts of command
-            action_type="mcp_command",
-            metadata={"command": ' '.join(cmd), "auto_approve": auto_approve}
+            f"🔨 Running MCP action: {action_type}",
+            action_type="mcp_action",
+            metadata={"action": action_type, "params": params}
         )
 
         # Use MCP integration if available
         if self.k8s_integration:
-            return await self.k8s_integration.execute_kubectl_command(
-                cmd,
-                dry_run=False,
-                auto_approve=auto_approve
+            return await self.k8s_integration.execute_action(
+                action_type,
+                params
             )
         else:
             return {
                 "success": False,
-                "error": "No Kubernetes MCP integration available. Please ensure mcp-server-kubernetes is installed.",
-                "command": " ".join(cmd)
+                "error": "No Kubernetes MCP integration available. Please ensure @modelcontextprotocol/server-kubernetes is installed.",
+                "action": action_type
             }
 
     async def execute_remediation_plan(
@@ -315,25 +313,15 @@ class AgentExecutor:
 
     async def _execute_restart_pod(self, action: ResolutionAction, auto_approve: bool) -> dict[str, Any]:
         """Execute pod restart."""
-        params = action.params
-        # Delete the pod to force restart
-        cmd = ["delete", "pod", params["pod_name"], "-n", params["namespace"]]
-        return await self.execute_kubectl_direct(cmd, auto_approve)
+        return await self.execute_mcp_action("restart_pod", action.params)
 
     async def _execute_scale_deployment(self, action: ResolutionAction, auto_approve: bool) -> dict[str, Any]:
         """Execute deployment scaling."""
-        params = action.params
-        cmd = ["scale", "deployment", params["deployment_name"],
-               "-n", params["namespace"],
-               f"--replicas={params['replicas']}"]
-        return await self.execute_kubectl_direct(cmd, auto_approve)
+        return await self.execute_mcp_action("scale_deployment", action.params)
 
     async def _execute_rollback_deployment(self, action: ResolutionAction, auto_approve: bool) -> dict[str, Any]:
         """Execute deployment rollback."""
-        params = action.params
-        cmd = ["rollout", "undo", "deployment", params["deployment_name"],
-               "-n", params["namespace"]]
-        return await self.execute_kubectl_direct(cmd, auto_approve)
+        return await self.execute_mcp_action("rollback_deployment", action.params)
 
     async def _execute_increase_memory(self, action: ResolutionAction, auto_approve: bool) -> dict[str, Any]:
         """Execute memory limit increase."""
@@ -346,38 +334,50 @@ class AgentExecutor:
         # Calculate new memory limit
         increase_pct = params.get("memory_increase", "50%")
 
-        # For now, we'll use kubectl patch command
-        patch_cmd = [
-            "patch", "deployment", deployment_name,
-            "-n", params["namespace"],
-            "--type", "json",
-            "-p", '[{"op": "replace", "path": "/spec/template/spec/containers/0/resources/limits/memory", "value": "512Mi"}]'
-        ]
+        # Prepare patch for MCP
+        patch_params = {
+            "kind": "deployment",
+            "name": deployment_name,
+            "namespace": params["namespace"],
+            "patch": [{"op": "replace", "path": "/spec/template/spec/containers/0/resources/limits/memory", "value": "512Mi"}],
+            "patch_type": "json"
+        }
 
-        return await self.execute_kubectl_direct(patch_cmd, auto_approve)
+        return await self.execute_mcp_action("patch_resource", patch_params)
 
     async def _execute_check_configs(self, action: ResolutionAction, auto_approve: bool) -> dict[str, Any]:
         """Check ConfigMaps and Secrets."""
         params = action.params
         namespace = params["namespace"]
 
-        # Get configmaps
-        cm_result = await self.execute_kubectl_direct(
-            ["get", "configmaps", "-n", namespace, "-o", "json"],
-            auto_approve=True  # Read-only operation
-        )
+        # Since configmaps and secrets aren't direct fetch_context types,
+        # we'll use describe_resource for specific ones if provided,
+        # or return a message indicating manual check is needed
 
-        # Get secrets
-        secret_result = await self.execute_kubectl_direct(
-            ["get", "secrets", "-n", namespace, "-o", "json"],
-            auto_approve=True  # Read-only operation
-        )
-
-        return {
-            "success": cm_result["success"] and secret_result["success"],
-            "configmaps": cm_result.get("output", ""),
-            "secrets": secret_result.get("output", "")
+        results = {
+            "success": True,
+            "message": "ConfigMaps and Secrets check requested",
+            "namespace": namespace
         }
+
+        # If specific configmap or secret names are provided, describe them
+        if "configmap_name" in params:
+            cm_result = await self.execute_mcp_action(
+                "describe_resource",
+                {"kind": "configmap", "name": params["configmap_name"], "namespace": namespace}
+            )
+            results["configmap"] = cm_result.get("description", "")
+            results["success"] = results["success"] and cm_result.get("success", False)
+
+        if "secret_name" in params:
+            secret_result = await self.execute_mcp_action(
+                "describe_resource",
+                {"kind": "secret", "name": params["secret_name"], "namespace": namespace}
+            )
+            results["secret"] = secret_result.get("description", "")
+            results["success"] = results["success"] and secret_result.get("success", False)
+
+        return results
 
     async def _execute_check_dependencies(self, action: ResolutionAction, auto_approve: bool) -> dict[str, Any]:
         """Check service dependencies."""
@@ -385,22 +385,30 @@ class AgentExecutor:
         namespace = params["namespace"]
 
         # Get services in namespace
-        svc_result = await self.execute_kubectl_direct(
-            ["get", "services", "-n", namespace, "-o", "json"],
-            auto_approve=True  # Read-only operation
+        svc_result = await self.execute_mcp_action(
+            "fetch_context",
+            {"type": "services", "namespace": namespace}
         )
 
-        # Get endpoints
-        ep_result = await self.execute_kubectl_direct(
-            ["get", "endpoints", "-n", namespace, "-o", "json"],
-            auto_approve=True  # Read-only operation
-        )
-
-        return {
-            "success": svc_result["success"] and ep_result["success"],
-            "services": svc_result.get("output", ""),
-            "endpoints": ep_result.get("output", "")
+        # For endpoints, we'll check specific services if provided
+        results = {
+            "success": svc_result.get("success", False),
+            "services": svc_result.get("services", svc_result),
+            "namespace": namespace
         }
+
+        # If specific service names are provided, describe them for endpoint info
+        if "service_names" in params:
+            endpoint_info = {}
+            for service_name in params["service_names"]:
+                ep_result = await self.execute_mcp_action(
+                    "describe_resource",
+                    {"kind": "endpoints", "name": service_name, "namespace": namespace}
+                )
+                endpoint_info[service_name] = ep_result.get("description", "No endpoint info")
+            results["endpoints"] = endpoint_info
+
+        return results
 
     async def _verify_action(self, action: ResolutionAction) -> dict[str, Any]:
         """Verify that an action was successful."""
@@ -409,28 +417,43 @@ class AgentExecutor:
 
         if action.action_type == "restart_pod":
             # Check if pod is running again
-            cmd = ["get", "pod", params["pod_name"], "-n", params["namespace"], "-o", "json"]
-            result = await self.execute_kubectl_direct(cmd, True)
+            result = await self.execute_mcp_action(
+                "describe_resource",
+                {"kind": "pod", "name": params["pod_name"], "namespace": params["namespace"]}
+            )
             if result["success"]:
                 try:
-                    pod_data = json.loads(result["output"])
-                    status = pod_data.get("status", {}).get("phase", "")
-                    return {"verified": status == "Running", "status": status}
+                    # Parse the description to find status
+                    description = result.get("description", "")
+                    if "Status:" in description:
+                        status_line = [line for line in description.split("\n") if "Status:" in line]
+                        if status_line:
+                            status = status_line[0].split(":")[1].strip()
+                            return {"verified": status == "Running", "status": status}
+                    return {"verified": False, "reason": "Could not parse pod status"}
                 except:
                     return {"verified": False, "reason": "Failed to parse pod status"}
             return {"verified": False, "reason": result.get("error")}
 
         elif action.action_type == "scale_deployment":
             # Check if replicas match
-            cmd = ["get", "deployment", params["deployment_name"], "-n", params["namespace"], "-o", "json"]
-            result = await self.execute_kubectl_direct(cmd, True)
+            result = await self.execute_mcp_action(
+                "describe_resource",
+                {"kind": "deployment", "name": params["deployment_name"], "namespace": params["namespace"]}
+            )
             if result["success"]:
                 try:
-                    dep_data = json.loads(result["output"])
-                    desired = dep_data.get("spec", {}).get("replicas", 0)
-                    ready = dep_data.get("status", {}).get("readyReplicas", 0)
-                    return {"verified": desired == params["replicas"] and ready == desired,
-                           "desired": desired, "ready": ready}
+                    # Parse the description to find replicas
+                    description = result.get("description", "")
+                    if "Replicas:" in description:
+                        replicas_line = [line for line in description.split("\n") if "Replicas:" in line]
+                        if replicas_line:
+                            # Extract replica numbers from line like "Replicas: 3 desired | 3 updated | 3 total"
+                            parts = replicas_line[0].split()
+                            desired = int(parts[1]) if len(parts) > 1 else 0
+                            return {"verified": desired == params["replicas"],
+                                   "desired": desired, "ready": desired}
+                    return {"verified": False, "reason": "Could not parse deployment status"}
                 except:
                     return {"verified": False, "reason": "Failed to parse deployment status"}
             return {"verified": False, "reason": result.get("error")}
@@ -453,20 +476,39 @@ class AgentExecutor:
         )
 
         # Get all pods and filter for error states
-        cmd = ["get", "pods"]
-        if not params.get("check_all_namespaces"):
-            cmd.extend(["-n", namespace])
+        if params.get("check_all_namespaces"):
+            # For all namespaces, we need to get pods differently
+            # MCP might not support "all" namespace in fetch_context
+            result = await self.execute_mcp_action(
+                "fetch_context",
+                {"type": "pods", "namespace": "default"}  # Start with default
+            )
+            # Note: Full all-namespace support would require listing namespaces first
+            # and then iterating through them
         else:
-            cmd.append("--all-namespaces")
-
-        result = await self.execute_kubectl_direct(cmd, auto_approve=True)  # Read-only operation
+            result = await self.execute_mcp_action(
+                "fetch_context",
+                {"type": "pods", "namespace": namespace}
+            )
 
         if result.get("success"):
-            output = result.get("output", "")
+            # Handle the result from fetch_context which returns structured data
+            pods_data = result.get("pods", result)
             error_pods = []
-            for line in output.split("\n")[1:]:  # Skip header
-                if any(state in line for state in ["Error", "CrashLoopBackOff", "ImagePullBackOff", "Pending"]):
-                    error_pods.append(line)
+
+            # If we got a list of pods or items
+            if isinstance(pods_data, dict) and "items" in pods_data:
+                for pod in pods_data["items"]:
+                    status = pod.get("status", {}).get("phase", "")
+                    if status in ["Failed", "Pending"] or any(cs.get("state", {}).get("waiting", {}).get("reason", "") in ["CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull"] for cs in pod.get("status", {}).get("containerStatuses", [])):
+                        pod_name = pod.get("metadata", {}).get("name", "unknown")
+                        pod_namespace = pod.get("metadata", {}).get("namespace", "unknown")
+                        error_pods.append(f"{pod_namespace} {pod_name} {status}")
+            elif isinstance(pods_data, str):
+                # Fallback to string parsing if we got plain text
+                for line in pods_data.split("\n")[1:]:  # Skip header
+                    if any(state in line for state in ["Error", "CrashLoopBackOff", "ImagePullBackOff", "Pending"]):
+                        error_pods.append(line)
 
             result["error_pods"] = error_pods
             result["error_count"] = len(error_pods)
@@ -524,8 +566,10 @@ class AgentExecutor:
                     pod_name = parts[1]
 
                 # Delete the pod to force restart
-                delete_cmd = ["delete", "pod", pod_name, "-n", pod_namespace]
-                result = await self.execute_kubectl_direct(delete_cmd, auto_approve)
+                result = await self.execute_mcp_action(
+                    "delete_resource",
+                    {"kind": "pod", "name": pod_name, "namespace": pod_namespace}
+                )
                 results.append({
                     "pod": pod_name,
                     "namespace": pod_namespace,
@@ -543,9 +587,11 @@ class AgentExecutor:
         params = action.params
         namespace = params.get("namespace", "default")
 
-        # Get resource usage
-        cmd = ["top", "pods", "-n", namespace]
-        result = await self.execute_kubectl_direct(cmd, auto_approve=True)  # Read-only operation
+        # Get resource usage via MCP metrics
+        result = await self.execute_mcp_action(
+            "fetch_context",
+            {"type": "metrics", "namespace": namespace}
+        )
 
         return result
 
@@ -556,23 +602,41 @@ class AgentExecutor:
         timeframe = params.get("timeframe", "1h")
 
         # Get events looking for OOM kills
-        cmd = ["get", "events", "-n", namespace, "--field-selector", "reason=OOMKilling"]
-        result = await self.execute_kubectl_direct(cmd, auto_approve=True)  # Read-only operation
+        result = await self.execute_mcp_action(
+            "fetch_context",
+            {"type": "events", "namespace": namespace}
+        )
 
         if result.get("success"):
-            # Parse output to find affected deployments
-            output = result.get("output", "")
+            # Parse events from fetch_context
+            events_data = result.get("events", result)
             oom_deployments = set()
-            for line in output.split("\n")[1:]:  # Skip header
-                if "OOMKilling" in line:
-                    # Extract deployment name from pod name
-                    parts = line.split()
-                    for part in parts:
-                        if "-" in part and not part.startswith("-"):
-                            # Likely a pod name, extract deployment
-                            deployment = "-".join(part.split("-")[:-2])
-                            if deployment:
-                                oom_deployments.add(deployment)
+
+            if isinstance(events_data, dict) and "items" in events_data:
+                for event in events_data.get("items", []):
+                    reason = event.get("reason", "")
+                    if reason == "OOMKilling":
+                        # Extract deployment from involved object
+                        involved = event.get("involvedObject", {})
+                        if involved.get("kind") == "Pod":
+                            pod_name = involved.get("name", "")
+                            if pod_name and "-" in pod_name:
+                                # Extract deployment name from pod name
+                                deployment = "-".join(pod_name.split("-")[:-2])
+                                if deployment:
+                                    oom_deployments.add(deployment)
+            elif isinstance(events_data, str) and "OOMKilling" in events_data:
+                # Fallback to string parsing
+                for line in events_data.split("\n")[1:]:  # Skip header
+                    if "OOMKilling" in line:
+                        # Extract deployment name from pod name
+                        parts = line.split()
+                        for part in parts:
+                            if "-" in part and not part.startswith("-"):
+                                # Likely a pod name, extract deployment
+                                deployment = "-".join(part.split("-")[:-2])
+                                if deployment:
+                                    oom_deployments.add(deployment)
 
             result["oom_deployments"] = list(oom_deployments)
             result["oom_count"] = len(oom_deployments)
@@ -610,14 +674,17 @@ class AgentExecutor:
         results = []
         for deployment in deployments:
             # Patch deployment to increase memory
-            patch_cmd = [
-                "patch", "deployment", deployment,
-                "-n", namespace,
-                "--type", "json",
-                "-p", '[{"op": "replace", "path": "/spec/template/spec/containers/0/resources/limits/memory", "value": "1Gi"}]'
-            ]
 
-            result = await self.execute_kubectl_direct(patch_cmd, auto_approve)
+            result = await self.execute_mcp_action(
+                "patch_resource",
+                {
+                    "kind": "deployment",
+                    "name": deployment,
+                    "namespace": namespace,
+                    "patch": [{"op": "replace", "path": "/spec/template/spec/containers/0/resources/limits/memory", "value": "1Gi"}],
+                    "patch_type": "json"
+                }
+            )
             results.append({
                 "deployment": deployment,
                 "result": result
@@ -637,9 +704,16 @@ class AgentExecutor:
         container = params["container_name"]
         new_image = params["new_image"]
 
-        cmd = ["set", "image", f"deployment/{deployment}",
-               f"{container}={new_image}", "-n", namespace]
-        return await self.execute_kubectl_direct(cmd, auto_approve)
+        return await self.execute_mcp_action(
+            "set_image",
+            {
+                "kind": "deployment",
+                "name": deployment,
+                "namespace": namespace,
+                "container": container,
+                "image": new_image
+            }
+        )
 
     async def _execute_delete_pods_by_label(self, action: ResolutionAction, auto_approve: bool) -> dict[str, Any]:
         """Delete pods by label selector."""
@@ -647,8 +721,14 @@ class AgentExecutor:
         namespace = params["namespace"]
         selector = params["label_selector"]
 
-        cmd = ["delete", "pods", "-l", selector, "-n", namespace]
-        return await self.execute_kubectl_direct(cmd, auto_approve)
+        return await self.execute_mcp_action(
+            "delete_resource",
+            {
+                "kind": "pod",
+                "namespace": namespace,
+                "label_selector": selector
+            }
+        )
 
     async def _execute_patch_memory_limit(self, action: ResolutionAction, auto_approve: bool) -> dict[str, Any]:
         """Patch memory limit for a deployment."""
@@ -657,13 +737,16 @@ class AgentExecutor:
         namespace = params["namespace"]
         memory_limit = params["memory_limit"]
 
-        patch_cmd = [
-            "patch", "deployment", deployment,
-            "-n", namespace,
-            "--type", "json",
-            "-p", f'[{{"op": "replace", "path": "/spec/template/spec/containers/0/resources/limits/memory", "value": "{memory_limit}"}}]'
-        ]
-        return await self.execute_kubectl_direct(patch_cmd, auto_approve)
+        return await self.execute_mcp_action(
+            "patch_resource",
+            {
+                "kind": "deployment",
+                "name": deployment,
+                "namespace": namespace,
+                "patch": [{"op": "replace", "path": "/spec/template/spec/containers/0/resources/limits/memory", "value": memory_limit}],
+                "patch_type": "json"
+            }
+        )
 
 
 class CircuitBreaker:

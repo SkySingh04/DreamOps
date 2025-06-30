@@ -20,8 +20,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.oncall_agent.config import get_config
 from src.oncall_agent.mcp_integrations.github_mcp import GitHubMCPIntegration
-from src.oncall_agent.mcp_integrations.kubernetes_mcp_only import (
-    KubernetesMCPOnlyIntegration as KubernetesIntegration,
+from src.oncall_agent.mcp_integrations.kubernetes_manusa_mcp import (
+    KubernetesManusaMCPIntegration as KubernetesIntegration,
 )
 from src.oncall_agent.mcp_integrations.notion_direct import NotionDirectIntegration
 

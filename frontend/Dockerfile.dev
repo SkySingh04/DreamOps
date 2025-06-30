@@ -1,0 +1,26 @@
+# Development Dockerfile for frontend
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install dependencies for building
+RUN apk add --no-cache libc6-compat
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy application code
+COPY . .
+
+# Set environment variables for development
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Expose port
+EXPOSE 3000
+
+# Run the Next.js development server
+CMD ["npm", "run", "dev"]

@@ -314,16 +314,22 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
       switch (currentAction.type) {
         case 'navigate':
           if (currentAction.target) {
-            router.push(currentAction.target).catch((error) => {
+            try {
+              router.push(currentAction.target);
+            } catch (error) {
               console.error('Demo navigation failed:', error);
               toast.error('Navigation failed during demo');
-            });
+            }
           }
           break;
         
         case 'toast':
           if (currentAction.message) {
             toast.info(currentAction.message);
+          }
+          // Enable integration if specified
+          if (currentAction.integration) {
+            dispatch({ type: 'ENABLE_INTEGRATION', name: currentAction.integration });
           }
           break;
         

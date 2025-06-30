@@ -16,6 +16,8 @@
 - [Features & Integrations](#features--integrations)
 - [Payment System](#payment-system)
 - [Deployment](#deployment)
+  - [Docker Setup](#docker-setup)
+  - [AWS Deployment](#aws-deployment)
 - [Testing & Development](#testing--development)
 - [CI/CD](#ci-cd)
 - [Troubleshooting](#troubleshooting)
@@ -51,14 +53,34 @@ DreamOps is an intelligent AI-powered incident response and infrastructure manag
 
 ### Prerequisites
 
+#### For Docker Setup (Recommended):
+- Docker and Docker Compose
+- Anthropic API key for Claude
+
+#### For Manual Setup:
 - Python 3.12+
 - Node.js 18+
-- Docker (optional)
 - PostgreSQL database (we use Neon)
 - Anthropic API key for Claude
 
 ### Fast Setup
 
+#### Option 1: Docker Compose (Recommended)
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/oncall-agent.git
+cd oncall-agent
+
+# Start all services with Docker
+./docker-dev.sh up
+
+# Access the application:
+# - Frontend: http://localhost:3000
+# - Backend API: http://localhost:8000
+# - API Docs: http://localhost:8000/docs
+```
+
+#### Option 2: Manual Setup
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/oncall-agent.git
@@ -637,18 +659,130 @@ cd backend && USE_MOCK_PAYMENTS=true uv run python api_server.py
 cd frontend && npm run dev
 ```
 
-### Docker Deployment
+### Docker Setup
+
+#### Development with Docker Compose
+
+The project includes a complete Docker setup for local development with hot reload, automatic database setup, and all services configured.
+
+##### Quick Start
+```bash
+# Start all services (frontend, backend, postgres, redis)
+./docker-dev.sh up
+
+# View logs
+./docker-dev.sh logs
+
+# Stop all services
+./docker-dev.sh down
+```
+
+##### Docker Components
+
+1. **Backend Service** (`backend/Dockerfile.dev`):
+   - Python 3.12 with uv package manager
+   - FastAPI with hot reload enabled
+   - Kubectl installed for Kubernetes operations
+   - Development environment variables pre-configured
+
+2. **Frontend Service** (`frontend/Dockerfile.dev`):
+   - Node.js 18 Alpine
+   - Next.js development server
+   - Hot reload enabled
+   - Automatic database migrations
+
+3. **PostgreSQL Database**:
+   - PostgreSQL 16 Alpine
+   - Pre-configured with development credentials
+   - Persistent volume for data
+
+4. **Redis Cache**:
+   - Redis 7 Alpine
+   - Used for caching and real-time features
+
+##### Docker Commands
+
+```bash
+# Build images
+./docker-dev.sh build
+
+# Rebuild from scratch
+./docker-dev.sh rebuild
+
+# Access database
+./docker-dev.sh db
+
+# Run migrations
+./docker-dev.sh migrate
+
+# Open Drizzle Studio
+./docker-dev.sh studio
+
+# Open shell in container
+./docker-dev.sh shell backend
+./docker-dev.sh shell frontend
+```
+
+##### Testing Docker Setup
+
+```bash
+# Run automated test suite
+./test-docker-setup.sh
+
+# Manual health checks
+curl http://localhost:8000/health
+curl http://localhost:8000/api/v1/payments/debug/environment
+```
+
+##### Docker Environment Variables
+
+The Docker setup automatically configures:
+- `NODE_ENV=development` - Development mode
+- `NEXT_PUBLIC_DEV_MODE=true` - Enable all features
+- `USE_MOCK_PAYMENTS=true` - Mock payment system
+- `CORS_ORIGINS` - Configured for frontend access
+- Database connections pre-configured
+
+##### Troubleshooting Docker
+
+**Port conflicts:**
+```bash
+# Kill processes using required ports
+lsof -ti:8000 | xargs kill -9  # Backend
+lsof -ti:3000 | xargs kill -9  # Frontend
+lsof -ti:5432 | xargs kill -9  # PostgreSQL
+lsof -ti:6379 | xargs kill -9  # Redis
+```
+
+**View container logs:**
+```bash
+docker-compose logs -f backend   # Backend logs
+docker-compose logs -f frontend  # Frontend logs
+docker-compose logs -f postgres  # Database logs
+```
+
+**Reset everything:**
+```bash
+# Stop and remove all containers, networks, volumes
+docker-compose down -v
+
+# Remove images too
+docker-compose down --rmi all
+```
+
+### Production Docker Deployment
 
 ```bash
 # Build and run with Docker Compose
-docker-compose up -d
+docker-compose -f docker-compose.production.yml up -d
 
 # Environment-specific:
 docker-compose -f docker-compose.staging.yml up -d
-docker-compose -f docker-compose.production.yml up -d
 ```
 
-### AWS Deployment (Terraform)
+### AWS Deployment
+
+#### Terraform Deployment
 
 1. **Prerequisites**:
    - AWS CLI configured
@@ -671,7 +805,7 @@ docker-compose -f docker-compose.production.yml up -d
    - CloudWatch for monitoring
    - Secrets Manager for credentials
 
-### AWS Amplify Deployment
+#### AWS Amplify Deployment
 
 For frontend deployment via Amplify:
 
@@ -721,6 +855,27 @@ jobs:
 ## Testing & Development
 
 ### Development Workflow
+
+#### Docker Development (Recommended)
+
+```bash
+# Start all services
+./docker-dev.sh up
+
+# View logs in real-time
+./docker-dev.sh logs
+
+# Run database migrations
+./docker-dev.sh migrate
+
+# Open Drizzle Studio
+./docker-dev.sh studio
+
+# Test the setup
+./test-docker-setup.sh
+```
+
+#### Manual Development
 
 1. **Backend Development**:
    ```bash
