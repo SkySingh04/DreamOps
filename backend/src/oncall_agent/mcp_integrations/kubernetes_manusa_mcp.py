@@ -64,14 +64,14 @@ class KubernetesManusaMCPIntegration(MCPIntegration):
             'get_events': 'events_list',
             'get_namespaces': 'namespaces_list',
             'top_pods': 'pods_top',
-            
+
             # Write operations
             'delete_pod': 'pods_delete',
             'delete_resource': 'resources_delete',
             'apply_manifest': 'resources_create_or_update',
             'exec_command': 'pods_exec',
             'run_pod': 'pods_run',
-            
+
             # Helm operations
             'helm_install': 'helm_install',
             'helm_list': 'helm_list',
@@ -97,7 +97,7 @@ class KubernetesManusaMCPIntegration(MCPIntegration):
             # Initialize MCP client
             self.mcp_client = MCPClient(self.mcp_server_url, self.logger)
             connected = await self.mcp_client.connect()
-            
+
             if not connected:
                 raise Exception("Failed to connect to MCP server")
 
@@ -247,7 +247,7 @@ class KubernetesManusaMCPIntegration(MCPIntegration):
             # Make the actual MCP call
             self.logger.info(f"MCP tool call: {tool} with params: {params}")
             result = await self.mcp_client.call_tool(tool, params)
-            
+
             return {
                 "success": result.success,
                 "content": result.content,
@@ -388,15 +388,15 @@ class KubernetesManusaMCPIntegration(MCPIntegration):
             if deployment_content and len(deployment_content) > 0:
                 deployment_text = deployment_content[0].get('text', '')
                 deployment = json.loads(deployment_text) if deployment_text else {}
-                
+
                 # Update replicas
                 deployment['spec']['replicas'] = int(replicas)
-                
+
                 # Apply the updated deployment
                 update_result = await self._call_mcp_tool('resources_create_or_update', {
                     'resource': json.dumps(deployment)
                 })
-                
+
                 return {
                     "success": update_result.get('success', False),
                     "message": f"Deployment {deployment_name} scaled to {replicas} replicas" if update_result.get('success') else update_result.get('error'),
@@ -405,7 +405,7 @@ class KubernetesManusaMCPIntegration(MCPIntegration):
                 }
             else:
                 return {"success": False, "error": "Deployment not found"}
-                
+
         except Exception as e:
             return {"success": False, "error": f"Failed to scale deployment: {str(e)}"}
 
@@ -599,7 +599,7 @@ class KubernetesManusaMCPIntegration(MCPIntegration):
     def get_audit_log(self) -> list[dict[str, Any]]:
         """Get the audit log of all MCP tool calls."""
         return [call.to_dict() for call in self._audit_log]
-    
+
     def get_connection_info(self) -> dict[str, Any]:
         """Get connection information for health check."""
         return {
@@ -610,9 +610,9 @@ class KubernetesManusaMCPIntegration(MCPIntegration):
             "available_tools": len(self._available_tools),
             "tools": list(self._available_tools)
         }
-    
+
     # Compatibility methods for the old interface
-    
+
     async def test_connection(self, context_name: str = None, namespace: str = None) -> dict[str, Any]:
         """Test connection to a Kubernetes cluster."""
         # For kubernetes-mcp-server, we just check if we can connect and list namespaces
@@ -621,10 +621,10 @@ class KubernetesManusaMCPIntegration(MCPIntegration):
                 connected = await self.connect()
                 if not connected:
                     return {"connected": False, "error": "Failed to connect to MCP server"}
-            
+
             # Try to list namespaces as a connection test
             result = await self._call_mcp_tool('namespaces_list', {})
-            
+
             if result.get('success'):
                 return {
                     "connected": True,
@@ -634,10 +634,10 @@ class KubernetesManusaMCPIntegration(MCPIntegration):
                 }
             else:
                 return {"connected": False, "error": result.get('error', 'Connection test failed')}
-                
+
         except Exception as e:
             return {"connected": False, "error": str(e)}
-    
+
     async def validate_kubeconfig(self, kubeconfig_data: str) -> dict[str, Any]:
         """Validate kubeconfig data - not directly supported by kubernetes-mcp-server."""
         # This is not directly supported, so we return a basic response
@@ -646,7 +646,7 @@ class KubernetesManusaMCPIntegration(MCPIntegration):
             "contexts": [{"name": "default", "cluster": "default", "server": "default", "is_current": True}],
             "error": None
         }
-    
+
     async def discover_contexts(self) -> list[dict[str, Any]]:
         """Discover available Kubernetes contexts."""
         # kubernetes-mcp-server uses the current kubectl context
@@ -654,9 +654,9 @@ class KubernetesManusaMCPIntegration(MCPIntegration):
         try:
             if not self._connected:
                 await self.connect()
-                
+
             result = await self._call_mcp_tool('configuration_view', {})
-            
+
             if result.get('success'):
                 # Parse the kubeconfig to extract contexts
                 # For now, return a simple default context
@@ -667,23 +667,23 @@ class KubernetesManusaMCPIntegration(MCPIntegration):
                 }]
             else:
                 return []
-                
+
         except Exception as e:
             self.logger.error(f"Error discovering contexts: {e}")
             return []
-    
+
     async def get_cluster_info(self, context_name: str = None) -> dict[str, Any]:
         """Get cluster information."""
         try:
             # Get namespaces as a proxy for cluster info
             namespaces_result = await self._get_namespaces()
-            
+
             return {
                 "context": context_name or "current",
                 "namespaces": len(namespaces_result.get('namespaces', [])),
                 "connected": not namespaces_result.get('error'),
                 "server": self.mcp_server_url
             }
-            
+
         except Exception as e:
             return {"error": str(e)}

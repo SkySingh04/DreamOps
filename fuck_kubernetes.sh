@@ -5,6 +5,12 @@
 
 set -e
 
+# Set up Kubernetes environment (if needed)
+export PATH="$HOME/bin:$PATH"
+if [ -f "/home/harsh/kubeconfig-oncall" ]; then
+    export KUBECONFIG="/home/harsh/kubeconfig-oncall"
+fi
+
 NAMESPACE="oncall-test-apps"
 TIMESTAMP=$(date +%s)
 
@@ -18,8 +24,44 @@ echo -e "${YELLOW}🔥 Kubernetes Issue Injection Script 🔥${NC}"
 echo -e "${YELLOW}Injecting deterministic issues that can be fixed by specific commands${NC}"
 echo ""
 
+# Check if PagerDuty integration key is set
+if [ -z "$PAGERDUTY_INTEGRATION_KEY" ]; then
+    # Try to source from .env file if exists
+    if [ -f "backend/.env" ]; then
+        export $(grep -E '^PAGERDUTY_INTEGRATION_KEY=' backend/.env | xargs)
+    elif [ -f ".env" ]; then
+        export $(grep -E '^PAGERDUTY_INTEGRATION_KEY=' .env | xargs)
+    fi
+fi
+
 # Create namespace if it doesn't exist
-kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f - --validate=false
+
+# Function to send PagerDuty alert
+send_pagerduty_alert() {
+    local summary="$1"
+    local details="$2"
+    local dedup_key="$3"
+    local severity="${4:-critical}"
+    
+    if [ -z "$PAGERDUTY_INTEGRATION_KEY" ]; then
+        echo -e "${YELLOW}⚠️  PagerDuty integration key not found. Skipping alert.${NC}"
+        return
+    fi
+    
+    echo -e "${YELLOW}📟 Sending PagerDuty alert: $summary${NC}"
+    
+    # Create PagerDuty event
+    curl -s -X POST https://events.pagerduty.com/v2/enqueue \
+        -H 'Content-Type: application/json' \
+        -d "{\n            \"routing_key\": \"$PAGERDUTY_INTEGRATION_KEY\",\n            \"event_action\": \"trigger\",\n            \"dedup_key\": \"$dedup_key\",\n            \"payload\": {\n                \"summary\": \"$summary\",\n                \"severity\": \"$severity\",\n                \"source\": \"fuck-kubernetes-script\",\n                \"custom_details\": {\n                    \"details\": \"$details\",\n                    \"namespace\": \"$NAMESPACE\",\n                    \"injected_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\n                    \"test_mode\": true\n                }\n            }\n        }" > /dev/null
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ PagerDuty alert sent successfully${NC}"
+    else
+        echo -e "${RED}❌ Failed to send PagerDuty alert${NC}"
+    fi
+}
 
 # Function to display usage
 usage() {
@@ -41,7 +83,7 @@ usage() {
 # 1. OOM Kill Issue - Fixed by scaling to 3 replicas
 apply_oom_issue() {
     echo -e "${RED}💥 Creating OOM Kill issue...${NC}"
-    cat <<EOF | kubectl apply -f -
+    cat <<EOF | kubectl apply -f - --validate=false
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -71,12 +113,19 @@ spec:
             memory: "64Mi"
 EOF
     echo -e "${GREEN}✅ OOM issue created. Fix: kubectl scale deployment oom-app -n $NAMESPACE --replicas=3${NC}"
+    
+    # Send PagerDuty alert
+    send_pagerduty_alert \
+        "Kubernetes Pod OOM Kill - oom-app" \
+        "Pod in deployment oom-app is experiencing OOM kills due to memory constraints. Fix by scaling to 3 replicas." \
+        "k8s-oom-kill-oom-app-$TIMESTAMP" \
+        "critical"
 }
 
 # 2. Image Pull Error - Fixed by updating image to nginx:latest
 apply_image_pull_issue() {
     echo -e "${RED}💥 Creating Image Pull Error...${NC}"
-    cat <<EOF | kubectl apply -f -
+    cat <<EOF | kubectl apply -f - --validate=false
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -101,13 +150,20 @@ spec:
         - containerPort: 80
 EOF
     echo -e "${GREEN}✅ Image pull issue created. Fix: kubectl set image deployment/bad-image-app app=nginx:latest -n $NAMESPACE${NC}"
+    
+    # Send PagerDuty alert
+    send_pagerduty_alert \
+        "Kubernetes ImagePullBackOff - bad-image-app" \
+        "Deployment bad-image-app cannot pull image nonexistent-registry.invalid/fake-image:v999. Fix by updating to nginx:latest." \
+        "k8s-image-pull-bad-image-app-$TIMESTAMP" \
+        "critical"
 }
 
 # 3. Crash Loop - Fixed by deleting the pod (it will recreate with fixed config)
 apply_crash_loop_issue() {
     echo -e "${RED}💥 Creating Crash Loop issue...${NC}"
     # First create a working deployment
-    cat <<EOF | kubectl apply -f -
+    cat <<EOF | kubectl apply -f - --validate=false
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -131,12 +187,19 @@ spec:
         command: ["sh", "-c", "exit 1"]  # Always exits, causing crash loop
 EOF
     echo -e "${GREEN}✅ Crash loop issue created. Fix: kubectl delete pods -l app=crashloop-app -n $NAMESPACE${NC}"
+    
+    # Send PagerDuty alert
+    send_pagerduty_alert \
+        "Kubernetes CrashLoopBackOff - crashloop-app" \
+        "Pod in deployment crashloop-app is in CrashLoopBackOff state. Fix by deleting the pod to force recreation." \
+        "k8s-crash-loop-crashloop-app-$TIMESTAMP" \
+        "critical"
 }
 
 # 4. Resource Limits Too Low - Fixed by patching memory to 256Mi
 apply_resource_limit_issue() {
     echo -e "${RED}💥 Creating Resource Limit issue...${NC}"
-    cat <<EOF | kubectl apply -f -
+    cat <<EOF | kubectl apply -f - --validate=false
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -165,13 +228,20 @@ spec:
             memory: "16Mi"
             cpu: "25m"
 EOF
-    echo -e "${GREEN}✅ Resource limit issue created. Fix: kubectl patch deployment resource-limited-app -n $NAMESPACE --type json -p '[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/resources/limits/memory\",\"value\":\"256Mi\"}]'${NC}"
+    echo -e "${GREEN}✅ Resource limit issue created. Fix: kubectl patch deployment resource-limited-app -n $NAMESPACE --type json -p '[{"op":"replace","path":"/spec/template/spec/containers/0/resources/limits/memory","value":"256Mi"}]'${NC}"
+    
+    # Send PagerDuty alert
+    send_pagerduty_alert \
+        "Kubernetes Resource Constraints - resource-limited-app" \
+        "Deployment resource-limited-app has insufficient memory limits (32Mi). Fix by patching memory limit to 256Mi." \
+        "k8s-resource-limit-resource-limited-app-$TIMESTAMP" \
+        "critical"
 }
 
 # 5. Service Down - Fixed by scaling from 0 to 2 replicas
 apply_service_down_issue() {
     echo -e "${RED}💥 Creating Service Down issue...${NC}"
-    cat <<EOF | kubectl apply -f -
+    cat <<EOF | kubectl apply -f - --validate=false
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -208,6 +278,13 @@ spec:
     targetPort: 80
 EOF
     echo -e "${GREEN}✅ Service down issue created. Fix: kubectl scale deployment down-service-app -n $NAMESPACE --replicas=2${NC}"
+    
+    # Send PagerDuty alert
+    send_pagerduty_alert \
+        "Kubernetes Service Unavailable - down-service" \
+        "Service down-service has no running pods (0 replicas). Fix by scaling deployment to 2 replicas." \
+        "k8s-service-down-down-service-$TIMESTAMP" \
+        "critical"
 }
 
 # Clean up function

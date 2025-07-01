@@ -159,8 +159,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           await signIn(email, password);
           return;
-        } catch (signInError) {
+        } catch (signInError: any) {
           console.error('Sign in after failed signup:', signInError);
+          // If sign in also fails, throw a more helpful error
+          if (signInError.code === 'auth/wrong-password') {
+            throw new Error('An account already exists with this email. Please sign in with your existing password.');
+          }
+          throw signInError;
         }
       }
       

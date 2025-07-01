@@ -9,7 +9,9 @@ try:
     from phonepe.sdk.pg.payments.v2.models.request.standard_checkout_pay_request import (
         StandardCheckoutPayRequest,
     )
-    from phonepe.sdk.pg.payments.v2.standard_checkout_client import StandardCheckoutClient
+    from phonepe.sdk.pg.payments.v2.standard_checkout_client import (
+        StandardCheckoutClient,
+    )
     PHONEPE_SDK_AVAILABLE = True
 except ImportError:
     # SDK not available, we'll use the mock service
@@ -28,17 +30,17 @@ except ImportError:
         pass
     class StandardCheckoutClient:
         _instance = None
-        
+
         @classmethod
         def get_instance(cls, **kwargs):
             return cls()
-        
+
         def pay(self, request):
             pass
-        
+
         def get_order_status(self, **kwargs):
             pass
-        
+
         def validate_callback(self, **kwargs):
             pass
 
@@ -63,7 +65,7 @@ class PhonePeSDKService:
                 "PhonePe SDK is not available. Please install it or use the mock service. "
                 "The SDK may need to be installed from a private repository."
             )
-            
+
         config = get_config()
 
         # PhonePe SDK configuration - Use proper test credentials

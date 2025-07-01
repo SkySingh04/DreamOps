@@ -48,10 +48,9 @@ const FALLBACK_DEV_CONFIGS = {
     webhook_secret: 'dev-webhook-secret-123456'
   },
   kubernetes: {
-    contexts: ['minikube', 'docker-desktop'],
+    contexts: ['kind-oncall-test'],
     namespaces: {
-      'minikube': 'default',
-      'docker-desktop': 'default'
+      'kind-oncall-test': 'oncall-demo'
     },
     enable_destructive_operations: true,
     kubeconfig_path: '~/.kube/config'

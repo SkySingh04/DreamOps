@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import re
+from datetime import datetime
 from typing import Any
 
 from anthropic import AsyncAnthropic
@@ -72,6 +73,7 @@ class OncallAgent:
 
         # Initialize Kubernetes integration if enabled
         if self.config.k8s_enabled:
+            # Use MCP-only integration - no kubectl subprocess calls
             contexts = []
             if self.config.k8s_context and self.config.k8s_context != "default":
                 contexts = [self.config.k8s_context]

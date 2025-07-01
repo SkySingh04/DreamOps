@@ -223,9 +223,24 @@ Please provide brief analysis and recommendations."""
             if pagerduty_incident.id in self.processing_alerts:
                 del self.processing_alerts[pagerduty_incident.id]
 
-    async def _process_alert_async(self, pager_alert: PagerAlert):
+    async def _process_alert_async(self, incident: PagerDutyIncidentData):
         """Process alert asynchronously in the background."""
         try:
+            # Convert PagerDutyIncidentData to PagerAlert
+            pager_alert = PagerAlert(
+                alert_id=incident.id,
+                service_name=incident.service.name if incident.service else "Unknown Service",
+                severity=incident.urgency or "medium",
+                description=incident.description or incident.title,
+                metadata={
+                    "incident_number": incident.incident_number,
+                    "status": incident.status,
+                    "created_at": incident.created_at,
+                    "service_id": incident.service.id if incident.service else None
+                },
+                timestamp=datetime.now().isoformat()
+            )
+            
             await self.alert_queue.put(pager_alert)
             if not self.agent:
                 await self.initialize()

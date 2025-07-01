@@ -176,11 +176,16 @@ async def agent_log_generator(request: Request, client_id: str) -> AsyncGenerato
 
 def create_sse_response(request: Request, client_id: str) -> EventSourceResponse:
     """Create an SSE response for streaming agent logs."""
+    # Get origin from request headers for CORS
+    origin = request.headers.get("origin", "http://localhost:3000")
+    
     return EventSourceResponse(
         agent_log_generator(request, client_id),
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",  # Disable Nginx buffering
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
         }
     )
