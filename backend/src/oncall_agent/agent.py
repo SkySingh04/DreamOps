@@ -81,7 +81,6 @@ class OncallAgent:
             enable_destructive = self.config.get("k8s_enable_destructive_operations", False)
 
             self.k8s_integration = KubernetesManusaMCPIntegration(
-                contexts=contexts,
                 namespace=self.config.k8s_namespace,
                 enable_destructive_operations=enable_destructive
             )
@@ -716,7 +715,7 @@ class OncallAgent:
             if "notion" in self.mcp_integrations and hasattr(self, 'notion_integration'):
                 try:
                     self.logger.info("📝 Creating Notion page for incident documentation...")
-                    
+
                     # Prepare the page content
                     notion_content = {
                         "title": f"Incident #{alert.alert_id}: {alert.service_name}",
@@ -758,7 +757,7 @@ class OncallAgent:
                             }
                         ]
                     }
-                    
+
                     # Add context information if available
                     if all_context:
                         notion_content["children"].append({
@@ -768,7 +767,7 @@ class OncallAgent:
                                 "rich_text": [{"text": {"content": "🔍 Context Gathered"}}]
                             }
                         })
-                        
+
                         context_text = self._format_context_for_prompt(all_context)
                         notion_content["children"].append({
                             "object": "block",
@@ -778,7 +777,7 @@ class OncallAgent:
                                 "language": "plain text"
                             }
                         })
-                    
+
                     # Add resolution actions if any were executed
                     if result.get("resolution_actions"):
                         notion_content["children"].append({
@@ -788,7 +787,7 @@ class OncallAgent:
                                 "rich_text": [{"text": {"content": "⚡ Resolution Actions"}}]
                             }
                         })
-                        
+
                         for action in result["resolution_actions"]:
                             notion_content["children"].append({
                                 "object": "block",
@@ -797,7 +796,7 @@ class OncallAgent:
                                     "rich_text": [{"text": {"content": f"{action.get('action_type', 'Unknown')}: {action.get('description', 'No description')}"}}]
                                 }
                             })
-                    
+
                     # Add execution results if in YOLO mode
                     if result.get("execution_results"):
                         notion_content["children"].append({
@@ -807,7 +806,7 @@ class OncallAgent:
                                 "rich_text": [{"text": {"content": "🚀 YOLO Mode Execution Results"}}]
                             }
                         })
-                        
+
                         exec_details = result["execution_results"].get("execution_details", [])
                         for detail in exec_details:
                             status_icon = "✅" if detail.get("result", {}).get("success") else "❌"
@@ -818,15 +817,15 @@ class OncallAgent:
                                     "rich_text": [{"text": {"content": f"{status_icon} {detail.get('action', {}).get('action_type', 'Unknown action')}"}}]
                                 }
                             })
-                    
+
                     # Create the page
                     notion_result = await self.notion_integration.execute_action("create_page", notion_content)
-                    
+
                     if notion_result.get("success"):
                         page_url = notion_result.get("url", "")
                         self.logger.info(f"✅ Notion page created successfully: {page_url}")
                         result["notion_page_url"] = page_url
-                        
+
                         # Send notification to dashboard
                         try:
                             await send_ai_action_to_dashboard(
@@ -838,7 +837,7 @@ class OncallAgent:
                             self.logger.error(f"Failed to send Notion notification to dashboard: {e}")
                     else:
                         self.logger.error(f"❌ Failed to create Notion page: {notion_result.get('error', 'Unknown error')}")
-                        
+
                 except Exception as e:
                     self.logger.error(f"❌ Error creating Notion page: {e}")
                     # Don't fail the entire operation if Notion fails

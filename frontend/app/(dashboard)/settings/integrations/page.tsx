@@ -21,6 +21,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { IntegrationSetupModal } from '@/components/integrations/integration-setup-modal';
+import { NotionActivityWidget } from '@/components/notion-activity/NotionActivityWidget';
 import { apiClient } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
@@ -468,6 +469,13 @@ export default function IntegrationsSettingsPage() {
                 </Card>
               );
             })
+          )}
+          
+          {/* Show Notion Activity Widget if Notion is connected */}
+          {integrations.some(i => i.integration_type === 'notion' && i.is_enabled) && (
+            <div className="mt-6">
+              <NotionActivityWidget />
+            </div>
           )}
         </TabsContent>
 

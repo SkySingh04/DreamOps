@@ -110,7 +110,7 @@ class Config(BaseSettings):
 
     # General settings
     environment: str = Field("production", env="ENVIRONMENT")
-    
+
     # CORS settings
     cors_origins: str = Field("http://localhost:3000,http://127.0.0.1:3000", env="CORS_ORIGINS")
 

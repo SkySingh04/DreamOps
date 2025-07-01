@@ -10,7 +10,9 @@
 - [Installation & Setup](#installation--setup)
 - [Configuration](#configuration)
   - [PagerDuty Integration](#pagerduty-integration)
-  - [Kubernetes Integration](#kubernetes-integration)
+  - [Kubernetes Integration Options](#kubernetes-integration-options)
+  - [Notion Integration](#notion-integration)
+  - [Grafana Integration](#grafana-integration-setup)
   - [PhonePe Payment Integration](#phonepe-payment-integration)
   - [Environment Separation](#environment-separation)
 - [Features & Integrations](#features--integrations)
@@ -18,8 +20,12 @@
 - [Deployment](#deployment)
   - [Docker Setup](#docker-setup)
   - [AWS Deployment](#aws-deployment)
+  - [Render Deployment](#render-deployment)
 - [Testing & Development](#testing--development)
 - [CI/CD](#ci-cd)
+- [Security Considerations](#security-considerations)
+- [Performance Optimization](#performance-optimization)
+- [Migration Guides](#migration-guides)
 - [Troubleshooting](#troubleshooting)
 - [API Reference](#api-reference)
 - [Contributing](#contributing)
@@ -38,6 +44,7 @@ DreamOps is an intelligent AI-powered incident response and infrastructure manag
 - 📊 **Real-time Dashboard**: Next.js frontend with live incident tracking
 - 🚀 **Cloud-Native**: Docker, Terraform, and AWS deployment ready
 - 🔒 **Enterprise Security**: Complete environment separation and secure secrets management
+- 📈 **Chaos to Insights**: Turn chaos engineering results into actionable recommendations
 
 ### Technology Stack
 
@@ -291,39 +298,61 @@ The project uses Neon PostgreSQL with complete environment separation:
 
 ### PagerDuty Integration
 
-1. **Create Integration in PagerDuty**:
-   - Go to Services → Service Directory
-   - Select your service → Integrations tab
-   - Add Integration → Search "Webhooks V3"
-   - Copy the Integration Key
+#### 1. Create Integration in PagerDuty
 
-2. **Configure Webhook**:
-   ```json
-   {
-     "webhook_url": "https://your-domain.com/webhook/pagerduty",
-     "description": "Oncall Agent Webhook",
-     "events": [
-       "incident.triggered",
-       "incident.acknowledged",
-       "incident.resolved"
-     ],
-     "headers": {
-       "X-Webhook-Secret": "your-secret-here"
-     }
-   }
-   ```
+1. Go to Services → Service Directory
+2. Select your service → Integrations tab
+3. Add Integration → Search "Webhooks V3"
+4. Copy the Integration Key
 
-3. **Environment Variables**:
-   ```env
-   PAGERDUTY_ENABLED=true
-   PAGERDUTY_API_KEY=your-api-key
-   PAGERDUTY_USER_EMAIL=your-email@company.com
-   PAGERDUTY_WEBHOOK_SECRET=your-webhook-secret
-   ```
+#### 2. Configure Webhook
 
-### Kubernetes Integration
+1. Go to **Configuration** → **Extensions** or **Services & Integrations**
+2. Click **New Extension** or **Add Extension**
+3. Choose **Generic V2 Webhook**
+4. Configure:
+   - **Name**: DreamOps Webhook
+   - **Service**: Select the service receiving K8s alerts
+   - **URL**: `https://your-domain.com/webhook/pagerduty` (or use ngrok for local testing)
+   - **Event Subscription**: 
+     - ✅ incident.triggered
+     - ✅ incident.acknowledged 
+     - ✅ incident.resolved
 
-The Kubernetes integration provides comprehensive cluster management:
+#### 3. Environment Variables
+
+```env
+PAGERDUTY_ENABLED=true
+PAGERDUTY_API_KEY=your-api-key
+PAGERDUTY_USER_EMAIL=your-email@company.com
+PAGERDUTY_WEBHOOK_SECRET=your-webhook-secret
+```
+
+#### 4. Test the Integration
+
+```bash
+# Direct webhook test
+curl -X POST http://localhost:8000/webhook/pagerduty \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [{
+      "event": "incident.trigger",
+      "incident": {
+        "incident_number": 99,
+        "title": "Test Alert",
+        "description": "Testing PagerDuty integration"
+      }
+    }]
+  }'
+```
+
+### Kubernetes Integration Options
+
+DreamOps offers multiple ways to integrate with Kubernetes clusters:
+
+#### 1. Standard Kubernetes Integration
+
+The basic integration provides comprehensive cluster management:
 
 ```env
 K8S_ENABLED=true
@@ -333,7 +362,7 @@ K8S_NAMESPACE=default
 K8S_ENABLE_DESTRUCTIVE_OPERATIONS=false  # Set true for YOLO mode
 ```
 
-#### Available Actions
+**Available Actions**:
 - Pod management (list, logs, describe, restart)
 - Deployment operations (status, scale, rollback)
 - Service monitoring and health checks
@@ -341,12 +370,147 @@ K8S_ENABLE_DESTRUCTIVE_OPERATIONS=false  # Set true for YOLO mode
 - Automated resolution strategies
 - Resource constraint analysis
 
-#### YOLO Mode Operations
-When `K8S_ENABLE_DESTRUCTIVE_OPERATIONS=true`:
-- Automatic pod restarts for failures
-- Memory limit adjustments for OOM issues
-- Deployment scaling and patches
-- Configuration updates
+#### 2. Enhanced Kubernetes with Auto-Discovery
+
+The enhanced integration adds intelligent cluster discovery:
+
+```env
+K8S_ENHANCED_ENABLED=true
+K8S_ENHANCED_MULTI_CONTEXT=true
+K8S_ENHANCED_AUTO_DISCOVER=true
+K8S_ENHANCED_PERMISSION_CHECK=true
+```
+
+**Features**:
+- Automatic context discovery from kubeconfig
+- Multi-context support
+- Permission verification
+- Frontend configuration UI
+- Namespace auto-discovery
+
+#### 3. Agno Framework Integration
+
+For remote Kubernetes management via Agno:
+
+```env
+AGNO_ENABLED=true
+AGNO_GITHUB_TOKEN=ghp_your_github_token
+AGNO_CONFIG_REPO=your-org/kubernetes-configs
+```
+
+**Connection Methods**:
+- Service Account authentication
+- Kubeconfig file authentication
+- Client certificate authentication
+
+**Setup**:
+```python
+# Configure remote connection
+POST /api/v1/agno/configure
+{
+  "cluster_name": "production",
+  "auth_method": "service_account",
+  "credentials": {
+    "token": "your-sa-token",
+    "ca_cert": "base64-encoded-cert",
+    "server": "https://k8s-api.example.com"
+  }
+}
+```
+
+#### 4. Kubernetes MCP Server
+
+Run Kubernetes operations via MCP protocol:
+
+```bash
+# Start MCP server
+./start-kubernetes-mcp-server.sh
+
+# Or run directly
+uv run python -m src.oncall_agent.mcp_integrations.kubernetes_mcp_server
+```
+
+**Available Operations**:
+- get_pods, describe_pod, get_pod_logs
+- get_deployments, scale_deployment, restart_deployment
+- get_services, get_endpoints
+- apply_manifest, delete_resource
+- get_events, get_nodes
+
+### Notion Integration
+
+#### 1. Get Notion API Token
+
+1. Go to https://www.notion.so/my-integrations
+2. Click "New integration"
+3. Give it a name (e.g., "DreamOps AI Agent")
+4. Select the workspace
+5. Copy the "Internal Integration Token" (starts with `secret_`)
+
+#### 2. Create a Database
+
+1. In Notion, create a new page
+2. Add a database (Table, Board, etc.)
+3. Add these properties:
+   - Title (default)
+   - Status (Select: Open, In Progress, Resolved)
+   - Priority (Select: Low, Medium, High, Critical)
+   - Created (Date)
+   - Description (Text)
+
+#### 3. Get Database ID
+
+1. Open your database in Notion
+2. Copy the URL: `https://www.notion.so/your-workspace/[DATABASE_ID]?v=...`
+3. The DATABASE_ID is the 32-character string after the workspace name
+
+#### 4. Share Database with Integration
+
+1. In your database, click "..." → "Add connections"
+2. Search for your integration name
+3. Click to add it
+
+#### 5. Configure Environment Variables
+
+```env
+# Notion Integration
+NOTION_TOKEN=secret_YOUR_INTEGRATION_TOKEN_HERE
+NOTION_DATABASE_ID=YOUR_DATABASE_ID_HERE
+NOTION_VERSION=2022-06-28
+```
+
+#### 6. Test the Integration
+
+```bash
+# Check integration status
+curl http://localhost:8000/api/v1/integrations
+
+# Test Notion specifically
+curl -X POST http://localhost:8000/api/v1/integrations/notion/test
+```
+
+### Grafana Integration Setup
+
+The Grafana integration provides metric retrieval and dashboard analysis:
+
+```env
+GRAFANA_URL=http://localhost:3000
+GRAFANA_API_KEY=your-grafana-api-key
+```
+
+**Features**:
+- Metric retrieval
+- Dashboard analysis
+- Alert correlation
+- Performance insights
+
+**Testing**:
+The project includes a comprehensive Grafana test suite:
+```bash
+cd backend/tests/integrations/grafana
+docker-compose up -d
+pytest test_grafana_integration.py -v
+```
 
 ### Payment System Configuration
 
@@ -519,26 +683,23 @@ GITHUB_MCP_SERVER_PATH=../../github-mcp-server/github-mcp-server
 
 #### 3. Notion Integration
 
-**Configuration**:
-```env
-NOTION_TOKEN=your-notion-token
-NOTION_DATABASE_ID=your-database-id
-NOTION_VERSION=2022-06-28
-```
-
 **Features**:
 - Incident documentation
 - Knowledge base updates
 - Runbook management
 - Post-mortem automation
 
-#### 4. Grafana Integration
+**Automated Documentation**:
+Each incident is documented with:
+- Incident title and ID
+- Service affected
+- Issue type and severity
+- Timestamp
+- Detailed metadata
+- Investigation checklist
+- Resolution placeholder
 
-**Configuration**:
-```env
-GRAFANA_URL=http://localhost:3000
-GRAFANA_API_KEY=your-grafana-api-key
-```
+#### 4. Grafana Integration
 
 **Features**:
 - Metric retrieval
@@ -573,6 +734,50 @@ ALERT_AUTO_ACKNOWLEDGE=true
 # 4 - Deployment failures
 # 5 - Service unavailability
 ```
+
+### Chaos to Insights Flow
+
+The platform turns chaos engineering results into actionable insights:
+
+#### 1. Chaos Engineering Execution
+```bash
+# From frontend incidents page - click "Nuke Infrastructure"
+# Or run directly:
+./fuck_kubernetes.sh [1-5|all|random]
+```
+
+#### 2. Automatic Processing
+- Chaos script creates Kubernetes issues
+- Alerts sent to PagerDuty
+- AI agent analyzes and remediates
+- Creates detailed Notion documentation
+
+#### 3. AI-Powered Insights
+
+**Real-time Analysis**:
+```bash
+POST /api/v1/insights/analyze-chaos
+```
+- Incidents from last 2 hours
+- Services affected
+- Issue types detected
+- Specific recommendations
+
+**Infrastructure Health Report**:
+```bash
+GET /api/v1/insights/report
+```
+- Total incidents over time
+- Most problematic services
+- Incident type distribution
+- Trend analysis
+- Prioritized recommendations
+
+#### 4. Pattern Detection
+- Identifies recurring issues
+- Detects time-based patterns
+- Tracks incident frequency trends
+- Builds knowledge base over time
 
 ## Payment System
 
@@ -830,6 +1035,88 @@ applications:
           - 'node_modules/**/*'
 ```
 
+### Render Deployment
+
+Deploy to Render.com for a managed cloud platform experience:
+
+#### Prerequisites
+- Render.com account
+- GitHub repository connected to Render
+- Neon database (or other PostgreSQL)
+
+#### Backend Deployment
+
+1. **Create Web Service**:
+   - Name: `dreamops-backend`
+   - Environment: `Python`
+   - Build Command: `pip install uv && uv sync`
+   - Start Command: `uv run python api_server.py`
+
+2. **Environment Variables**:
+   ```env
+   # Core
+   ANTHROPIC_API_KEY=sk-ant-xxx
+   CLAUDE_MODEL=claude-3-5-sonnet-20241022
+   NODE_ENV=production
+   NEXT_PUBLIC_DEV_MODE=false
+   
+   # Database
+   DATABASE_URL=postgresql://xxx
+   
+   # API Configuration
+   API_HOST=0.0.0.0
+   API_PORT=10000
+   CORS_ORIGINS=https://your-frontend.onrender.com
+   
+   # Integrations (as needed)
+   PAGERDUTY_API_KEY=xxx
+   K8S_ENABLED=true
+   ```
+
+3. **Advanced Settings**:
+   - Instance Type: Standard or higher
+   - Health Check Path: `/health`
+   - Auto-Deploy: Yes
+
+#### Frontend Deployment
+
+1. **Create Static Site**:
+   - Name: `dreamops-frontend`
+   - Build Command: `npm install && npm run build`
+   - Publish Directory: `out`
+
+2. **Environment Variables**:
+   ```env
+   POSTGRES_URL=postgresql://xxx
+   NEXT_PUBLIC_API_URL=https://dreamops-backend.onrender.com
+   NODE_ENV=production
+   ```
+
+3. **Headers** (`render.yaml`):
+   ```yaml
+   headers:
+     - path: /*
+       name: X-Frame-Options
+       value: DENY
+     - path: /*
+       name: X-Content-Type-Options
+       value: nosniff
+   ```
+
+#### Post-Deployment
+
+1. **Verify Services**:
+   ```bash
+   curl https://dreamops-backend.onrender.com/health
+   curl https://dreamops-frontend.onrender.com
+   ```
+
+2. **Configure Webhooks**:
+   Update PagerDuty webhook URL to Render backend URL
+
+3. **Monitor Logs**:
+   Check Render dashboard for deployment and runtime logs
+
 ### GitHub Actions Deployment
 
 The project includes CI/CD workflows:
@@ -935,6 +1222,30 @@ tail -f logs/agent.log
 ./fuck_kubernetes.sh clean
 ```
 
+### Grafana Test Suite
+
+The project includes comprehensive Grafana integration tests:
+
+```bash
+cd backend/tests/integrations/grafana
+
+# Start test environment
+docker-compose up -d
+
+# Run tests
+pytest test_grafana_integration.py -v
+
+# Performance benchmarks
+pytest test_grafana_integration.py::test_performance -v
+```
+
+**Test Categories**:
+- Connection tests
+- Metric retrieval tests
+- Alert integration tests
+- Performance benchmarks
+- Error handling tests
+
 ## CI/CD
 
 ### GitHub Actions Workflows
@@ -975,6 +1286,89 @@ NEON_DATABASE_URL_STAGING
 NEON_DATABASE_URL_PROD
 AMPLIFY_APP_ID
 ```
+
+## Security Considerations
+
+### Environment Variables
+- Never commit `.env` files to version control
+- Use different secrets for each environment
+- Rotate API keys regularly
+- Use least-privilege access for service accounts
+
+### Database Security
+- Each environment uses completely separate databases
+- Connection strings include SSL requirements
+- Database users have minimal required permissions
+- Regular security updates for database instances
+
+### Kubernetes Security
+- RBAC permissions are minimally scoped
+- Destructive operations require explicit enablement
+- All kubectl commands are logged
+- Namespace isolation for testing
+
+### API Security
+- Authentication required for sensitive endpoints
+- Request validation using Pydantic models
+- Rate limiting implemented
+- Comprehensive audit logging
+
+## Performance Optimization
+
+### Async Operations
+- All I/O operations use async/await
+- Concurrent processing of multiple alerts
+- Connection pooling for database operations
+- Efficient resource cleanup
+
+### Caching Strategy
+- Configuration cached in memory
+- Database query results cached where appropriate
+- Static assets served from CDN
+- Browser caching for frontend resources
+
+### Monitoring and Alerting
+- CloudWatch integration for metrics
+- Custom dashboards for system health
+- Alerting on error rates and performance
+- Real-time log streaming
+
+## Migration Guides
+
+### kubectl to MCP Migration
+
+When migrating from direct kubectl commands to MCP-based operations:
+
+#### Command Mappings
+
+| kubectl Command | MCP Tool | Parameters |
+|----------------|----------|------------|
+| `kubectl get pods` | `get_pods` | `namespace`, `label_selector` |
+| `kubectl describe pod` | `describe_pod` | `name`, `namespace` |
+| `kubectl logs` | `get_pod_logs` | `name`, `namespace`, `container` |
+| `kubectl get deployments` | `get_deployments` | `namespace` |
+| `kubectl scale` | `scale_deployment` | `name`, `namespace`, `replicas` |
+| `kubectl rollout restart` | `restart_deployment` | `name`, `namespace` |
+| `kubectl apply -f` | `apply_manifest` | `manifest` |
+| `kubectl delete` | `delete_resource` | `resource_type`, `name`, `namespace` |
+
+#### Before (Direct kubectl):
+```python
+result = subprocess.run(["kubectl", "get", "pods", "-n", "default"], capture_output=True)
+```
+
+#### After (MCP):
+```python
+result = await k8s_integration.call_tool("get_pods", {"namespace": "default"})
+```
+
+#### Migration Checklist
+- [ ] Replace subprocess kubectl calls with MCP tools
+- [ ] Update error handling for MCP responses
+- [ ] Add proper async/await for MCP calls
+- [ ] Update logging to use MCP context
+- [ ] Test rollback scenarios
+- [ ] Verify permissions work with MCP
 
 ## Troubleshooting
 
@@ -1021,6 +1415,26 @@ USE_MOCK_PAYMENTS=true
 - Check `~/.kube/config` exists
 - Set correct context: `K8S_CONTEXT=your-context`
 
+#### 6. Notion Integration Issues
+
+**Common Problems**:
+
+1. **"notion integration requires NOTION_TOKEN and NOTION_DATABASE_ID"**
+   - Make sure both environment variables are set
+   - Restart the backend server after adding them
+
+2. **"Failed to connect to Notion API"**
+   - Check your integration token is correct
+   - Ensure the token starts with `secret_`
+
+3. **"Database not found"**
+   - Verify the database ID is correct (32 characters)
+   - Make sure you've shared the database with your integration
+
+4. **"Insufficient permissions"**
+   - The integration needs read and write access
+   - Re-share the database with the integration
+
 ### Debug Tools
 
 ```bash
@@ -1035,6 +1449,12 @@ cd frontend && npm run test:db
 
 # View agent logs
 tail -f backend/logs/agent.log
+
+# Check integration status
+curl http://localhost:8000/api/v1/integrations
+
+# Monitor webhook traffic (if using ngrok)
+curl http://localhost:4040/inspect/http
 ```
 
 ## API Reference
@@ -1044,6 +1464,7 @@ tail -f backend/logs/agent.log
 #### Health Check
 ```http
 GET /health
+Response: {"status": "healthy", "version": "1.0.0"}
 ```
 
 #### Webhook Handler
@@ -1065,6 +1486,12 @@ X-Webhook-Secret: your-secret
 #### Track Alert Usage
 ```http
 GET /api/v1/alert-tracking/usage/{team_id}
+Response: {
+  "team_id": "team_123",
+  "alerts_used": 2,
+  "alerts_limit": 3,
+  "account_tier": "free"
+}
 ```
 
 #### Create Manual Alert
@@ -1077,6 +1504,15 @@ POST /api/v1/alert-tracking/alerts
 }
 ```
 
+#### Check Integration Access
+```http
+GET /api/v1/alert-tracking/check-integration-access/{team_id}/{integration_name}
+Response: {
+  "has_access": true,
+  "reason": "Integration allowed on pro plan"
+}
+```
+
 ### Payment Endpoints
 
 #### Initiate Payment
@@ -1086,6 +1522,10 @@ POST /api/v1/payments/initiate
   "team_id": "team_123",
   "amount": 99900,
   "plan": "STARTER"
+}
+Response: {
+  "payment_id": "PAY_123",
+  "redirect_url": "https://phonepe.com/pay/..."
 }
 ```
 
@@ -1100,6 +1540,44 @@ POST /api/v1/payments/status
 #### Get Plans
 ```http
 GET /api/v1/payments/plans
+Response: {
+  "plans": [
+    {"id": "starter", "name": "Starter", "price": 999, "alerts": 50},
+    {"id": "pro", "name": "Professional", "price": 4999, "alerts": -1}
+  ]
+}
+```
+
+### Integration Endpoints
+
+#### List Integrations
+```http
+GET /api/v1/integrations
+Response: {
+  "integrations": [
+    {"name": "kubernetes", "enabled": true, "status": "connected"},
+    {"name": "pagerduty", "enabled": true, "status": "connected"},
+    {"name": "notion", "enabled": false, "status": "not_configured"}
+  ]
+}
+```
+
+#### Test Integration
+```http
+POST /api/v1/integrations/{name}/test
+Response: {
+  "success": true,
+  "message": "Integration test successful"
+}
+```
+
+#### Integration Health Check
+```http
+POST /api/v1/integrations/{name}/health
+Response: {
+  "healthy": true,
+  "details": {...}
+}
 ```
 
 ### Dashboard API
@@ -1107,16 +1585,94 @@ GET /api/v1/payments/plans
 #### Get Incidents
 ```http
 GET /api/v1/incidents?team_id={team_id}
+Response: {
+  "incidents": [{
+    "id": "INC_123",
+    "title": "Pod CrashLoopBackOff",
+    "status": "resolved",
+    "created_at": "2024-01-01T00:00:00Z"
+  }]
+}
 ```
 
 #### Get Metrics
 ```http
 GET /api/v1/dashboard/metrics?team_id={team_id}
+Response: {
+  "total_incidents": 45,
+  "resolved_incidents": 40,
+  "avg_resolution_time": 300,
+  "uptime_percentage": 99.9
+}
 ```
 
 #### Get AI Actions
 ```http
 GET /api/v1/dashboard/ai-actions?team_id={team_id}
+Response: {
+  "actions": [{
+    "id": "ACT_123",
+    "type": "pod_restart",
+    "status": "completed",
+    "timestamp": "2024-01-01T00:00:00Z"
+  }]
+}
+```
+
+### Insights API
+
+#### Analyze Recent Chaos
+```http
+POST /api/v1/insights/analyze-chaos
+Response: {
+  "incidents_created": 3,
+  "services_affected": ["oom-app", "bad-image-app"],
+  "insights": ["Memory issues detected", "Image pull failures"],
+  "recommendations": ["Increase memory limits", "Check registry access"]
+}
+```
+
+#### Get Infrastructure Report
+```http
+GET /api/v1/insights/report
+Response: Markdown report with analysis and recommendations
+```
+
+#### Get Service Analysis
+```http
+GET /api/v1/insights/analysis?service=oom-app
+Response: {
+  "service": "oom-app",
+  "incident_count": 5,
+  "issue_types": ["oom"],
+  "recommendations": ["Urgent: Increase memory limits"]
+}
+```
+
+### Agno Framework Endpoints
+
+#### Configure Remote Cluster
+```http
+POST /api/v1/agno/configure
+{
+  "cluster_name": "production",
+  "auth_method": "service_account",
+  "credentials": {
+    "token": "your-sa-token",
+    "ca_cert": "base64-encoded-cert",
+    "server": "https://k8s-api.example.com"
+  }
+}
+```
+
+#### Execute Remote Command
+```http
+POST /api/v1/agno/execute
+{
+  "cluster": "production",
+  "operation": "get_pods",
+  "namespace": "default"
+}
 ```
 
 ## Contributing

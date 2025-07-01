@@ -240,7 +240,7 @@ Please provide brief analysis and recommendations."""
                 },
                 timestamp=datetime.now().isoformat()
             )
-            
+
             await self.alert_queue.put(pager_alert)
             if not self.agent:
                 await self.initialize()

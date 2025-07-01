@@ -27,11 +27,13 @@ from src.oncall_agent.api.routers import (
     dev_config,
     firebase_auth,
     incidents_router,
+    insights,
     integrations_router,
     kubernetes_agno,
     kubernetes_improved,
     mock_payments,
     monitoring_router,
+    notion_activity,
     payments_router,
     security_router,
     settings_router,
@@ -396,6 +398,8 @@ app.include_router(incidents_router, prefix="/api/v1")
 app.include_router(agent_router, prefix="/api/v1")
 app.include_router(agent_logs.router, prefix="/api/v1")
 app.include_router(integrations_router, prefix="/api/v1")
+app.include_router(insights.router, prefix="/api/v1")
+app.include_router(notion_activity.router, prefix="/api/v1")
 app.include_router(analytics_router, prefix="/api/v1")
 app.include_router(security_router, prefix="/api/v1")
 app.include_router(monitoring_router, prefix="/api/v1")

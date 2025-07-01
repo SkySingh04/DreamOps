@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from ..services.notion_activity_tracker import notion_tracker
 from .base import MCPIntegration
 
 
@@ -125,9 +126,23 @@ class NotionDirectIntegration(MCPIntegration):
 
             response = await self.client.post("/search", json=body)
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+
+            # Track the search operation
+            await notion_tracker.log_operation("search_pages", {
+                "query": query,
+                "results_count": len(result.get("results", [])),
+                "has_more": result.get("has_more", False)
+            })
+
+            return result
         except Exception as e:
             self.logger.error(f"Search failed: {e}")
+            await notion_tracker.log_operation("search_pages", {
+                "query": query,
+                "success": False,
+                "error": str(e)
+            })
             return {"error": str(e)}
 
     async def _get_page(self, page_id: str, **kwargs) -> dict[str, Any]:
@@ -135,9 +150,24 @@ class NotionDirectIntegration(MCPIntegration):
         try:
             response = await self.client.get(f"/pages/{page_id}")
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+
+            # Track the read operation
+            await notion_tracker.log_operation("read_page", {
+                "page_id": page_id,
+                "page_url": result.get("url"),
+                "created_time": result.get("created_time"),
+                "last_edited_time": result.get("last_edited_time")
+            })
+
+            return result
         except Exception as e:
             self.logger.error(f"Get page failed: {e}")
+            await notion_tracker.log_operation("read_page", {
+                "page_id": page_id,
+                "success": False,
+                "error": str(e)
+            })
             return {"error": str(e)}
 
     async def _get_database(self, database_id: str, **kwargs) -> dict[str, Any]:
@@ -157,10 +187,33 @@ class NotionDirectIntegration(MCPIntegration):
             if response.status_code != 200:
                 error_data = response.json()
                 self.logger.error(f"Create page failed with status {response.status_code}: {error_data}")
+                await notion_tracker.log_operation("create_page", {
+                    "success": False,
+                    "status_code": response.status_code,
+                    "error": str(error_data),
+                    "properties": params.get("properties", {})
+                })
                 return {"error": f"{response.status_code}: {error_data}"}
-            return response.json()
+
+            result = response.json()
+
+            # Track successful page creation
+            await notion_tracker.log_operation("create_page", {
+                "page_id": result.get("id"),
+                "page_url": result.get("url"),
+                "created_time": result.get("created_time"),
+                "properties": params.get("properties", {}),
+                "parent_type": "database" if params.get("parent", {}).get("database_id") else "workspace"
+            })
+
+            return result
         except Exception as e:
             self.logger.error(f"Create page failed: {e}")
+            await notion_tracker.log_operation("create_page", {
+                "success": False,
+                "error": str(e),
+                "properties": params.get("properties", {})
+            })
             return {"error": str(e)}
 
     async def _update_page(self, page_id: str, properties: dict[str, Any], **kwargs) -> dict[str, Any]:
@@ -197,12 +250,17 @@ class NotionDirectIntegration(MCPIntegration):
 
             # Create page properties
             properties = {
-                "title": {
+                "Name": {
                     "title": [{
                         "text": {
                             "content": f"Incident: {alert_data.get('service_name')} - {alert_data.get('alert_id')}"
                         }
                     }]
+                },
+                "Status": {
+                    "status": {
+                        "name": "In progress"
+                    }
                 }
             }
 
@@ -243,7 +301,7 @@ class NotionDirectIntegration(MCPIntegration):
                     "type": "paragraph",
                     "paragraph": {
                         "rich_text": [{
-                            "text": {"content": alert_data.get('description', 'No description provided')}
+                            "text": {"content": alert_data.get('description', 'No description provided')[:1900]}
                         }]
                     }
                 },
@@ -259,7 +317,7 @@ class NotionDirectIntegration(MCPIntegration):
                     "type": "code",
                     "code": {
                         "rich_text": [{
-                            "text": {"content": json.dumps(alert_data.get('metadata', {}), indent=2)}
+                            "text": {"content": json.dumps(alert_data.get('metadata', {}), indent=2)[:2000]}
                         }],
                         "language": "json"
                     }
