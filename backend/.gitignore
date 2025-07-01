@@ -17,6 +17,18 @@ venv.bak/
 .env.staging
 .env.production
 
+# Firebase credentials
+firebase-service-account-key.json
+firebase-service-account-key*.json
+firebase-*.json
+
+# PhonePe credentials
+.env.phonepe
+
+# Kubernetes auth keys
+.k8s_auth_key
+*_auth_key
+
 # IDE
 .vscode/
 .idea/

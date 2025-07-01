@@ -245,9 +245,9 @@ async def pagerduty_webhook(
                     title=incident.title,
                     description=incident.description or "",
                     severity=Severity.HIGH if incident.urgency == 'high' else Severity.MEDIUM,
-                    status=IncidentStatus.TRIGGERED,
-                    service_name=incident.service.name if incident.service else "Unknown Service",
-                    alert_source="pagerduty",
+                    status=IncidentStatus.OPEN,
+                    source="pagerduty",
+                    source_id=incident.id,
                     created_at=datetime.now(UTC),
                     userId=1  # Default user ID
                 )
@@ -255,7 +255,7 @@ async def pagerduty_webhook(
 
                 # Process incident via agent
                 logger.info(f"🤖 Processing incident via agent: {incident.id}")
-                result = await trigger._process_alert_async(incident)
+                result = await trigger.process_incident_async(incident)
                 results.append(result)
 
                 # Log the result
@@ -336,9 +336,9 @@ async def pagerduty_webhook(
                         title=incident.title,
                         description=incident.description or "",
                         severity=Severity.HIGH if incident.urgency == 'high' else Severity.MEDIUM,
-                        status=IncidentStatus.TRIGGERED,
-                        service_name=incident.service.name if incident.service else "Unknown Service",
-                        alert_source="pagerduty",
+                        status=IncidentStatus.OPEN,
+                        source="pagerduty",
+                        source_id=incident.id,
                         created_at=datetime.now(UTC),
                         userId=1  # Default user ID
                     )
@@ -346,7 +346,7 @@ async def pagerduty_webhook(
 
                     # Process with agent
                     logger.info(f"🤖 Triggering DreamOps agent for incident: {incident.id}")
-                    result = await trigger._process_alert_async(incident)
+                    result = await trigger.process_incident_async(incident)
                     results.append(result)
 
                     # Log the result

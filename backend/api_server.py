@@ -48,6 +48,9 @@ setup_logging(level=config.log_level)
 
 logger = get_logger(__name__)
 
+# Log configuration for debugging
+logger.info(f"Configuration loaded - NODE_ENV: {config.node_env}, ENVIRONMENT: {getattr(config, 'environment', 'not set')}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -135,12 +138,16 @@ app.add_middleware(
 )
 
 
-# Add request logging middleware
-@app.middleware("http")
+# Add request logging middleware - MUST be added BEFORE CORS to ensure proper order
 async def log_requests(request: Request, call_next):
     """Log all incoming requests for debugging."""
     # Log request details
     logger.info(f"Incoming request: {request.method} {request.url.path}")
+
+    # Skip body reading for OPTIONS requests to prevent interference with CORS
+    if request.method == "OPTIONS":
+        response = await call_next(request)
+        return response
 
     # Log authorization header for debugging authentication issues
     auth_header = request.headers.get("authorization")
@@ -196,11 +203,12 @@ async def list_routes():
     for route in app.routes:
         if hasattr(route, "path") and hasattr(route, "methods"):
             routes.append({
-                "path": route.path,
-                "methods": list(route.methods),
-                "name": route.name
+                "path": getattr(route, "path", ""),
+                "methods": list(getattr(route, "methods", set())),
+                "name": getattr(route, "name", "")
             })
     return {"routes": sorted(routes, key=lambda x: x["path"])}
+
 
 
 @app.get("/health")
@@ -415,10 +423,12 @@ app.include_router(kubernetes_agno.router)  # Kubernetes Agno MCP integration
 app.include_router(kubernetes_improved.router)  # Improved Kubernetes integration with kubeconfig support
 
 # Include dev config router only in development mode
-if os.getenv("NODE_ENV") == "development":
+if config.node_env == "development" or config.environment == "development":
     app.include_router(dev_config.router)
     app.include_router(chaos.router, prefix="/api/v1")
     logger.info("Dev config and chaos routes registered (development mode)")
+else:
+    logger.info(f"Dev routes not registered (node_env={config.node_env}, environment={config.environment})")
 
 # Conditionally include webhook router
 if config.pagerduty_enabled:
@@ -426,6 +436,12 @@ if config.pagerduty_enabled:
     logger.info("PagerDuty webhook routes registered")
 
 logger.info("All API routes registered successfully")
+
+# Add request logging middleware AFTER routes are registered
+@app.middleware("http")
+async def log_requests_middleware(request: Request, call_next):
+    """Log all incoming requests for debugging."""
+    return await log_requests(request, call_next)
 
 # Mount Socket.IO application - TEMPORARILY DISABLED
 # app.mount("/socket.io", socket_app)

@@ -5,9 +5,11 @@
 
 set -e
 
-# Set up Kubernetes environment
+# Set up Kubernetes environment (if needed)
 export PATH="$HOME/bin:$PATH"
-export KUBECONFIG="/home/harsh/kubeconfig-oncall"
+if [ -f "/home/harsh/kubeconfig-oncall" ]; then
+    export KUBECONFIG="/home/harsh/kubeconfig-oncall"
+fi
 
 NAMESPACE="oncall-test-apps"
 TIMESTAMP=$(date +%s)
@@ -52,22 +54,7 @@ send_pagerduty_alert() {
     # Create PagerDuty event
     curl -s -X POST https://events.pagerduty.com/v2/enqueue \
         -H 'Content-Type: application/json' \
-        -d "{
-            \"routing_key\": \"$PAGERDUTY_INTEGRATION_KEY\",
-            \"event_action\": \"trigger\",
-            \"dedup_key\": \"$dedup_key\",
-            \"payload\": {
-                \"summary\": \"$summary\",
-                \"severity\": \"$severity\",
-                \"source\": \"fuck-kubernetes-script\",
-                \"custom_details\": {
-                    \"details\": \"$details\",
-                    \"namespace\": \"$NAMESPACE\",
-                    \"injected_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
-                    \"test_mode\": true
-                }
-            }
-        }" > /dev/null
+        -d "{\n            \"routing_key\": \"$PAGERDUTY_INTEGRATION_KEY\",\n            \"event_action\": \"trigger\",\n            \"dedup_key\": \"$dedup_key\",\n            \"payload\": {\n                \"summary\": \"$summary\",\n                \"severity\": \"$severity\",\n                \"source\": \"fuck-kubernetes-script\",\n                \"custom_details\": {\n                    \"details\": \"$details\",\n                    \"namespace\": \"$NAMESPACE\",\n                    \"injected_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\n                    \"test_mode\": true\n                }\n            }\n        }" > /dev/null
     
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✅ PagerDuty alert sent successfully${NC}"
@@ -241,7 +228,7 @@ spec:
             memory: "16Mi"
             cpu: "25m"
 EOF
-    echo -e "${GREEN}✅ Resource limit issue created. Fix: kubectl patch deployment resource-limited-app -n $NAMESPACE --type json -p '[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/resources/limits/memory\",\"value\":\"256Mi\"}]'${NC}"
+    echo -e "${GREEN}✅ Resource limit issue created. Fix: kubectl patch deployment resource-limited-app -n $NAMESPACE --type json -p '[{"op":"replace","path":"/spec/template/spec/containers/0/resources/limits/memory","value":"256Mi"}]'${NC}"
     
     # Send PagerDuty alert
     send_pagerduty_alert \

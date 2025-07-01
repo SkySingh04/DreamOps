@@ -63,7 +63,7 @@ INTEGRATION_RESTRICTIONS = {
 async def get_alert_usage(user_id: str):
     """Get alert usage for a user."""
     logger.info(f"Getting alert usage for user: {user_id}")
-
+    
     # Check if in development mode
     import os
     is_dev_mode = os.getenv("NEXT_PUBLIC_DEV_MODE", "false").lower() == "true" or os.getenv("NODE_ENV", "") == "development"
@@ -73,7 +73,7 @@ async def get_alert_usage(user_id: str):
         # In dev mode, start with Pro plan
         default_plan = "pro" if is_dev_mode else "free"
         default_limit = SUBSCRIPTION_PLANS[default_plan]["alerts_limit"]
-
+        
         USER_DATA[user_id] = {
             "alerts_used": 0,
             "alerts_limit": default_limit,
@@ -98,7 +98,7 @@ async def get_alert_usage(user_id: str):
 
     alerts_remaining = max(0, user_data["alerts_limit"] - user_data["alerts_used"])
     is_limit_reached = user_data["alerts_used"] >= user_data["alerts_limit"]
-
+    
     # Get plan name from SUBSCRIPTION_PLANS
     plan_info = SUBSCRIPTION_PLANS.get(user_data["account_tier"], {"name": "Free"})
     plan_name = plan_info["name"]
@@ -122,13 +122,13 @@ async def record_alert_usage(request: RecordAlertRequest):
     # Check if in development mode
     import os
     is_dev_mode = os.getenv("NEXT_PUBLIC_DEV_MODE", "false").lower() == "true" or os.getenv("NODE_ENV", "") == "development"
-
+    
     # Initialize user data if not exists
     if request.user_id not in USER_DATA:
         # In dev mode, start with Pro plan
         default_plan = "pro" if is_dev_mode else "free"
         default_limit = SUBSCRIPTION_PLANS[default_plan]["alerts_limit"]
-
+        
         USER_DATA[request.user_id] = {
             "alerts_used": 0,
             "alerts_limit": default_limit,
@@ -247,11 +247,11 @@ async def get_current_plan(user_id: str):
             "alerts_limit_display": "3",
             "price_display": "Free"
         }
-
+    
     user_data = USER_DATA[user_id]
     plan_id = user_data.get("account_tier", "free")
     plan_info = SUBSCRIPTION_PLANS.get(plan_id, SUBSCRIPTION_PLANS["free"])
-
+    
     return {
         "plan_id": plan_id,
         "plan_name": plan_info["name"],
@@ -268,19 +268,19 @@ async def check_integration_access(user_id: str, integration_name: str):
     import os
     if os.getenv("NEXT_PUBLIC_DEV_MODE", "false").lower() == "true":
         return {"has_access": True, "reason": "Development mode - all integrations enabled"}
-
+    
     # Get user's current plan
     if user_id not in USER_DATA:
         plan_id = "free"
     else:
         plan_id = USER_DATA[user_id].get("account_tier", "free")
-
+    
     # Get allowed integrations for the plan
     allowed_integrations = INTEGRATION_RESTRICTIONS.get(plan_id, [])
-
+    
     # Check if integration is allowed
     has_access = integration_name in allowed_integrations
-
+    
     return {
         "has_access": has_access,
         "user_plan": plan_id,

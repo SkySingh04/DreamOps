@@ -674,11 +674,12 @@ function GrafanaConfig({ config, onChange, requirements }: any) {
           <strong>Setup Instructions:</strong>
           <ol className="mt-2 space-y-1 text-sm">
             <li>1. Log in to your Grafana instance</li>
-            <li>2. Go to Configuration → API Keys</li>
+            <li>2. Go to Configuration → API Keys (or Administration → API Keys in newer versions)</li>
             <li>3. Click "Add API key"</li>
-            <li>4. Name it "DreamOps" with "Viewer" role</li>
-            <li>5. Copy the generated API key</li>
+            <li>4. Name it "DreamOps" with "Viewer" role or higher</li>
+            <li>5. Copy the generated API key immediately (it won't be shown again)</li>
             <li>6. Note your Grafana URL (e.g., https://mycompany.grafana.net)</li>
+            <li className="text-amber-700 font-medium">⚠️ Important: API keys expire! Check expiration settings.</li>
           </ol>
         </AlertDescription>
       </Alert>

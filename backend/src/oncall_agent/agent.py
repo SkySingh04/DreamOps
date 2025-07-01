@@ -78,14 +78,16 @@ class OncallAgent:
             if self.config.k8s_context and self.config.k8s_context != "default":
                 contexts = [self.config.k8s_context]
 
-            enable_destructive = self.config.get("k8s_enable_destructive_operations", False)
+            enable_destructive = self.config.k8s_enable_destructive_operations
 
+            # Always use MCP-only integration - no kubectl subprocess calls
             self.k8s_integration = KubernetesManusaMCPIntegration(
                 namespace=self.config.k8s_namespace,
                 enable_destructive_operations=enable_destructive
             )
+            self.logger.info("Using Kubernetes MCP integration with kubernetes-mcp-server (manusa)")
+
             self.register_mcp_integration("kubernetes", self.k8s_integration)
-            self.logger.info("Using MCP-only Kubernetes integration (no kubectl subprocess calls)")
 
         # Initialize Notion integration if configured
         if self.config.notion_token:
@@ -842,7 +844,6 @@ class OncallAgent:
                     self.logger.error(f"❌ Error creating Notion page: {e}")
                     # Don't fail the entire operation if Notion fails
                     result["notion_error"] = str(e)
-
             return result
 
         except Exception as e:
