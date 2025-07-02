@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment-service
+  template:
+    metadata:
+      labels:
+        app: payment-service
+    spec:
+      containers:
+      - name: payment-app
+        image: busybox
+        command: ["/bin/sh"]
+        args: 
+        - -c
+        - |
+          echo "Starting payment service..."
+          echo "Loading configuration from /config/app.conf..."
+          if [ ! -f /config/app.conf ]; then
+            echo "ERROR: Configuration file /config/app.conf not found!"
+            echo "FATAL: Cannot start without configuration"
+            exit 1
+          fi
+          echo "Config loaded successfully"
+          while true; do
+            echo "Processing payments..."
+            sleep 10
+          done
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+spec:
+  selector:
+    app: payment-service
+  ports:
+  - port: 8080
+    targetPort: 8080

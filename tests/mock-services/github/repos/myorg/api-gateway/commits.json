@@ -1,0 +1,26 @@
+[
+  {
+    "sha": "abc123def456",
+    "commit": {
+      "author": {
+        "name": "Developer",
+        "email": "dev@example.com",
+        "date": "2025-06-21T08:00:00Z"
+      },
+      "message": "Update database connection pool settings"
+    },
+    "html_url": "https://github.com/myorg/api-gateway/commit/abc123def456"
+  },
+  {
+    "sha": "def456ghi789",
+    "commit": {
+      "author": {
+        "name": "Developer2",
+        "email": "dev2@example.com",
+        "date": "2025-06-21T07:30:00Z"
+      },
+      "message": "Add retry logic for database connections"
+    },
+    "html_url": "https://github.com/myorg/api-gateway/commit/def456ghi789"
+  }
+]

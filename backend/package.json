@@ -1,0 +1,8 @@
+{
+  "name": "oncall-agent-backend",
+  "version": "0.1.0",
+  "description": "Backend dependencies for Oncall Agent",
+  "dependencies": {
+    "kubernetes-mcp-server": "latest"
+  }
+}

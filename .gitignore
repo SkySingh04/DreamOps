@@ -1,0 +1,207 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+ENV/
+
+# Backend specific
+backend/.env
+backend/.env.*
+backend/*.env
+backend/.uv/
+backend/*.log
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/.coverage
+backend/htmlcov/
+backend/*.pyo
+backend/*.pyd
+backend/.Python
+backend/pip-log.txt
+backend/pip-delete-this-directory.txt
+backend/.tox/
+backend/.nox/
+backend/.eggs/
+backend/*.egg
+backend/*.egg-info/
+backend/.installed.cfg
+backend/develop-eggs/
+backend/downloads/
+backend/eggs/
+backend/.eggs/
+backend/lib/
+backend/lib64/
+backend/parts/
+backend/sdist/
+backend/var/
+backend/wheels/
+backend/*.manifest
+backend/*.spec
+
+# Frontend Node.js
+frontend/node_modules/
+frontend/.next/
+frontend/.env
+frontend/.env.*
+frontend/*.env
+frontend/.vercel
+frontend/out/
+frontend/*.log
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# IDEs
+.vscode/
+*.code-workspace
+
+# Claude settings
+.claude/
+settings.local.json
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
+.terraform/
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Project specific
+*.log
+*.pyc
+*.pid
+*.seed
+*.pid.lock
+
+# Python cache (global)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.pyc
+*.pyo
+*.pyd
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+*.cover
+*.py,cover
+.hypothesis/
+.prof
+*.sage.py
+.ipynb_checkpoints/
+profile_default/
+ipython_config.py
+.pdm.toml
+__pypackages__/
+celerybeat-schedule
+celerybeat.pid
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+instance/
+.webassets-cache
+.scrapy
+docs/_build/
+target/
+.pytype/
+.cython_debug/
+
+# GitHub MCP Server - NOW TRACKED IN REPO
+# github-mcp-server
+# github-mcp-server.exe
+# github-mcp-server-*
+# /oncall/github-mcp-server/
+# ../github-mcp-server/
+# **/github-mcp-server
+
+# Repository cache for offline access
+/tmp/oncall_repos/
+cache/
+repos_cache/
+*.git-cache/
+
+# UV
+.uv/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Root level
+.env
+.env.*
+*.env
+!.env.example
+!.env.*.example
+*.log
+.cache/
+tmp/
+temp/
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfplan
+*.tfplan.*
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Kubernetes configs
+kubeconfig*
+*.kubeconfig
+*kubeconfig.yaml
+*kubeconfig.yml
+
+aws/
+*.zip
+node_modules/

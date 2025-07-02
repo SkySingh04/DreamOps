@@ -1,0 +1,111 @@
+services:
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: oncall-agent-backend
+    ports:
+      - "8000:8000"
+    environment:
+      # Development mode
+      - NODE_ENV=development
+      - NEXT_PUBLIC_DEV_MODE=true
+      
+      # Core settings
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-3-5-sonnet-20241022}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # CORS for frontend
+      - CORS_ORIGINS=http://localhost:3000,http://frontend:3000
+      
+      # Database
+      - DATABASE_URL=${DATABASE_URL:-postgresql://oncall_user:changeme@postgres:5432/oncall_agent?sslmode=disable}
+      
+      # Mock payments for development
+      - USE_MOCK_PAYMENTS=true
+      
+      # PagerDuty (optional)
+      - PAGERDUTY_ENABLED=${PAGERDUTY_ENABLED:-false}
+      - PAGERDUTY_API_KEY=${PAGERDUTY_API_KEY:-}
+      - PAGERDUTY_WEBHOOK_SECRET=${PAGERDUTY_WEBHOOK_SECRET:-}
+      
+      # Kubernetes (optional)
+      - K8S_ENABLED=${K8S_ENABLED:-false}
+      - K8S_CONFIG_PATH=${K8S_CONFIG_PATH:-~/.kube/config}
+    volumes:
+      - ./backend:/app
+      - ~/.kube:/root/.kube:ro  # For kubectl access
+    networks:
+      - oncall-network
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: oncall-agent-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # Development mode
+      - NODE_ENV=development
+      - NEXT_PUBLIC_DEV_MODE=true
+      
+      # API configuration
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      
+      # Database - Use local PostgreSQL container
+      - POSTGRES_URL=postgresql://oncall_user:changeme@postgres:5432/oncall_agent?sslmode=disable
+      - DATABASE_URL=postgresql://oncall_user:changeme@postgres:5432/oncall_agent?sslmode=disable
+      
+      # Auth
+      - AUTH_SECRET=development-secret-key-change-in-production
+      
+      # Mock payments
+      - NEXT_PUBLIC_USE_MOCK_PAYMENTS=true
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules  # Prevent node_modules from being overwritten
+      - /app/.next  # Prevent build artifacts from being overwritten
+    depends_on:
+      - backend
+      - postgres
+    networks:
+      - oncall-network
+    restart: unless-stopped
+
+  # PostgreSQL for frontend (Next.js SaaS starter uses Postgres)
+  postgres:
+    image: postgres:16-alpine
+    container_name: oncall-agent-db
+    environment:
+      - POSTGRES_DB=oncall_agent
+      - POSTGRES_USER=oncall_user
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - oncall-network
+    restart: unless-stopped
+
+  # Redis for caching and real-time updates (future enhancement)
+  redis:
+    image: redis:7-alpine
+    container_name: oncall-agent-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - oncall-network
+    restart: unless-stopped
+
+networks:
+  oncall-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

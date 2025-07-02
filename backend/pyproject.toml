@@ -1,0 +1,87 @@
+[project]
+name = "oncall_agent"
+version = "0.1.0"
+description = "Dream easy while AI takes your on-call duty. AI-powered incident response and infrastructure management platform."
+requires-python = ">=3.11"
+dependencies = [
+    "agno>=1.6.3",
+    "anthropic>=0.54.0",
+    "httpx>=0.28.1",
+    "pydantic>=2.11.7",
+    "python-dotenv>=1.1.0",
+    "mcp>=1.0.0",
+    "kubernetes>=30.1.0",
+    "asyncio>=3.4.3",
+    "fastapi>=0.115.13",
+    "uvicorn[standard]>=0.34.3",
+    "pydantic-settings>=2.0.0",
+    "sse-starlette>=2.3.6",
+    "aiohttp>=3.12.13",
+    "pyyaml>=6.0.2",
+    "stripe>=12.2.0",
+    "cryptography>=45.0.4",
+    "asyncpg>=0.30.0",
+    "requests>=2.32.0",
+    "gunicorn>=20.1.0",
+    "python-multipart>=0.0.5",
+    "sqlalchemy>=2.0.0",
+    "email-validator>=2.0.0",
+    "bcrypt>=4.3.0",
+    "pyjwt>=2.10.1",
+    "firebase-admin>=6.9.0",
+    "phonepe>=1.0.0",
+    "openai>=1.93.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.16.1",
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.0.0",
+    "pytest-cov>=6.2.1",
+    "ruff>=0.12.0",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+exclude = [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".mypy_cache",
+    ".pytest_cache",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "N",  # pep8-naming
+    "UP", # pyupgrade
+]
+ignore = ["E501"]  # line too long
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/oncall_agent"]
