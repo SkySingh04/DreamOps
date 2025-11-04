@@ -18,7 +18,7 @@ from .frontend_integration import (
 )
 from .mcp_integrations.base import MCPIntegration
 from .mcp_integrations.github_mcp import GitHubMCPIntegration
-from .mcp_integrations.kubernetes_manusa_mcp import KubernetesManusaMCPIntegration
+from .mcp_integrations.kubernetes_agno_mcp import KubernetesAgnoMCPIntegration
 from .mcp_integrations.notion_direct import NotionDirectIntegration
 from .pagerduty_client import (
     acknowledge_pagerduty_incident,
@@ -52,8 +52,8 @@ class EnhancedOncallAgent:
         self.agent_executor = None
 
         if self.config.k8s_enabled:
-            # Initialize k8s_mcp first for context gathering
-            self.k8s_mcp = KubernetesManusaMCPIntegration(
+            # Initialize k8s_mcp using Agno's MCPTools (the correct way!)
+            self.k8s_mcp = KubernetesAgnoMCPIntegration(
                 namespace=self.config.k8s_namespace,
                 enable_destructive_operations=self.config.k8s_enable_destructive_operations
             )

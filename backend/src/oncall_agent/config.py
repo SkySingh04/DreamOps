@@ -54,6 +54,7 @@ class Config(BaseSettings):
     k8s_context: str = Field("default", env="K8S_CONTEXT")
     k8s_namespace: str = Field("default", env="K8S_NAMESPACE")
     k8s_mcp_server_url: str = Field("http://localhost:8080", env="K8S_MCP_SERVER_URL")
+    k8s_mcp_command: str = Field("npx -y kubernetes-mcp-server@latest", env="K8S_MCP_COMMAND")
     k8s_enable_destructive_operations: bool = Field(False, env="K8S_ENABLE_DESTRUCTIVE_OPERATIONS")
 
     # K8s MCP Server settings
