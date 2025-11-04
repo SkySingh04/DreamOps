@@ -21,11 +21,9 @@ from src.oncall_agent.api.routers import (
     alert_tracking,
     analytics_router,
     api_keys,
-    auth_setup,
     chaos,
     dashboard_router,
     dev_config,
-    firebase_auth,
     incidents_router,
     insights,
     integrations_router,
@@ -149,13 +147,7 @@ async def log_requests(request: Request, call_next):
         response = await call_next(request)
         return response
 
-    # Log authorization header for debugging authentication issues
-    auth_header = request.headers.get("authorization")
-    if request.url.path.startswith("/api/v1/auth/"):
-        logger.info(f"Auth endpoint called: {request.url.path}")
-        logger.info(f"Authorization header present: {bool(auth_header)}")
-        if auth_header:
-            logger.info(f"Authorization header format: {auth_header[:20]}...")
+    # Note: Auth logging removed - auth is handled by authentik reverse proxy
 
     # Log webhook requests in detail
     if request.url.path == "/webhook/pagerduty":
@@ -397,10 +389,6 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Include routers
 # Always include core routers
-# Note: Both firebase_auth and auth_setup have /api/v1/auth prefix
-# FastAPI will merge routes from both routers under the same prefix
-app.include_router(firebase_auth.router)  # Firebase auth endpoints
-app.include_router(auth_setup.router)  # Auth and setup flow endpoints
 app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(incidents_router, prefix="/api/v1")
 app.include_router(agent_router, prefix="/api/v1")

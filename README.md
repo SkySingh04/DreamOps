@@ -53,6 +53,7 @@ DreamOps is an intelligent AI-powered incident response and infrastructure manag
 - **AI**: Claude 3.5 Sonnet API, Model Context Protocol (MCP)
 - **Database**: Neon PostgreSQL with environment separation
 - **Infrastructure**: Docker, Terraform, AWS (ECS Fargate, S3, CloudFront)
+- **Authentication**: Handled by Authentik reverse proxy (no built-in auth)
 - **Payments**: PhonePe Payment Gateway SDK
 - **Monitoring**: CloudWatch, custom metrics and dashboards
 
@@ -1289,6 +1290,12 @@ AMPLIFY_APP_ID
 
 ## Security Considerations
 
+### Authentication
+- **Authentication is handled by Authentik reverse proxy**
+- No built-in authentication in the application
+- User identity is provided via headers from Authentik
+- Ensure Authentik is properly configured and secured
+
 ### Environment Variables
 - Never commit `.env` files to version control
 - Use different secrets for each environment
@@ -1308,7 +1315,6 @@ AMPLIFY_APP_ID
 - Namespace isolation for testing
 
 ### API Security
-- Authentication required for sensitive endpoints
 - Request validation using Pydantic models
 - Rate limiting implemented
 - Comprehensive audit logging

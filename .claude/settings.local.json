@@ -78,7 +78,11 @@
       "Bash(cp:*)",
       "Bash(git rev-list:*)",
       "Bash(git checkout:*)",
-      "Bash(git branch:*)"
+      "Bash(git branch:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill:*)",
+      "Bash(kubectl config get-contexts:*)",
+      "Bash(kubectl config use-context:*)"
     ],
     "deny": []
   }

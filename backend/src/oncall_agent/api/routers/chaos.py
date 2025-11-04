@@ -4,12 +4,11 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from ...config import get_config
 from ...pagerduty_client import trigger_pagerduty_event
-from ...security.firebase_auth import FirebaseUser, get_current_firebase_user
 
 logger = logging.getLogger(__name__)
 
@@ -37,13 +36,14 @@ class ChaosEventResponse(BaseModel):
 
 @router.post("/trigger-alert", response_model=ChaosEventResponse)
 async def trigger_chaos_alert(
-    request: ChaosEventRequest,
-    current_user: FirebaseUser = Depends(get_current_firebase_user)
+    request: ChaosEventRequest
 ) -> ChaosEventResponse:
     """Trigger a PagerDuty alert for chaos engineering actions.
-    
+
     This endpoint is used by the frontend to create PagerDuty incidents
     when chaos engineering actions are performed.
+
+    Auth is handled by authentik reverse proxy.
     """
     config = get_config()
 
@@ -75,7 +75,7 @@ async def trigger_chaos_alert(
         "chaos_type": request.service or "all_services",
         "action": request.action,
         "affected_services": affected_services,
-        "triggered_by": current_user.email or "oncall-agent",
+        "triggered_by": "oncall-agent",
         "timestamp": datetime.utcnow().isoformat(),
         "environment": "development",
         "namespace": "oncall-test-apps",
@@ -124,10 +124,11 @@ async def trigger_chaos_alert(
 
 
 @router.get("/status")
-async def get_chaos_status(
-    current_user: FirebaseUser = Depends(get_current_firebase_user)
-) -> dict[str, Any]:
-    """Get chaos engineering status and configuration."""
+async def get_chaos_status() -> dict[str, Any]:
+    """Get chaos engineering status and configuration.
+
+    Auth is handled by authentik reverse proxy.
+    """
     config = get_config()
 
     return {

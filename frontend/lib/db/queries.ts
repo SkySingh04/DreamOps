@@ -1,7 +1,18 @@
-// Re-export all functions from API-based auth
-// This maintains compatibility while moving away from direct DB access
-export { 
-  getUser, 
-  getUserById,
-  getActivityLogs
-} from '@/lib/api/auth';
+// Auth removed - handled by authentik reverse proxy
+// User info will be passed via headers from authentik
+
+export async function getUser() {
+  // Auth is handled by authentik reverse proxy
+  // User info should be read from headers
+  return null;
+}
+
+export async function getUserById(id: string) {
+  // Auth is handled by authentik reverse proxy
+  return null;
+}
+
+export async function getActivityLogs() {
+  // Auth is handled by authentik reverse proxy
+  return [];
+}

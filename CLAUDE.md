@@ -2,6 +2,28 @@
 
 This document provides comprehensive instructions for AI assistants (like Claude, GPT-4, etc.) on how to effectively work with this codebase.
 
+## CRITICAL: Git Commit Message Rules
+
+**IMPORTANT**: When creating git commits, follow these strict rules:
+
+- ❌ **NEVER EVER add co-author credits in commit messages**
+- ❌ **DO NOT include any "Co-Authored-By" lines**
+- ❌ **DO NOT add "Generated with Claude Code" or similar attribution**
+- ❌ **DO NOT add emoji or branding in commit messages**
+- ✅ **Keep commit messages clean, professional, and focused on the changes only**
+- ✅ **Use conventional commit format: `type(scope): description`**
+- ✅ **Be concise and descriptive about what changed and why**
+
+Example of a GOOD commit message:
+```
+refactor(auth): remove authentication in favor of Authentik proxy
+
+- Remove all Firebase authentication code from backend and frontend
+- Delete auth routers, models, and security modules
+- Update deployment docs for bare-metal K3s with Authentik
+- Remove firebase-admin, pyjwt, and bcrypt dependencies
+```
+
 ## Documentation Structure
 
 **IMPORTANT**: All project documentation has been consolidated into the main README.md file. Before making any changes, read the relevant sections in README.md:
@@ -31,14 +53,15 @@ DreamOps is an intelligent AI-powered incident response and infrastructure manag
 ## Key Architecture Decisions
 
 1. **Individual User Model**: The platform operates on an individual user basis WITHOUT teams. Users register and use the platform as individuals, not as part of teams or organizations.
-2. **Modular MCP Integrations**: All integrations extend `MCPIntegration` base class in `src/oncall_agent/mcp_integrations/base.py`
-3. **Async-First**: All operations are async to handle concurrent MCP calls efficiently
-4. **Configuration-Driven**: Uses pydantic for config validation and environment variables
-5. **Type-Safe**: Extensive use of type hints throughout the codebase
-6. **Retry Logic**: Built-in exponential backoff for network operations (configurable via MCP_MAX_RETRIES)
-7. **Singleton Config**: Global configuration instance accessed via `get_config()`
-8. **Environment Separation**: Complete database and configuration isolation between local/staging/production
-9. **YOLO Mode**: Autonomous remediation mode that executes fixes without human approval
+2. **Authentication via Authentik**: Authentication is handled by Authentik reverse proxy, not built into the application. User identity is provided via headers.
+3. **Modular MCP Integrations**: All integrations extend `MCPIntegration` base class in `src/oncall_agent/mcp_integrations/base.py`
+4. **Async-First**: All operations are async to handle concurrent MCP calls efficiently
+5. **Configuration-Driven**: Uses pydantic for config validation and environment variables
+6. **Type-Safe**: Extensive use of type hints throughout the codebase
+7. **Retry Logic**: Built-in exponential backoff for network operations (configurable via MCP_MAX_RETRIES)
+8. **Singleton Config**: Global configuration instance accessed via `get_config()`
+9. **Environment Separation**: Complete database and configuration isolation between local/staging/production
+10. **YOLO Mode**: Autonomous remediation mode that executes fixes without human approval
 
 ## Project Structure
 
