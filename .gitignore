@@ -165,6 +165,7 @@ repos_cache/
 *.swo
 *~
 
+.claude/settings.local.json
 # OS
 .DS_Store
 Thumbs.db
