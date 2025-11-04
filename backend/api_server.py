@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 
 from src.oncall_agent.api import webhooks
 from src.oncall_agent.api.routers import (
-    admin_integrations,
+    # admin_integrations,  # Temporarily disabled - requires auth
     agent_logs,
     agent_router,
     alert_crud,
@@ -35,7 +35,7 @@ from src.oncall_agent.api.routers import (
     payments_router,
     security_router,
     settings_router,
-    user_integrations,
+    # user_integrations,  # Temporarily disabled - requires auth
 )
 from src.oncall_agent.config import get_config
 from src.oncall_agent.utils import get_logger, setup_logging
@@ -405,8 +405,8 @@ app.include_router(mock_payments.router, prefix="/api/v1")
 app.include_router(alert_tracking, prefix="/api/v1")
 app.include_router(alert_crud, prefix="/api/v1")
 app.include_router(api_keys.router)
-app.include_router(user_integrations.router)  # Already has /api/v1 prefix
-app.include_router(admin_integrations.router)  # Admin integration verification routes
+# app.include_router(user_integrations.router)  # Already has /api/v1 prefix - Temporarily disabled (requires auth)
+# app.include_router(admin_integrations.router)  # Admin integration verification routes - Temporarily disabled (requires auth)
 app.include_router(kubernetes_agno.router)  # Kubernetes Agno MCP integration
 app.include_router(kubernetes_improved.router)  # Improved Kubernetes integration with kubeconfig support
 

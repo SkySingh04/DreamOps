@@ -36,11 +36,11 @@ import { AccountTierBadge } from '@/components/ui/account-tier-badge';
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 const navItems = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', hideWhenLoggedOut: true },
-  { href: '/ai-control', icon: Bot, label: 'AI Agents', hideWhenLoggedOut: true },
-  { href: '/incidents', icon: AlertTriangle, label: 'Incidents', hideWhenLoggedOut: true },
-  { href: '/integrations', icon: Plug, label: 'Integrations', hideWhenLoggedOut: true },
-  { href: '/settings', icon: Settings, label: 'Settings', hideWhenLoggedOut: true }
+  { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/ai-control', icon: Bot, label: 'AI Agents' },
+  { href: '/incidents', icon: AlertTriangle, label: 'Incidents' },
+  { href: '/integrations', icon: Plug, label: 'Integrations' },
+  { href: '/settings', icon: Settings, label: 'Settings' }
 ];
 
 export function Navigation() {
@@ -49,14 +49,10 @@ export function Navigation() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { data: user, error, isLoading } = useSWR<User>('/api/user', fetcher);
 
+  // Auth removed - handled by Authentik reverse proxy
   const handleLogout = async () => {
-    try {
-      await fetch('/api/logout', { method: 'POST' });
-      mutate('/api/user', null, false);
-      router.push('/sign-in');
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
+    // No logout needed - Authentik handles auth
+    router.push('/');
   };
 
   return (
@@ -74,8 +70,6 @@ export function Navigation() {
             {/* Desktop navigation */}
             <div className="hidden md:ml-8 md:flex md:space-x-8">
               {navItems.map((item) => {
-                if (item.hideWhenLoggedOut && !user) return null;
-                
                 const isActive = pathname === item.href;
                 return (
                   <Link
@@ -139,20 +133,7 @@ export function Navigation() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </>
-            ) : (
-              <>
-                {!isLoading && (
-                  <div className="hidden md:flex items-center space-x-4">
-                    <Link href="/sign-in">
-                      <Button variant="ghost">Sign In</Button>
-                    </Link>
-                    <Link href="/sign-up">
-                      <Button>Get Started</Button>
-                    </Link>
-                  </div>
-                )}
-              </>
-            )}
+            ) : null}
 
             {/* Mobile menu button */}
             <div className="md:hidden">
@@ -177,8 +158,6 @@ export function Navigation() {
         <div className="md:hidden">
           <div className="pt-2 pb-3 space-y-1">
             {navItems.map((item) => {
-              if (item.hideWhenLoggedOut && !user) return null;
-              
               const isActive = pathname === item.href;
               return (
                 <Link

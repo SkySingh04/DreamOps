@@ -4,6 +4,7 @@
 
 ## Table of Contents
 
+- [TODO List](#todo-list)
 - [Project Overview](#project-overview)
 - [Quick Start Guide](#quick-start-guide)
 - [Architecture & Technical Details](#architecture--technical-details)
@@ -29,6 +30,76 @@
 - [Troubleshooting](#troubleshooting)
 - [API Reference](#api-reference)
 - [Contributing](#contributing)
+
+## TODO List
+
+### High Priority
+
+#### Authentication & Deployment (Linear: Auth and Deployment)
+- [ ] **DEVOPS-459**: Disable Built-in Authentication
+  - Remove all Firebase authentication code from backend and frontend
+  - Delete auth routers, models, and security modules
+  - Remove firebase-admin, pyjwt, and bcrypt dependencies
+  - Configure application to read user identity from Authentik headers
+
+- [ ] **DEVOPS-460**: Add Authentik Proxy for Authentication
+  - Create Authentik provider configuration (Proxy Provider)
+  - Configure headers to pass user identity (X-Authentik-Username, X-Authentik-Email, etc.)
+  - Create Authentik application and update outpost
+  - Test authentication flow end-to-end
+
+- [ ] **DEVOPS-461**: Deploy DreamOps on Bare Metal K3s Server
+  - Create dreamops namespace in K3s
+  - Deploy backend and frontend with proper configurations
+  - Run database migrations for production
+  - Configure Authentik proxy routing
+  - Verify end-to-end alert flow
+
+- [ ] **DEVOPS-462**: Set Up CI/CD Pipeline for DreamOps Deployment
+  - Create GitHub Actions workflows for backend and frontend
+  - Set up automated testing (linting, type checking, unit tests)
+  - Configure Docker image builds and pushes
+  - Set up automated deployment to K3s cluster
+  - Implement rollback procedures
+
+#### UI/UX Improvements
+- [ ] Remove chaos engineering components from UI
+- [ ] Redo entire UI with improved design and user experience
+- [ ] Implement consistent design system across all pages
+- [ ] Improve mobile responsiveness
+
+#### API & Integrations
+- [ ] Get and configure Anthropic API key
+- [ ] Connect to MCP servers:
+  - [ ] Kubernetes MCP integration
+  - [ ] Grafana MCP integration
+  - [ ] Datadog MCP integration
+- [ ] Connect to PagerDuty webhook and API
+- [ ] Connect to Slack for notifications and alerts
+- [ ] Add logs to Grafana for centralized monitoring
+
+#### Code Quality
+- [ ] Clean up codebase (remove unused files, deprecated code)
+- [ ] Remove or refactor auth-dependent routers:
+  - `admin_integrations.py` (currently disabled)
+  - `user_integrations.py` (currently disabled)
+- [ ] Consolidate documentation (combine similar docs in `/docs`)
+- [ ] Add comprehensive tests for core functionality
+- [ ] Improve error handling and logging
+
+### Medium Priority
+- [ ] Set up proper secrets management for production
+- [ ] Implement rate limiting for API endpoints
+- [ ] Add comprehensive API documentation
+- [ ] Create deployment runbooks and playbooks
+- [ ] Set up monitoring dashboards in Grafana
+
+### Low Priority
+- [ ] Optimize database queries and add indexing
+- [ ] Implement caching layer for frequently accessed data
+- [ ] Add internationalization (i18n) support
+- [ ] Create user onboarding flow
+- [ ] Build admin dashboard for system monitoring
 
 ## Project Overview
 

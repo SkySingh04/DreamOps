@@ -29,13 +29,88 @@ refactor(auth): remove authentication in favor of Authentik proxy
 **IMPORTANT**: All project documentation has been consolidated into the main README.md file. Before making any changes, read the relevant sections in README.md:
 
 - **Database Setup** - Database configuration for all environments
-- **Configuration** - PagerDuty setup and webhook configuration  
+- **Configuration** - PagerDuty setup and webhook configuration
 - **Features & Integrations** - YOLO mode, MCP integrations, and safety mechanisms
 - **Deployment** - AWS deployment options (Terraform, Amplify)
 - **Architecture & Technical Details** - Implementation details and fixes
 - **CI/CD** - GitHub Actions workflows and deployment automation
 
 Always check the README.md for the latest information before implementing changes.
+
+## CRITICAL: Documentation Guidelines
+
+**IMPORTANT**: Follow these strict rules when creating or updating documentation:
+
+### Documentation Location Rules
+
+1. **ALWAYS write documentation in the `/docs` directory ONLY**
+   - ❌ **DO NOT create markdown files in the root directory** (except README.md and CLAUDE.md)
+   - ❌ **DO NOT create documentation files in subdirectories** (backend/, frontend/, etc.)
+   - ✅ **ALL documentation files MUST go in `/docs/`**
+   - ✅ **Use clear, descriptive filenames** (e.g., `kubernetes-integration.md`, not `k8s-stuff.md`)
+
+2. **ALWAYS combine similar documentation whenever possible**
+   - If you're creating a new doc about Kubernetes, check if `/docs/kubernetes-integration.md` exists
+   - If similar documentation exists, **UPDATE the existing file** instead of creating a new one
+   - Only create a new file if the topic is distinctly different
+   - Example: Combine "Kubernetes Setup", "Kubernetes Configuration", and "Kubernetes Troubleshooting" into ONE file
+
+3. **Keep documentation organized and consolidated**
+   - Prefer fewer, comprehensive files over many small files
+   - Use sections and subsections within files to organize content
+   - Link between docs when necessary using relative paths
+   - Maintain a clear structure: Overview → Setup → Configuration → Usage → Troubleshooting
+
+### Documentation File Structure
+
+Organize files in `/docs` by topic:
+```
+/docs
+├── README.md                       # Index of all docs
+├── deployment.md                   # All deployment guides (AWS, K3s, Docker, etc.)
+├── kubernetes-integration.md       # All Kubernetes-related docs
+├── grafana-integration.md          # Grafana setup and configuration
+├── pagerduty-integration.md        # PagerDuty webhook and API
+└── troubleshooting.md             # Common issues and solutions
+```
+
+### What NOT to Document
+
+- ❌ **DO NOT create separate files for minor features**
+- ❌ **DO NOT duplicate information across multiple files**
+- ❌ **DO NOT create README files in subdirectories**
+- ❌ **DO NOT write docs in code comments when they belong in `/docs`**
+
+### Documentation Best Practices
+
+1. **Before creating a new doc**: Check `/docs` directory for existing files on that topic
+2. **Before updating a doc**: Read the entire file to understand its structure
+3. **After updating**: Ensure links are updated if file names changed
+4. **Keep it DRY**: Don't Repeat Yourself - link to existing documentation instead
+5. **Use consistent formatting**: Follow the style of existing documentation
+
+### Example: Good vs Bad Documentation Approach
+
+**❌ BAD Approach:**
+```
+Creating separate files:
+- /docs/k8s-setup.md
+- /docs/kubernetes-config.md
+- /docs/kubernetes-troubleshooting.md
+- /docs/k8s-deployment.md
+- /backend/kubernetes-notes.md
+```
+
+**✅ GOOD Approach:**
+```
+One comprehensive file:
+- /docs/kubernetes-integration.md
+  - Section: Setup
+  - Section: Configuration
+  - Section: Deployment
+  - Section: Troubleshooting
+  - Section: MCP Integration
+```
 
 ## Project Overview
 

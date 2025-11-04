@@ -1,8 +1,6 @@
 import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import { Manrope } from 'next/font/google';
-import { getUser } from '@/lib/db/queries';
-import { SWRConfig } from 'swr';
 import { Providers } from '@/lib/providers';
 import { DevModeIndicator } from '@/components/dev-mode-indicator';
 
@@ -22,9 +20,6 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Fetch data server-side
-  const user = await getUser();
-
   return (
     <html
       lang="en"
@@ -32,16 +27,8 @@ export default async function RootLayout({
     >
       <body className="min-h-[100dvh] bg-gray-50" suppressHydrationWarning>
         <Providers>
-          <SWRConfig
-            value={{
-              fallback: {
-                '/api/user': user
-              }
-            }}
-          >
-            {children}
-            <DevModeIndicator />
-          </SWRConfig>
+          {children}
+          <DevModeIndicator />
         </Providers>
       </body>
     </html>

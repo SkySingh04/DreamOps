@@ -12,31 +12,13 @@ import {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-// Dynamically import Firebase auth to avoid SSR issues
-let firebaseAuth: any = null;
-if (typeof window !== 'undefined') {
-  import('./firebase/config').then(module => {
-    firebaseAuth = module.auth;
-  });
-}
+// Auth removed - handled by Authentik reverse proxy
 
 class APIClient {
   private baseURL: string;
 
   constructor() {
     this.baseURL = API_BASE_URL;
-  }
-
-  private async getAuthToken(): Promise<string | null> {
-    try {
-      if (firebaseAuth && firebaseAuth.currentUser) {
-        return await firebaseAuth.currentUser.getIdToken();
-      }
-      return null;
-    } catch (error) {
-      console.error('Error getting auth token:', error);
-      return null;
-    }
   }
 
   private async request<T>(
@@ -48,12 +30,6 @@ class APIClient {
         'Content-Type': 'application/json',
         ...(options.headers as Record<string, string> || {}),
       };
-
-      // Add authorization header
-      const token = await this.getAuthToken();
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
 
       const response = await fetch(`${this.baseURL}${endpoint}`, {
         ...options,

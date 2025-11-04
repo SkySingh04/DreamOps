@@ -170,7 +170,12 @@ export default function DashboardPage() {
         const response = await fetch('/api/user');
         if (response.ok) {
           const user = await response.json();
-          setUserId(user.id);
+          // Auth removed - user will be null, fallback to user 1
+          if (user && user.id) {
+            setUserId(user.id);
+          } else {
+            setUserId(1);
+          }
         } else {
           // Fallback to user 1 for testing
           setUserId(1);
@@ -181,7 +186,7 @@ export default function DashboardPage() {
         setUserId(1);
       }
     }
-    
+
     fetchUserId();
   }, []);
 
