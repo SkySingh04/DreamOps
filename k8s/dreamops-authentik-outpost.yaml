@@ -1,0 +1,51 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dreamops-authentik-outpost
+  namespace: default
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "4"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - oncall.frai.pro
+    secretName: dreamops-oncall-outpost-tls
+  rules:
+  - host: oncall.frai.pro
+    http:
+      paths:
+      - path: /outpost.goauthentik.io
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: authentik-outpost
+            port:
+              number: 9000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: authentik-outpost
+  namespace: default
+spec:
+  ports:
+  - port: 9000
+    targetPort: 9000
+    protocol: TCP
+    name: http
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: authentik-outpost
+  namespace: default
+subsets:
+- addresses:
+  - ip: 10.0.190.133  # IP of ak-outpost-azure-outpost service
+  ports:
+  - port: 9000
+    name: http

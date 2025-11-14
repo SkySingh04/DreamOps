@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, CheckCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
-export default function PaymentRedirectPage() {
+function PaymentRedirectContent() {
   const searchParams = useSearchParams();
   const transactionId = searchParams.get("transaction_id");
   const [status, setStatus] = useState<"checking" | "success" | "failed">("checking");
@@ -116,5 +116,22 @@ export default function PaymentRedirectPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function PaymentRedirectPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <Card className="w-full max-w-md">
+          <CardContent className="text-center py-8">
+            <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary mb-4" />
+            <p className="text-gray-600">Loading...</p>
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <PaymentRedirectContent />
+    </Suspense>
   );
 }

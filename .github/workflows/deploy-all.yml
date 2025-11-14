@@ -1,0 +1,154 @@
+name: Deploy All Services
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.gitignore'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  ECR_BACKEND: dreamops-backend
+  ECR_FRONTEND: dreamops-frontend
+
+jobs:
+  build-backend:
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push backend
+        id: build
+        working-directory: ./backend
+        run: |
+          IMAGE_TAG=${{ github.sha }}
+          REGISTRY=${{ steps.login-ecr.outputs.registry }}
+
+          docker build -t $ECR_BACKEND:$IMAGE_TAG -f Dockerfile.prod .
+          docker tag $ECR_BACKEND:$IMAGE_TAG $REGISTRY/$ECR_BACKEND:$IMAGE_TAG
+          docker tag $ECR_BACKEND:$IMAGE_TAG $REGISTRY/$ECR_BACKEND:latest
+
+          docker push $REGISTRY/$ECR_BACKEND:$IMAGE_TAG
+          docker push $REGISTRY/$ECR_BACKEND:latest
+
+          echo "image=$REGISTRY/$ECR_BACKEND:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+  build-frontend:
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push frontend
+        id: build
+        working-directory: ./frontend
+        env:
+          POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
+        run: |
+          IMAGE_TAG=${{ github.sha }}
+          REGISTRY=${{ steps.login-ecr.outputs.registry }}
+
+          docker build \
+            --build-arg POSTGRES_URL="$POSTGRES_URL" \
+            -t $ECR_FRONTEND:$IMAGE_TAG \
+            -f Dockerfile .
+          docker tag $ECR_FRONTEND:$IMAGE_TAG $REGISTRY/$ECR_FRONTEND:$IMAGE_TAG
+          docker tag $ECR_FRONTEND:$IMAGE_TAG $REGISTRY/$ECR_FRONTEND:latest
+
+          docker push $REGISTRY/$ECR_FRONTEND:$IMAGE_TAG
+          docker push $REGISTRY/$ECR_FRONTEND:latest
+
+          echo "image=$REGISTRY/$ECR_FRONTEND:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend]
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Deploy to production
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.PRODUCTION_SERVER_HOST }}
+          username: ${{ secrets.PRODUCTION_SERVER_USER }}
+          key: ${{ secrets.PRODUCTION_SERVER_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/dreamops
+
+            echo "Logging into ECR..."
+            aws ecr get-login-password --region ${{ env.AWS_REGION }} | \
+              docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
+
+            echo "Pulling latest images..."
+            docker compose pull
+
+            echo "Stopping services..."
+            docker compose down
+
+            echo "Starting services..."
+            docker compose up -d
+
+            echo "Waiting for services to be healthy..."
+
+            # Wait for backend
+            timeout 60 bash -c 'until curl -f http://127.0.0.1:8000/health 2>/dev/null; do echo "Waiting for backend..."; sleep 2; done' || {
+              echo "❌ Backend failed to start!"
+              docker compose logs backend --tail=100
+              exit 1
+            }
+            echo "✅ Backend is healthy"
+
+            # Wait for frontend
+            timeout 60 bash -c 'until curl -f http://127.0.0.1:3000 2>/dev/null; do echo "Waiting for frontend..."; sleep 2; done' || {
+              echo "❌ Frontend failed to start!"
+              docker compose logs frontend --tail=100
+              exit 1
+            }
+            echo "✅ Frontend is healthy"
+
+            # Cleanup old images
+            docker image prune -f --filter "until=72h"
+
+            echo "🚀 Deployment completed successfully!"
+            docker compose ps

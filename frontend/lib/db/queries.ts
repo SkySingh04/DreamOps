@@ -1,5 +1,6 @@
 // Auth removed - handled by authentik reverse proxy
 // User info will be passed via headers from authentik
+import type { ActivityLog } from './schema';
 
 export async function getUser() {
   // Auth is handled by authentik reverse proxy
@@ -12,7 +13,7 @@ export async function getUserById(id: string) {
   return null;
 }
 
-export async function getActivityLogs() {
+export async function getActivityLogs(): Promise<ActivityLog[]> {
   // Auth is handled by authentik reverse proxy
   return [];
 }

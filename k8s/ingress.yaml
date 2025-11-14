@@ -1,0 +1,54 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dreamops-ingress
+  namespace: dreamops
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/client-body-buffer-size: "16k"
+    nginx.ingress.kubernetes.io/client-header-buffer-size: "32k"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "32k"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - oncall.frai.pro
+    secretName: dreamops-tls
+  rules:
+  - host: oncall.frai.pro
+    http:
+      paths:
+      # Backend API
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: dreamops-backend
+            port:
+              number: 8000
+      - path: /webhook
+        pathType: Prefix
+        backend:
+          service:
+            name: dreamops-backend
+            port:
+              number: 8000
+      - path: /health
+        pathType: Prefix
+        backend:
+          service:
+            name: dreamops-backend
+            port:
+              number: 8000
+      # Frontend (catch-all)
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: dreamops-frontend
+            port:
+              number: 3000

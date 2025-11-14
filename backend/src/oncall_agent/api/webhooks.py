@@ -389,14 +389,23 @@ async def pagerduty_webhook(
 @router.get("/pagerduty/status")
 async def webhook_status() -> dict[str, Any]:
     """Get PagerDuty webhook configuration status."""
+    api_key_configured = bool(getattr(config, 'pagerduty_api_key', None))
+
     return {
         "webhook_enabled": config.pagerduty_enabled,
         "secret_configured": bool(getattr(config, 'pagerduty_webhook_secret', None)),
-        "api_key_configured": bool(getattr(config, 'pagerduty_api_key', None)),
+        "api_key_configured": api_key_configured,
         "user_email_configured": bool(getattr(config, 'pagerduty_user_email', None)),
         "webhook_url": f"{config.api_host}:{config.api_port}/webhook/pagerduty",
         "agent_status": {
             "initialized": agent_trigger is not None,
             "agent_available": agent_trigger is not None
-        }
+        },
+        "features": {
+            "webhook_receiving": True,  # Always available
+            "incident_acknowledgment": api_key_configured,
+            "incident_resolution": api_key_configured,
+            "incident_notes": api_key_configured
+        },
+        "note": "API key is optional. Without it, incidents will be received and processed, but cannot be updated in PagerDuty."
     }

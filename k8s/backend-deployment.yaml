@@ -1,0 +1,150 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dreamops-backend
+  namespace: dreamops
+  labels:
+    app: dreamops-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dreamops-backend
+  template:
+    metadata:
+      labels:
+        app: dreamops-backend
+    spec:
+      containers:
+      - name: backend
+        image: 507254053937.dkr.ecr.us-east-1.amazonaws.com/dreamops-backend:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: dreamops-secrets
+              key: anthropic-api-key
+        - name: NODE_ENV
+          value: "production"
+        - name: ENVIRONMENT
+          value: "production"
+        - name: POSTGRES_URL
+          valueFrom:
+            secretKeyRef:
+              name: dreamops-secrets
+              key: postgres-url
+        - name: K8S_ENABLED
+          value: "true"
+        - name: K8S_NAMESPACE
+          value: "default"
+        - name: K8S_ENABLE_DESTRUCTIVE_OPERATIONS
+          value: "false"
+        - name: PAGERDUTY_ENABLED
+          value: "true"
+        - name: PAGERDUTY_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: dreamops-secrets
+              key: pagerduty-api-key
+              optional: true
+        - name: PAGERDUTY_USER_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: dreamops-secrets
+              key: pagerduty-user-email
+              optional: true
+        - name: API_HOST
+          value: "0.0.0.0"
+        - name: API_PORT
+          value: "8000"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: kube-config
+          mountPath: /root/.kube
+          readOnly: true
+      volumes:
+      - name: kube-config
+        secret:
+          secretName: kubeconfig
+          optional: true
+      serviceAccountName: dreamops-backend
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dreamops-backend
+  namespace: dreamops
+  labels:
+    app: dreamops-backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: dreamops-backend
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dreamops-backend
+  namespace: dreamops
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: dreamops-backend
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "services", "events", "nodes"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["delete", "patch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets"]
+  verbs: ["get", "list", "watch", "patch", "update"]
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dreamops-backend
+subjects:
+- kind: ServiceAccount
+  name: dreamops-backend
+  namespace: dreamops
+roleRef:
+  kind: ClusterRole
+  name: dreamops-backend
+  apiGroup: rbac.authorization.k8s.io
