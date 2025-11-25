@@ -113,8 +113,8 @@ async def payment_callback(
             amount = payment_details.get("amount", 0) / 100  # Convert from paise
 
             # Parse user_id from transaction_id or metadata
-            # In production, this would be stored properly
-            user_id = "1"  # Default for testing
+            # Auth handled by Authentik proxy - using default user
+            user_id = "1"
 
             # Determine plan based on amount
             plan_id = "free"

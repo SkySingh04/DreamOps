@@ -218,6 +218,38 @@ export default function IncidentsPage() {
     },
   });
 
+  // Test PagerDuty event mutation - triggers and IMMEDIATELY resolves
+  const testPagerDutyMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch('/api/v1/webhook/pagerduty/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to send test event');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      if (data.status === 'success') {
+        toast.success('Test event sent and auto-resolved!', {
+          description: 'The incident was triggered and immediately resolved to avoid disturbing on-call.',
+        });
+      } else if (data.status === 'partial_success') {
+        toast.warning('Test event sent but NOT auto-resolved!', {
+          description: data.warning || 'Please resolve the incident manually!',
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: queryKeys.incidents() });
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to send test event', {
+        description: error.message,
+      });
+    },
+  });
+
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
@@ -396,6 +428,25 @@ export default function IncidentsPage() {
           >
             <Terminal className="h-4 w-4 mr-2" />
             {showAgentLogs ? 'Hide' : 'Show'} AI Logs
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => testPagerDutyMutation.mutate()}
+            disabled={testPagerDutyMutation.isPending}
+            className="bg-orange-500 hover:bg-orange-600 text-white"
+          >
+            {testPagerDutyMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Send className="h-4 w-4 mr-2" />
+                Test Event (Auto-Resolve)
+              </>
+            )}
           </Button>
         </div>
       </div>

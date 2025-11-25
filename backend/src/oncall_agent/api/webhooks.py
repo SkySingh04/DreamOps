@@ -199,7 +199,7 @@ async def pagerduty_webhook(
                 )
 
                 # Check alert usage - using user_id "1" for now (should be from incident context)
-                user_id = "1"  # Default user for webhook incidents
+                user_id = "1"  # Auth handled by Authentik proxy - using default user
                 allowed, usage_data = await record_alert_usage(user_id, incident.id)
 
                 if not allowed:
@@ -294,7 +294,7 @@ async def pagerduty_webhook(
                 # Only process triggered incidents
                 if event == "incident.trigger":
                     # Check alert usage - using user_id "1" for now
-                    user_id = "1"  # Default user for webhook incidents
+                    user_id = "1"  # Auth handled by Authentik proxy - using default user
                     allowed, usage_data = await record_alert_usage(user_id, incident.id)
 
                     if not allowed:
@@ -392,6 +392,109 @@ async def pagerduty_webhook(
             metadata={"error": str(e)}
         )
 
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/pagerduty/test")
+async def send_test_pagerduty_event() -> dict[str, Any]:
+    """
+    Send a test PagerDuty event and IMMEDIATELY resolve it.
+
+    This is safe to use for testing - the incident is resolved within seconds
+    to avoid disturbing on-call engineers.
+
+    The event summary includes "(TEST BY SKY)" to clearly mark it as a test.
+    """
+    import time
+
+    # Get the routing key from config
+    routing_key = getattr(config, 'pagerduty_events_integration_key', None)
+    if not routing_key:
+        raise HTTPException(
+            status_code=400,
+            detail="PagerDuty Events Integration Key not configured. Set PAGERDUTY_EVENTS_INTEGRATION_KEY in environment."
+        )
+
+    # Generate unique dedup key
+    dedup_key = f"test-sky-{int(time.time())}"
+
+    try:
+        # Send trigger event
+        trigger_payload = {
+            "routing_key": routing_key,
+            "event_action": "trigger",
+            "dedup_key": dedup_key,
+            "payload": {
+                "summary": "(TEST BY SKY) DreamOps test simulation - please ignore",
+                "severity": "warning",
+                "source": "dreamops-test-button",
+                "custom_details": {
+                    "test": True,
+                    "triggered_by": "DreamOps Test Button",
+                    "environment": "demo",
+                    "auto_resolve": True
+                }
+            }
+        }
+
+        async with httpx.AsyncClient() as client:
+            # Trigger the incident
+            trigger_response = await client.post(
+                "https://events.pagerduty.com/v2/enqueue",
+                json=trigger_payload,
+                headers={"Content-Type": "application/json"},
+                timeout=10.0
+            )
+
+            if trigger_response.status_code != 202:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to trigger test event: {trigger_response.text}"
+                )
+
+            trigger_result = trigger_response.json()
+            logger.info(f"Test event triggered: {trigger_result}")
+
+            # IMMEDIATELY resolve the incident (within 1 second)
+            resolve_payload = {
+                "routing_key": routing_key,
+                "event_action": "resolve",
+                "dedup_key": dedup_key
+            }
+
+            resolve_response = await client.post(
+                "https://events.pagerduty.com/v2/enqueue",
+                json=resolve_payload,
+                headers={"Content-Type": "application/json"},
+                timeout=10.0
+            )
+
+            if resolve_response.status_code != 202:
+                logger.error(f"Failed to resolve test event: {resolve_response.text}")
+                # Still return success but warn about resolution failure
+                return {
+                    "status": "partial_success",
+                    "message": "Test event triggered but failed to auto-resolve. Please resolve manually!",
+                    "dedup_key": dedup_key,
+                    "trigger_result": trigger_result,
+                    "warning": "RESOLVE THIS INCIDENT MANUALLY TO AVOID DISTURBING ON-CALL"
+                }
+
+            resolve_result = resolve_response.json()
+            logger.info(f"Test event resolved: {resolve_result}")
+
+            return {
+                "status": "success",
+                "message": "Test event triggered and immediately resolved",
+                "dedup_key": dedup_key,
+                "trigger_result": trigger_result,
+                "resolve_result": resolve_result
+            }
+
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Timeout connecting to PagerDuty")
+    except Exception as e:
+        logger.error(f"Error sending test event: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

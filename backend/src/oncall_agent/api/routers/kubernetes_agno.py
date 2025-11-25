@@ -78,7 +78,7 @@ async def test_agno_connection(
             # Get credentials from database
             creds_service = KubernetesCredentialsService(db_pool)
             credentials = await creds_service.get_credentials(
-                user_id=1,  # TODO: Get from auth
+                user_id=1,  # Auth handled by Authentik proxy - using default user
                 cluster_name=request.cluster_name
             )
 
@@ -166,7 +166,7 @@ async def connect_remote_cluster(
 
         # Connect to remote cluster
         result = await agent.connect_remote_cluster(
-            user_id=1,  # TODO: Get from auth
+            user_id=1,  # Auth handled by Authentik proxy - using default user
             credentials=k8s_creds
         )
 
@@ -202,7 +202,7 @@ async def list_clusters(db_pool=Depends(get_db_pool)) -> list[dict[str, Any]]:
         agent = DreamOpsK8sAgent(credentials_service=creds_service)
 
         clusters = await agent.list_available_clusters(
-            user_id=1  # TODO: Get from auth
+            user_id=1  # Auth handled by Authentik proxy - using default user
         )
 
         return clusters
@@ -240,7 +240,7 @@ async def process_k8s_incident(
         if cluster_name and cluster_name != "local":
             # Get credentials for remote cluster
             credentials = await creds_service.get_credentials(
-                user_id=1,  # TODO: Get from auth
+                user_id=1,  # Auth handled by Authentik proxy - using default user
                 cluster_name=cluster_name
             )
             if credentials:

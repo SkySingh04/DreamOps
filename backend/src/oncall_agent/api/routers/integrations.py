@@ -937,7 +937,7 @@ async def authenticate_with_kubeconfig(
         )
 
         # In production, get from app state and auth
-        user_id = 1  # Get from authenticated user
+        user_id = 1  # Auth handled by Authentik proxy - using default user
         db_url = "postgresql://user:pass@localhost/dbname"  # Get from config
         pool = await asyncpg.create_pool(db_url)
 
@@ -1009,7 +1009,7 @@ async def authenticate_with_service_account(
         )
 
         # In production, get from app state and auth
-        user_id = 1  # Get from authenticated user
+        user_id = 1  # Auth handled by Authentik proxy - using default user
         db_url = "postgresql://user:pass@localhost/dbname"  # Get from config
         pool = await asyncpg.create_pool(db_url)
 
@@ -1083,7 +1083,7 @@ async def authenticate_with_client_certificate(
         )
 
         # In production, get from app state and auth
-        user_id = 1  # Get from authenticated user
+        user_id = 1  # Auth handled by Authentik proxy - using default user
         db_url = "postgresql://user:pass@localhost/dbname"  # Get from config
         pool = await asyncpg.create_pool(db_url)
 

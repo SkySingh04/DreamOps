@@ -52,7 +52,8 @@ export function useAgentLogs(incidentId?: string) {
     }
     params.append('client_id', `web-${Date.now()}`)
 
-    const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/agent-logs/stream?${params}`
+    // Use relative URL to go through Next.js rewrite proxy (handles SSE properly)
+    const url = `/api/v1/agent-logs/stream?${params}`
 
     console.log('Connecting to agent logs stream:', url)
 
