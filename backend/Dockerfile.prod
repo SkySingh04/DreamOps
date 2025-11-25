@@ -28,9 +28,14 @@ RUN uv sync --frozen --no-dev
 # Copy application code
 COPY . .
 
-# Create non-root user
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+# Create non-root user with .kube directory for kubeconfig
+RUN useradd -m -u 1000 appuser && \
+    mkdir -p /home/appuser/.kube && \
+    chown -R appuser:appuser /app /home/appuser/.kube
 USER appuser
+
+# Set KUBECONFIG environment variable
+ENV KUBECONFIG=/home/appuser/.kube/config
 
 # Install kubectl for k8s operations
 USER root
