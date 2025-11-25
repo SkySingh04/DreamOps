@@ -54,7 +54,7 @@ async def get_dev_config():
     llm_config = {
         "provider": "anthropic",  # Default provider
         "api_key": os.getenv("ANTHROPIC_API_KEY", ""),
-        "model": os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-20241022"),
+        "model": os.getenv("CLAUDE_MODEL", "claude-sonnet-4-5-20250929"),
         "key_name": "Development API Key"
     }
 
@@ -126,7 +126,7 @@ async def get_full_dev_config():
         "llm_config": {
             "provider": "anthropic",
             "api_key": os.getenv("ANTHROPIC_API_KEY", ""),
-            "model": os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-20241022"),
+            "model": os.getenv("CLAUDE_MODEL", "claude-sonnet-4-5-20250929"),
             "key_name": "Development API Key"
         },
         "integrations": {

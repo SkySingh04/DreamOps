@@ -62,7 +62,7 @@ class KubernetesAgnoMCPIntegration(MCPIntegration):
             # Create Agno agent with MCP tools
             self.agent = Agent(
                 name="KubernetesAgent",
-                model=Claude(id="claude-sonnet-4-20250514"),
+                model=Claude(id=self.config.claude_model),
                 tools=[self.mcp_tools],
                 instructions=f"""
 You are a Kubernetes operations assistant with access to MCP tools for managing Kubernetes resources.

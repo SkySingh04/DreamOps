@@ -76,7 +76,7 @@ class LLMValidator:
                         "content-type": "application/json"
                     },
                     json={
-                        "model": model or "claude-3-5-sonnet-20241022",
+                        "model": model or "claude-sonnet-4-5-20250929",
                         "messages": [{"role": "user", "content": "Hi"}],
                         "max_tokens": 10
                     },

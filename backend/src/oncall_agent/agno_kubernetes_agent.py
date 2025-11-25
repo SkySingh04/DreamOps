@@ -190,7 +190,7 @@ class DreamOpsK8sAgent:
         if active_key.provider == LLMProvider.ANTHROPIC:
             return {
                 "model": OpenAIChat(
-                    id="claude-3-5-sonnet-20241022",
+                    id=self.config.claude_model,
                     api_key=active_key.api_key,
                     base_url="https://api.anthropic.com/v1"
                 ),

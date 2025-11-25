@@ -11,7 +11,7 @@ class Config(BaseSettings):
 
     # Anthropic/Claude settings
     anthropic_api_key: str = Field(..., env="ANTHROPIC_API_KEY")
-    claude_model: str = Field("claude-3-5-sonnet-20241022", env="CLAUDE_MODEL")
+    claude_model: str = Field("claude-sonnet-4-5-20250929", env="CLAUDE_MODEL")
 
     # Agent settings
     agent_name: str = Field("oncall-agent", env="AGENT_NAME")
