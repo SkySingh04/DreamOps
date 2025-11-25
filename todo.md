@@ -94,13 +94,30 @@ curl -X POST https://events.pagerduty.com/v2/enqueue \
 ## Phase 2: Integration & Reporting (After Phase 1 Tested)
 
 ### 5. Kubernetes MCP Server Connection
-- [ ] Fix MCP server connection issues
+- [x] Add Node.js to Docker container for MCP server
+- [x] Fix kubeconfig mount path for appuser
+- [ ] **REQUIRES MANUAL SETUP**: Valid kubeconfig must be placed in `/root/.kube/config` on the server
 - [ ] Verify kubectl commands work through MCP
 - [ ] Test pod listing, logs retrieval, deployment status
 - [ ] Confirm destructive operations (restart, scale) work when enabled
 - [ ] Add connection health check to dashboard
 
-**Current Issue:** `kubernetes_agno_mcp.py` may not be properly connecting to the MCP server.
+**Current Issue:** Kubeconfig not configured on production server.
+
+**To fix:**
+```bash
+# On production server, create kubeconfig:
+ssh root@37.27.115.235
+mkdir -p /root/.kube
+# Copy your kubeconfig or create service account credentials
+cat > /root/.kube/config << 'EOF'
+# Your kubeconfig content here
+EOF
+chmod 600 /root/.kube/config
+
+# Restart backend
+cd /opt/dreamops && docker compose -f docker-compose.local.yml restart backend
+```
 
 **Files to check:**
 - `backend/src/oncall_agent/mcp_integrations/kubernetes_agno_mcp.py`
