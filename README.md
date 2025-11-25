@@ -31,75 +31,35 @@
 - [API Reference](#api-reference)
 - [Contributing](#contributing)
 
+## Recent Changes (November 2025)
+
+### Fixed: Real-time Log Streaming (SSE)
+- **Issue**: Agent logs were not appearing in the frontend UI despite showing "Connected" status
+- **Root Cause**: Next.js rewrites buffer HTTP responses, breaking Server-Sent Events (SSE) streaming
+- **Solution**: Changed SSE connections to connect directly to the backend API (`NEXT_PUBLIC_API_URL`) instead of going through Next.js rewrites
+- **Files Changed**: `frontend/lib/hooks/use-agent-logs.ts`
+
+### Working Features
+- ✅ Real-time AI agent log streaming to frontend
+- ✅ Test Event button with auto-resolve (prevents disturbing on-call engineers)
+- ✅ Claude model configuration (claude-sonnet-4-5-20250929)
+- ✅ PagerDuty webhook integration (V3 format)
+- ✅ Kubernetes MCP server setup (requires manual kubeconfig on server)
+- ✅ Docker deployment with proper Node.js for MCP
+- ✅ SSE streaming from backend to frontend
+
+### Needs Work
+- ⚠️ Incident Report Generation - needs proper implementation connected to AI agent output
+- ⚠️ UI Revamp - needs polish and cleanup for production readiness
+- ⚠️ Manual kubeconfig setup required on production server
+
+See [todo.md](./todo.md) for detailed task tracking.
+
+---
+
 ## TODO List
 
-### High Priority
-
-#### Authentication & Deployment (Linear: Auth and Deployment)
-- [ ] **DEVOPS-459**: Disable Built-in Authentication
-  - Remove all Firebase authentication code from backend and frontend
-  - Delete auth routers, models, and security modules
-  - Remove firebase-admin, pyjwt, and bcrypt dependencies
-  - Configure application to read user identity from Authentik headers
-
-- [ ] **DEVOPS-460**: Add Authentik Proxy for Authentication
-  - Create Authentik provider configuration (Proxy Provider)
-  - Configure headers to pass user identity (X-Authentik-Username, X-Authentik-Email, etc.)
-  - Create Authentik application and update outpost
-  - Test authentication flow end-to-end
-
-- [ ] **DEVOPS-461**: Deploy DreamOps on Bare Metal K3s Server
-  - Create dreamops namespace in K3s
-  - Deploy backend and frontend with proper configurations
-  - Run database migrations for production
-  - Configure Authentik proxy routing
-  - Verify end-to-end alert flow
-
-- [ ] **DEVOPS-462**: Set Up CI/CD Pipeline for DreamOps Deployment
-  - Create GitHub Actions workflows for backend and frontend
-  - Set up automated testing (linting, type checking, unit tests)
-  - Configure Docker image builds and pushes
-  - Set up automated deployment to K3s cluster
-  - Implement rollback procedures
-
-#### UI/UX Improvements
-- [ ] Remove chaos engineering components from UI
-- [ ] Redo entire UI with improved design and user experience
-- [ ] Implement consistent design system across all pages
-- [ ] Improve mobile responsiveness
-
-#### API & Integrations
-- [ ] Get and configure Anthropic API key
-- [ ] Connect to MCP servers:
-  - [ ] Kubernetes MCP integration
-  - [ ] Grafana MCP integration
-  - [ ] Datadog MCP integration
-- [ ] Connect to PagerDuty webhook and API
-- [ ] Connect to Slack for notifications and alerts
-- [ ] Add logs to Grafana for centralized monitoring
-
-#### Code Quality
-- [ ] Clean up codebase (remove unused files, deprecated code)
-- [ ] Remove or refactor auth-dependent routers:
-  - `admin_integrations.py` (currently disabled)
-  - `user_integrations.py` (currently disabled)
-- [ ] Consolidate documentation (combine similar docs in `/docs`)
-- [ ] Add comprehensive tests for core functionality
-- [ ] Improve error handling and logging
-
-### Medium Priority
-- [ ] Set up proper secrets management for production
-- [ ] Implement rate limiting for API endpoints
-- [ ] Add comprehensive API documentation
-- [ ] Create deployment runbooks and playbooks
-- [ ] Set up monitoring dashboards in Grafana
-
-### Low Priority
-- [ ] Optimize database queries and add indexing
-- [ ] Implement caching layer for frequently accessed data
-- [ ] Add internationalization (i18n) support
-- [ ] Create user onboarding flow
-- [ ] Build admin dashboard for system monitoring
+See [todo.md](./todo.md) for detailed task list with progress tracking.
 
 ## Project Overview
 

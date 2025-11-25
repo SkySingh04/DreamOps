@@ -30,7 +30,7 @@ curl -X POST https://events.pagerduty.com/v2/enqueue \
 ## Phase 1: Core Functionality (Must Work for Demo)
 
 ### 1. Agent Analysis Working Correctly
-- [ ] Fix Claude model mismatch in `kubernetes_agno_mcp.py` (hardcoded `claude-sonnet-4-20250514` → use config)
+- [x] Fix Claude model mismatch in `kubernetes_agno_mcp.py` (hardcoded `claude-sonnet-4-20250514` → use config)
 - [ ] Verify AI agent triggers on PagerDuty webhook receipt
 - [ ] Confirm incident analysis generates proper output
 - [ ] Test YOLO mode execution flow
@@ -43,11 +43,11 @@ curl -X POST https://events.pagerduty.com/v2/enqueue \
 - `backend/src/oncall_agent/config.py`
 
 ### 2. Agent Workflow Logs Reaching Frontend
-- [ ] Verify WebSocket/SSE connection for real-time logs
-- [ ] Check agent log streaming to frontend dashboard
+- [x] Verify WebSocket/SSE connection for real-time logs (fixed: SSE must connect directly to backend, not through Next.js rewrites)
+- [x] Check agent log streaming to frontend dashboard
 - [ ] Confirm log entries appear in incident detail view
 - [ ] Test log persistence in database
-- [ ] Validate log format and readability
+- [x] Validate log format and readability
 
 **Files to check:**
 - `backend/src/oncall_agent/api/routers/agent_logs.py`
@@ -55,10 +55,11 @@ curl -X POST https://events.pagerduty.com/v2/enqueue \
 - `frontend/components/incidents/`
 
 ### 3. Test Simulation Button (Events V2 API)
-- [ ] Add "Send Test Event" button to frontend dashboard
-- [ ] Implement Events V2 API call with test payload
-- [ ] Include "(TEST BY SKY)" in summary to prevent panic
-- [ ] Add visual feedback (loading, success, error states)
+- [x] Add "Send Test Event" button to frontend dashboard
+- [x] Implement Events V2 API call with test payload
+- [x] Include "(TEST BY SKY)" in summary to prevent panic
+- [x] Add visual feedback (loading, success, error states)
+- [x] Auto-resolve test incidents immediately after triggering
 - [ ] Log test events separately for easy identification
 
 **Test Event Payload:**
@@ -124,7 +125,7 @@ cd /opt/dreamops && docker compose -f docker-compose.local.yml restart backend
 - `backend/src/oncall_agent/mcp_integrations/kubernetes_direct.py`
 - `backend/src/oncall_agent/agno_kubernetes_agent.py`
 
-### 6. Incident Report Generation
+### 6. Incident Report Generation ⚠️ NEEDS PROPER IMPLEMENTATION
 - [ ] Review report generation logic
 - [ ] Ensure reports include:
   - Incident summary
@@ -134,13 +135,15 @@ cd /opt/dreamops && docker compose -f docker-compose.local.yml restart backend
   - Resolution status
 - [ ] Test report export (PDF/JSON)
 - [ ] Validate report storage and retrieval
+- [ ] Connect reports to actual AI agent analysis output
+- [ ] Add report generation trigger after incident resolution
 
 **Files to check:**
 - `backend/src/oncall_agent/api/routers/insights.py`
 - `backend/src/oncall_agent/services/`
 - `frontend/app/(dashboard)/reports/`
 
-### 7. UI Fix and Revamp
+### 7. UI Fix and Revamp ⚠️ NEEDS PROPER IMPLEMENTATION
 - [ ] Remove chaos engineering components
 - [ ] Clean up dashboard layout
 - [ ] Improve incident list view
@@ -149,6 +152,7 @@ cd /opt/dreamops && docker compose -f docker-compose.local.yml restart backend
 - [ ] Implement consistent design system
 - [ ] Mobile responsiveness
 - [ ] Add loading states and error handling
+- [ ] Review and polish all UI components for production readiness
 
 ---
 
@@ -207,4 +211,4 @@ ssh root@37.27.115.235 "cd /opt/dreamops && docker compose logs backend --tail=5
 
 ---
 
-*Last Updated: 2025-01-25*
+*Last Updated: 2025-11-26*
