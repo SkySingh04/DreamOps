@@ -221,7 +221,7 @@ export default function IncidentsPage() {
   // Test PagerDuty event mutation - triggers and IMMEDIATELY resolves
   const testPagerDutyMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch('/api/v1/webhook/pagerduty/test', {
+      const response = await fetch('/webhook/pagerduty/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });

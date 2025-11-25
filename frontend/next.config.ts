@@ -58,6 +58,10 @@ const nextConfig: NextConfig = {
         source: '/api/v1/incidents/:path*',
         destination: `${apiUrl}/api/v1/incidents/:path*`, // Backend incidents endpoints
       },
+      {
+        source: '/webhook/:path*',
+        destination: `${apiUrl}/webhook/:path*`, // Backend webhook endpoints (PagerDuty)
+      },
     ];
   },
 };
