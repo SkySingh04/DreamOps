@@ -2,6 +2,34 @@
 
 This document provides comprehensive instructions for AI assistants (like Claude, GPT-4, etc.) on how to effectively work with this codebase.
 
+## ⚠️ CRITICAL: PagerDuty Test Incident Rules ⚠️
+
+**EXTREMELY IMPORTANT - READ THIS FIRST:**
+
+When testing PagerDuty webhooks or creating test incidents:
+
+- ⚠️ **ALWAYS RESOLVE TEST INCIDENTS IMMEDIATELY AFTER CREATING THEM**
+- ⚠️ **Test incidents disturb the on-call engineer and trigger real alerts**
+- ⚠️ **Never leave test incidents open - resolve them within seconds**
+
+**How to resolve an incident:**
+```bash
+# Always use the same dedup_key you used to trigger
+curl -X POST https://events.pagerduty.com/v2/enqueue \
+  -H "Content-Type: application/json" \
+  -d '{
+    "routing_key": "<YOUR_ROUTING_KEY>",
+    "event_action": "resolve",
+    "dedup_key": "<SAME_DEDUP_KEY_USED_TO_TRIGGER>"
+  }'
+```
+
+**Best Practice:**
+1. Generate a unique dedup_key: `test-$(date +%s)`
+2. Trigger the test incident
+3. **IMMEDIATELY** send the resolve event with the same dedup_key
+4. Include "(TEST BY SKY)" in summaries so engineers know it's a test
+
 ## CRITICAL: Git Commit Message Rules
 
 **IMPORTANT**: When creating git commits, follow these strict rules:
@@ -720,3 +748,4 @@ This is a **PRODUCTION CODEBASE**. Do not create:
 - Any "circus files" that don't serve production purposes
 
 Keep the codebase clean, focused, and production-ready at all times.
+- EVERY TIME U OPEN INCIDENT U NEED  TO CLOSE IT IMMEDIATELY AS IT DISTURBS ONCALL ENGINEER

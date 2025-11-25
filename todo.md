@@ -2,6 +2,31 @@
 
 > Critical tasks for project demonstration
 
+---
+
+## ⚠️ CRITICAL RULE: PAGERDUTY TEST INCIDENTS ⚠️
+
+**NEVER LEAVE TEST INCIDENTS OPEN - THEY DISTURB THE ON-CALL ENGINEER!**
+
+When testing PagerDuty:
+1. **ALWAYS** use a unique `dedup_key` (e.g., `test-sky-$(date +%s)`)
+2. **IMMEDIATELY** resolve the incident after triggering
+3. Include `(TEST BY SKY)` in summaries so engineers know it's a test
+
+```bash
+# Trigger test
+curl -X POST https://events.pagerduty.com/v2/enqueue \
+  -H "Content-Type: application/json" \
+  -d '{"routing_key":"<KEY>","event_action":"trigger","dedup_key":"test-123","payload":{"summary":"(TEST BY SKY) Test","severity":"warning","source":"test"}}'
+
+# IMMEDIATELY RESOLVE (same dedup_key!)
+curl -X POST https://events.pagerduty.com/v2/enqueue \
+  -H "Content-Type: application/json" \
+  -d '{"routing_key":"<KEY>","event_action":"resolve","dedup_key":"test-123"}'
+```
+
+---
+
 ## Phase 1: Core Functionality (Must Work for Demo)
 
 ### 1. Agent Analysis Working Correctly

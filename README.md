@@ -477,6 +477,17 @@ ports:
 - Custom ports like 8001 are supported
 - Both HTTP and HTTPS are supported
 
+> ⚠️ **CRITICAL: ALWAYS RESOLVE TEST INCIDENTS IMMEDIATELY!**
+>
+> Test incidents trigger real alerts to the on-call engineer. **NEVER leave test incidents open.**
+>
+> After triggering a test, immediately resolve it:
+> ```bash
+> curl -X POST https://events.pagerduty.com/v2/enqueue \
+>   -H "Content-Type: application/json" \
+>   -d '{"routing_key":"<YOUR_KEY>","event_action":"resolve","dedup_key":"<SAME_DEDUP_KEY>"}'
+> ```
+
 ### Kubernetes Integration Options
 
 DreamOps offers multiple ways to integrate with Kubernetes clusters:
