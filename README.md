@@ -370,53 +370,112 @@ The project uses Neon PostgreSQL with complete environment separation:
 
 ### PagerDuty Integration
 
-#### 1. Create Integration in PagerDuty
+#### 1. Create Events API V2 Integration
 
-1. Go to Services → Service Directory
-2. Select your service → Integrations tab
-3. Add Integration → Search "Webhooks V3"
-4. Copy the Integration Key
+1. Go to **Services** → **Service Directory**
+2. Select your service (e.g., `frai-backend`)
+3. Click **Integrations** tab
+4. Click **Add Integration**
+5. Search for **Events API V2**
+6. Copy the **Integration Key** (routing key for sending events)
 
-#### 2. Configure Webhook
+#### 2. Configure V3 Webhook Subscription
 
-1. Go to **Configuration** → **Extensions** or **Services & Integrations**
-2. Click **New Extension** or **Add Extension**
-3. Choose **Generic V2 Webhook**
-4. Configure:
-   - **Name**: DreamOps Webhook
-   - **Service**: Select the service receiving K8s alerts
-   - **URL**: `https://your-domain.com/webhook/pagerduty` (or use ngrok for local testing)
-   - **Event Subscription**: 
-     - ✅ incident.triggered
-     - ✅ incident.acknowledged 
-     - ✅ incident.resolved
+1. Go to **Integrations** → **Generic Webhooks (v3)**
+2. Click **New Webhook**
+3. Configure:
+   - **Webhook URL**: `http://oncall.frai.pro:8001/api/v1/webhook/pagerduty`
+   - **Description**: DreamOps AI Agent Webhook
+   - **Scope Type**: Service
+   - **Scope**: Select your service (e.g., `frai-backend`)
+   - **Event Subscription** - Select these events:
+     - ✅ `incident.triggered`
+     - ✅ `incident.acknowledged`
+     - ✅ `incident.escalated`
+     - ✅ `incident.resolved`
+     - ✅ `incident.priority_updated`
+4. Click **Add Webhook**
+5. **Important**: Copy the webhook secret provided (optional, for signature verification)
 
 #### 3. Environment Variables
 
 ```env
+# PagerDuty Configuration
 PAGERDUTY_ENABLED=true
-PAGERDUTY_API_KEY=your-api-key
-PAGERDUTY_USER_EMAIL=your-email@company.com
-PAGERDUTY_WEBHOOK_SECRET=your-webhook-secret
+PAGERDUTY_API_KEY=your-api-key              # Optional: For API operations (acknowledge, resolve)
+PAGERDUTY_USER_EMAIL=your-email@company.com  # Optional: Required if using API
+PAGERDUTY_WEBHOOK_SECRET=your-webhook-secret # Optional: For signature verification
 ```
+
+**Note**: The webhook integration works without API key. API key is only needed if you want DreamOps to acknowledge/resolve incidents in PagerDuty.
 
 #### 4. Test the Integration
 
+##### Option A: Trigger Real Incident via Events API
+
 ```bash
-# Direct webhook test
-curl -X POST http://localhost:8000/webhook/pagerduty \
+# Replace with your Integration Key from step 1
+curl -X POST https://events.pagerduty.com/v2/enqueue \
   -H "Content-Type: application/json" \
   -d '{
-    "messages": [{
-      "event": "incident.trigger",
-      "incident": {
-        "incident_number": 99,
-        "title": "Test Alert",
-        "description": "Testing PagerDuty integration"
-      }
-    }]
-  }'
+  "routing_key": "YOUR_INTEGRATION_KEY",
+  "event_action": "trigger",
+  "dedup_key": "test-'$(date +%s)'",
+  "payload": {
+    "summary": "Test: High CPU usage on production server",
+    "severity": "critical",
+    "source": "monitoring-system",
+    "custom_details": {
+      "cpu_usage": "95%",
+      "server": "prod-api-01"
+    }
+  }
+}'
 ```
+
+##### Option B: Direct Webhook Test (V3 Format)
+
+```bash
+curl -X POST http://localhost:8000/api/v1/webhook/pagerduty \
+  -H "Content-Type: application/json" \
+  -d '{
+  "event": {
+    "id": "test-event-123",
+    "event_type": "incident.triggered",
+    "resource_type": "incident",
+    "occurred_at": "2025-11-25T14:00:00Z",
+    "data": {
+      "id": "TEST123",
+      "type": "incident",
+      "status": "triggered",
+      "title": "Test Alert",
+      "service": {
+        "id": "PSVC123",
+        "summary": "Test Service"
+      },
+      "urgency": "high"
+    }
+  }
+}'
+```
+
+#### 5. Deployment Configuration
+
+For bare metal deployment on port 8001:
+
+```bash
+# Docker Compose Configuration
+# Expose port 8001 for webhook delivery
+ports:
+  - "8001:80"  # nginx → backend routing
+```
+
+**Important Notes**:
+- PagerDuty's "Send Test Event" button **does NOT actually send webhooks** - it only validates the URL format
+- Use Events API v2 (Option A above) to trigger real incidents that will send webhooks
+- Webhook URL must be publicly accessible (no localhost)
+- Custom ports like 8001 are supported
+- Both HTTP and HTTPS are supported
 
 ### Kubernetes Integration Options
 

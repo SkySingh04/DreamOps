@@ -206,3 +206,5 @@ kubeconfig*
 aws/
 *.zip
 node_modules/k8s/oauth2-proxy.yaml
+backend/node_modules/
+frontend/public/

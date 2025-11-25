@@ -245,17 +245,22 @@ async def pagerduty_webhook(
                     title=incident.title,
                     description=incident.description or "",
                     severity=Severity.HIGH if incident.urgency == 'high' else Severity.MEDIUM,
-                    status=IncidentStatus.OPEN,
-                    source="pagerduty",
-                    source_id=incident.id,
+                    status=IncidentStatus.TRIGGERED,
+                    service_name=incident.service.name if incident.service else "Unknown Service",
+                    alert_source="pagerduty",
                     created_at=datetime.now(UTC),
-                    userId=1  # Default user ID
+                    metadata={
+                        "source_id": incident.id,
+                        "urgency": incident.urgency,
+                        "html_url": incident.html_url,
+                        "userId": 1
+                    }
                 )
                 INCIDENTS_DB[incident.id] = memory_incident
 
                 # Process incident via agent
                 logger.info(f"🤖 Processing incident via agent: {incident.id}")
-                result = await trigger.process_incident_async(incident)
+                result = await trigger.trigger_oncall_agent(incident)
                 results.append(result)
 
                 # Log the result
@@ -336,17 +341,21 @@ async def pagerduty_webhook(
                         title=incident.title,
                         description=incident.description or "",
                         severity=Severity.HIGH if incident.urgency == 'high' else Severity.MEDIUM,
-                        status=IncidentStatus.OPEN,
-                        source="pagerduty",
-                        source_id=incident.id,
+                        status=IncidentStatus.TRIGGERED,
+                        service_name=incident.service.name if hasattr(incident, 'service') and incident.service else "Unknown Service",
+                        alert_source="pagerduty",
                         created_at=datetime.now(UTC),
-                        userId=1  # Default user ID
+                        metadata={
+                            "source_id": incident.id,
+                            "urgency": getattr(incident, 'urgency', 'medium'),
+                            "userId": 1
+                        }
                     )
                     INCIDENTS_DB[incident.id] = memory_incident
 
                     # Process with agent
                     logger.info(f"🤖 Triggering DreamOps agent for incident: {incident.id}")
-                    result = await trigger.process_incident_async(incident)
+                    result = await trigger.trigger_oncall_agent(incident)
                     results.append(result)
 
                     # Log the result
