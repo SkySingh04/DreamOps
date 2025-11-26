@@ -689,5 +689,5 @@ def init_mock_data():
         INCIDENTS_DB[incident.id] = incident
 
 
-# Initialize mock data on module load
-init_mock_data()
+# Note: Mock data initialization removed. Incidents are created via webhooks only.
+# To add mock incidents, call init_mock_data() manually or via /api/v1/incidents POST endpoint.
