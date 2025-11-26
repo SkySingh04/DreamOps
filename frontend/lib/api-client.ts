@@ -35,7 +35,12 @@ class APIClient {
         ...(options.headers as Record<string, string> || {}),
       };
 
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      // Ensure endpoint has trailing slash to avoid 307 redirects
+      const normalizedEndpoint = endpoint.endsWith('/') || endpoint.includes('?')
+        ? endpoint
+        : `${endpoint}/`;
+
+      const response = await fetch(`${this.baseURL}${normalizedEndpoint}`, {
         ...options,
         headers,
       });
