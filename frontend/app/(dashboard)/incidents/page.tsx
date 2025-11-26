@@ -76,6 +76,8 @@ export default function IncidentsPage() {
   const [showAgentLogs, setShowAgentLogs] = useState(true);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [alertUsageData, setAlertUsageData] = useState<any>(null);
+  const [showTestConfirmDialog, setShowTestConfirmDialog] = useState(false);
+  const [testConfirmStep, setTestConfirmStep] = useState<1 | 2>(1);
   const queryClient = useQueryClient();
   const teamId = "team_123"; // In production, get from context/auth
 
@@ -221,7 +223,8 @@ export default function IncidentsPage() {
   // Test PagerDuty event mutation - triggers and IMMEDIATELY resolves
   const testPagerDutyMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch('/webhook/pagerduty/test', {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${apiUrl}/webhook/pagerduty/test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -232,6 +235,8 @@ export default function IncidentsPage() {
       return response.json();
     },
     onSuccess: (data) => {
+      setShowTestConfirmDialog(false);
+      setTestConfirmStep(1);
       if (data.status === 'success') {
         toast.success('Test event sent and auto-resolved!', {
           description: 'The incident was triggered and immediately resolved to avoid disturbing on-call.',
@@ -244,6 +249,8 @@ export default function IncidentsPage() {
       queryClient.invalidateQueries({ queryKey: queryKeys.incidents() });
     },
     onError: (error: Error) => {
+      setShowTestConfirmDialog(false);
+      setTestConfirmStep(1);
       toast.error('Failed to send test event', {
         description: error.message,
       });
@@ -432,7 +439,10 @@ export default function IncidentsPage() {
           <Button
             variant="default"
             size="sm"
-            onClick={() => testPagerDutyMutation.mutate()}
+            onClick={() => {
+              setTestConfirmStep(1);
+              setShowTestConfirmDialog(true);
+            }}
             disabled={testPagerDutyMutation.isPending}
             className="bg-orange-500 hover:bg-orange-600 text-white"
           >
@@ -444,7 +454,7 @@ export default function IncidentsPage() {
             ) : (
               <>
                 <Send className="h-4 w-4 mr-2" />
-                Test Event (Auto-Resolve)
+                Simulate Test Event
               </>
             )}
           </Button>
@@ -685,9 +695,9 @@ export default function IncidentsPage() {
                         <div className="space-y-2">
                           {incident.status === 'active' && (
                             <>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
+                              <Button
+                                variant="outline"
+                                size="sm"
                                 className="w-full justify-start"
                                 onClick={() => {
                                   setSelectedIncident(incident);
@@ -705,8 +715,8 @@ export default function IncidentsPage() {
                                 <RotateCcw className="h-4 w-4 mr-2" />
                                 Restart Service
                               </Button>
-                              <Button 
-                                size="sm" 
+                              <Button
+                                size="sm"
                                 className="w-full"
                                 onClick={() => resolveMutation.mutate(incident.id)}
                               >
@@ -715,7 +725,7 @@ export default function IncidentsPage() {
                               </Button>
                             </>
                           )}
-                          
+
                           {incident.status === 'resolved' && (
                             <div className="text-center py-4 text-gray-500">
                               <CheckCircle className="h-8 w-8 mx-auto text-green-600 mb-2" />
@@ -727,6 +737,37 @@ export default function IncidentsPage() {
                               )}
                             </div>
                           )}
+
+                          {/* Download Reports */}
+                          <div className="pt-3 border-t mt-3">
+                            <p className="text-xs text-gray-500 mb-2">Download Report</p>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex-1"
+                                onClick={() => {
+                                  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+                                  window.open(`${apiUrl}/api/v1/incidents/${incident.id}/report/json`, '_blank');
+                                }}
+                              >
+                                <Download className="h-4 w-4 mr-1" />
+                                JSON
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex-1"
+                                onClick={() => {
+                                  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+                                  window.open(`${apiUrl}/api/v1/incidents/${incident.id}/report/markdown`, '_blank');
+                                }}
+                              >
+                                <Download className="h-4 w-4 mr-1" />
+                                Markdown
+                              </Button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -864,6 +905,108 @@ export default function IncidentsPage() {
         alertsLimit={alertUsageData?.alerts_limit || 3}
         teamId={teamId}
       />
+
+      {/* Test Event Double Confirmation Dialog */}
+      <Dialog open={showTestConfirmDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowTestConfirmDialog(false);
+          setTestConfirmStep(1);
+        }
+      }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-600">
+              <AlertTriangle className="h-5 w-5" />
+              {testConfirmStep === 1 ? 'Simulate Test Event' : 'Final Confirmation'}
+            </DialogTitle>
+            <DialogDescription>
+              {testConfirmStep === 1
+                ? 'This will trigger a test PagerDuty incident marked as "(TEST BY SKY)"'
+                : 'Are you absolutely sure? This action cannot be undone.'
+              }
+            </DialogDescription>
+          </DialogHeader>
+
+          {testConfirmStep === 1 ? (
+            <div className="space-y-4">
+              <Alert className="border-orange-200 bg-orange-50">
+                <AlertCircle className="h-4 w-4 text-orange-600" />
+                <AlertTitle className="text-orange-800">What will happen:</AlertTitle>
+                <AlertDescription className="text-orange-700 space-y-2">
+                  <ul className="list-disc pl-4 space-y-1 mt-2">
+                    <li>A test incident will be created in PagerDuty</li>
+                    <li>The incident will be marked with &quot;(TEST BY SKY)&quot;</li>
+                    <li>The AI agent will analyze and generate a response</li>
+                    <li>The incident will be <strong>auto-resolved immediately</strong></li>
+                  </ul>
+                </AlertDescription>
+              </Alert>
+              <div className="bg-gray-100 rounded-lg p-4">
+                <p className="text-sm font-medium text-gray-700 mb-2">Test Event Details:</p>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li><strong>Type:</strong> Kubernetes Pod CrashLoopBackOff</li>
+                  <li><strong>Severity:</strong> Warning</li>
+                  <li><strong>Source:</strong> DreamOps Test Button</li>
+                  <li><strong>Label:</strong> (TEST BY SKY)</li>
+                </ul>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Double Confirmation Required</AlertTitle>
+                <AlertDescription>
+                  Please confirm you want to send this test event. The on-call engineer may receive a brief notification before auto-resolution.
+                </AlertDescription>
+              </Alert>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+                <p className="text-red-800 font-medium">
+                  Click &quot;Send Test Event&quot; to proceed
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowTestConfirmDialog(false);
+                setTestConfirmStep(1);
+              }}
+            >
+              Cancel
+            </Button>
+            {testConfirmStep === 1 ? (
+              <Button
+                onClick={() => setTestConfirmStep(2)}
+                className="bg-orange-500 hover:bg-orange-600"
+              >
+                Continue
+              </Button>
+            ) : (
+              <Button
+                onClick={() => testPagerDutyMutation.mutate()}
+                disabled={testPagerDutyMutation.isPending}
+                variant="destructive"
+              >
+                {testPagerDutyMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4 mr-2" />
+                    Send Test Event
+                  </>
+                )}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

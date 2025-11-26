@@ -1,10 +1,12 @@
 """Incident management API endpoints for DreamOps."""
 
+import json
 import uuid
 from datetime import UTC, datetime
+from io import BytesIO
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.oncall_agent.api.schemas import (
     AIAnalysis,
@@ -17,6 +19,7 @@ from src.oncall_agent.api.schemas import (
     Severity,
     SuccessResponse,
 )
+from src.oncall_agent.services.slack_notifier import get_slack_notifier
 from src.oncall_agent.utils import get_logger
 
 logger = get_logger(__name__)
@@ -408,6 +411,249 @@ async def resolve_incident(
     return SuccessResponse(
         success=True,
         message="Incident resolved successfully"
+    )
+
+
+@router.post("/{incident_id}/share/slack")
+async def share_incident_to_slack(
+    incident_id: str = Path(..., description="Incident ID")
+) -> JSONResponse:
+    """Share incident analysis to Slack."""
+    if incident_id not in INCIDENTS_DB:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    incident = INCIDENTS_DB[incident_id]
+    analysis = ANALYSIS_DB.get(incident_id, {})
+
+    # Get analysis text
+    analysis_text = ""
+    if analysis:
+        analysis_text = analysis.get("analysis", "")
+    elif incident.ai_analysis:
+        analysis_text = f"**Summary:** {incident.ai_analysis.summary}\n\n"
+        if incident.ai_analysis.root_cause:
+            analysis_text += f"**Root Cause:** {incident.ai_analysis.root_cause}\n\n"
+        if incident.ai_analysis.impact_assessment:
+            analysis_text += f"**Impact:** {incident.ai_analysis.impact_assessment}\n\n"
+        if incident.ai_analysis.recommended_actions:
+            analysis_text += "**Recommended Actions:**\n"
+            for action in incident.ai_analysis.recommended_actions:
+                if isinstance(action, dict):
+                    analysis_text += f"- {action.get('action', 'Unknown')}: {action.get('reason', '')}\n"
+                else:
+                    analysis_text += f"- {action}\n"
+
+    if not analysis_text:
+        analysis_text = f"Incident: {incident.title}\n\nDescription: {incident.description or 'No description available'}"
+
+    # Post to Slack
+    slack_notifier = get_slack_notifier()
+    if not slack_notifier.enabled:
+        raise HTTPException(status_code=400, detail="Slack integration not configured")
+
+    severity = incident.severity.value if hasattr(incident.severity, 'value') else str(incident.severity)
+    result = await slack_notifier.post_incident_analysis(
+        incident_id=incident.id,
+        title=incident.title,
+        severity=severity,
+        analysis=analysis_text
+    )
+
+    if result.get("success"):
+        return JSONResponse(content={
+            "success": True,
+            "message": "Incident shared to Slack",
+            "thread_ts": result.get("thread_ts")
+        })
+    else:
+        raise HTTPException(status_code=500, detail=result.get("error", "Failed to post to Slack"))
+
+
+@router.get("/{incident_id}/report/json")
+async def download_incident_report_json(
+    incident_id: str = Path(..., description="Incident ID")
+) -> StreamingResponse:
+    """Download incident report as JSON."""
+    if incident_id not in INCIDENTS_DB:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    incident = INCIDENTS_DB[incident_id]
+    analysis = ANALYSIS_DB.get(incident_id, {})
+
+    # Build comprehensive report
+    report = {
+        "report_generated_at": datetime.now(UTC).isoformat(),
+        "report_type": "incident_analysis",
+        "incident": {
+            "id": incident.id,
+            "title": incident.title,
+            "description": incident.description,
+            "severity": incident.severity.value if hasattr(incident.severity, 'value') else str(incident.severity),
+            "status": incident.status.value if hasattr(incident.status, 'value') else str(incident.status),
+            "service_name": incident.service_name,
+            "alert_source": incident.alert_source,
+            "assignee": incident.assignee,
+            "created_at": incident.created_at.isoformat() if incident.created_at else None,
+            "resolved_at": incident.resolved_at.isoformat() if incident.resolved_at else None,
+            "resolution": incident.resolution,
+        },
+        "ai_analysis": analysis if analysis else (
+            incident.ai_analysis.model_dump() if incident.ai_analysis else None
+        ),
+        "timeline": incident.timeline,
+        "actions_taken": [
+            {
+                "action_type": a.action_type.value if hasattr(a.action_type, 'value') else str(a.action_type),
+                "description": a.description,
+                "automated": a.automated,
+                "user": a.user,
+                "timestamp": a.timestamp.isoformat() if a.timestamp else None,
+                "result": a.result
+            }
+            for a in incident.actions_taken
+        ],
+        "metadata": incident.metadata
+    }
+
+    # Create JSON file
+    json_content = json.dumps(report, indent=2, default=str)
+    buffer = BytesIO(json_content.encode('utf-8'))
+
+    filename = f"incident-report-{incident_id[:8]}-{datetime.now(UTC).strftime('%Y%m%d')}.json"
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
+
+@router.get("/{incident_id}/report/markdown")
+async def download_incident_report_markdown(
+    incident_id: str = Path(..., description="Incident ID")
+) -> StreamingResponse:
+    """Download incident report as Markdown (for PDF conversion)."""
+    if incident_id not in INCIDENTS_DB:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    incident = INCIDENTS_DB[incident_id]
+    analysis = ANALYSIS_DB.get(incident_id, {})
+
+    # Build Markdown report
+    md_lines = [
+        f"# Incident Report: {incident.title}",
+        "",
+        f"**Generated:** {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}",
+        "",
+        "---",
+        "",
+        "## Summary",
+        "",
+        f"| Field | Value |",
+        f"|-------|-------|",
+        f"| **ID** | `{incident.id}` |",
+        f"| **Severity** | {incident.severity.value if hasattr(incident.severity, 'value') else str(incident.severity)} |",
+        f"| **Status** | {incident.status.value if hasattr(incident.status, 'value') else str(incident.status)} |",
+        f"| **Service** | {incident.service_name} |",
+        f"| **Alert Source** | {incident.alert_source} |",
+        f"| **Assignee** | {incident.assignee or 'Unassigned'} |",
+        f"| **Created** | {incident.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') if incident.created_at else 'N/A'} |",
+        f"| **Resolved** | {incident.resolved_at.strftime('%Y-%m-%d %H:%M:%S UTC') if incident.resolved_at else 'N/A'} |",
+        "",
+        "## Description",
+        "",
+        incident.description or "No description provided.",
+        "",
+    ]
+
+    # Add AI Analysis section
+    ai_data = analysis if analysis else (incident.ai_analysis.model_dump() if incident.ai_analysis else None)
+    if ai_data:
+        md_lines.extend([
+            "## AI Analysis",
+            "",
+        ])
+
+        # Handle different analysis formats
+        if isinstance(ai_data, dict):
+            if 'analysis' in ai_data:
+                md_lines.append(ai_data['analysis'])
+            else:
+                if ai_data.get('summary'):
+                    md_lines.extend([f"### Summary", "", ai_data['summary'], ""])
+                if ai_data.get('root_cause'):
+                    md_lines.extend([f"### Root Cause", "", ai_data['root_cause'], ""])
+                if ai_data.get('impact_assessment'):
+                    md_lines.extend([f"### Impact Assessment", "", ai_data['impact_assessment'], ""])
+                if ai_data.get('recommended_actions'):
+                    md_lines.extend([f"### Recommended Actions", ""])
+                    for i, action in enumerate(ai_data['recommended_actions'], 1):
+                        if isinstance(action, dict):
+                            md_lines.append(f"{i}. **{action.get('action', 'Unknown')}**: {action.get('reason', '')}")
+                        else:
+                            md_lines.append(f"{i}. {action}")
+                    md_lines.append("")
+        md_lines.append("")
+
+    # Add Timeline section
+    if incident.timeline:
+        md_lines.extend([
+            "## Timeline",
+            "",
+        ])
+        for event in incident.timeline:
+            timestamp = event.get('timestamp', 'N/A')
+            event_type = event.get('event', 'unknown')
+            description = event.get('description', '')
+            user = event.get('user', 'system')
+            md_lines.append(f"- **{timestamp}** - `{event_type}` - {description} (by {user})")
+        md_lines.append("")
+
+    # Add Actions Taken section
+    if incident.actions_taken:
+        md_lines.extend([
+            "## Actions Taken",
+            "",
+        ])
+        for action in incident.actions_taken:
+            md_lines.extend([
+                f"### {action.action_type.value if hasattr(action.action_type, 'value') else str(action.action_type)}",
+                f"- **Description:** {action.description}",
+                f"- **Automated:** {'Yes' if action.automated else 'No'}",
+                f"- **User:** {action.user or 'System'}",
+                f"- **Result:** {action.result or 'N/A'}",
+                "",
+            ])
+
+    # Add Resolution section
+    if incident.resolution:
+        md_lines.extend([
+            "## Resolution",
+            "",
+            incident.resolution,
+            "",
+        ])
+
+    md_lines.extend([
+        "---",
+        "",
+        "*Report generated by DreamOps AI Incident Management Platform*",
+    ])
+
+    # Create Markdown file
+    md_content = "\n".join(md_lines)
+    buffer = BytesIO(md_content.encode('utf-8'))
+
+    filename = f"incident-report-{incident_id[:8]}-{datetime.now(UTC).strftime('%Y%m%d')}.md"
+
+    return StreamingResponse(
+        buffer,
+        media_type="text/markdown",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
     )
 
 

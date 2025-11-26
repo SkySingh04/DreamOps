@@ -19,6 +19,7 @@ from src.oncall_agent.api.oncall_agent_trigger import OncallAgentTrigger
 from src.oncall_agent.api.routers.incidents import INCIDENTS_DB
 from src.oncall_agent.api.schemas import Incident, IncidentStatus, Severity
 from src.oncall_agent.config import get_config
+from src.oncall_agent.services.slack_notifier import get_slack_notifier
 from src.oncall_agent.utils import get_logger
 
 router = APIRouter(prefix="/webhook", tags=["webhooks"])
@@ -266,6 +267,25 @@ async def pagerduty_webhook(
                 # Log the result
                 logger.info(f"📊 Agent processing result: {result}")
 
+                # Post analysis to Slack if configured
+                try:
+                    slack_notifier = get_slack_notifier()
+                    if slack_notifier.enabled and result.get("agent_response", {}).get("analysis"):
+                        analysis = result["agent_response"]["analysis"]
+                        severity = "high" if incident.urgency == "high" else "medium"
+                        slack_result = await slack_notifier.post_incident_analysis(
+                            incident_id=incident.id,
+                            title=incident.title,
+                            severity=severity,
+                            analysis=analysis
+                        )
+                        if slack_result.get("success"):
+                            logger.info(f"📢 Posted incident analysis to Slack for {incident.id}")
+                        else:
+                            logger.warning(f"Failed to post to Slack: {slack_result.get('error')}")
+                except Exception as slack_err:
+                    logger.error(f"Error posting to Slack: {slack_err}")
+
             return JSONResponse(
                 status_code=200,
                 content={
@@ -419,20 +439,38 @@ async def send_test_pagerduty_event() -> dict[str, Any]:
     dedup_key = f"test-sky-{int(time.time())}"
 
     try:
-        # Send trigger event
+        # Send trigger event with realistic K8s details for proper agent analysis
         trigger_payload = {
             "routing_key": routing_key,
             "event_action": "trigger",
             "dedup_key": dedup_key,
             "payload": {
-                "summary": "(TEST BY SKY) DreamOps test simulation - please ignore",
+                "summary": "(TEST BY SKY) K8s Pod CrashLoopBackOff - dreamops-backend-7f8b9c6d5d-test123 in namespace default",
                 "severity": "warning",
                 "source": "dreamops-test-button",
+                "component": "kubernetes",
+                "group": "infrastructure",
+                "class": "pod_crash",
                 "custom_details": {
                     "test": True,
                     "triggered_by": "DreamOps Test Button",
-                    "environment": "demo",
-                    "auto_resolve": True
+                    "environment": "production",
+                    "auto_resolve": True,
+                    "alert_type": "pod_crash",
+                    "namespace": "default",
+                    "pod_name": "dreamops-backend-7f8b9c6d5d-test123",
+                    "container_name": "backend",
+                    "restart_count": 5,
+                    "exit_code": 137,
+                    "reason": "OOMKilled",
+                    "last_state": "Terminated",
+                    "message": "Container exceeded memory limit and was killed by OOM killer",
+                    "node": "k8s-worker-01",
+                    "deployment": "dreamops-backend",
+                    "labels": {
+                        "app": "dreamops-backend",
+                        "version": "v1.2.3"
+                    }
                 }
             }
         }

@@ -70,6 +70,12 @@ class Config(BaseSettings):
     pagerduty_user_email: str = Field("oncall-agent@example.com", env="PAGERDUTY_USER_EMAIL")
     pagerduty_events_integration_key: str | None = Field(None, env="PAGERDUTY_EVENTS_INTEGRATION_KEY")
 
+    # Slack integration settings
+    slack_webhook_url: str | None = Field(None, env="SLACK_WEBHOOK_URL")
+    slack_bot_token: str | None = Field(None, env="SLACK_BOT_TOKEN")
+    slack_channel: str = Field("#incidents", env="SLACK_CHANNEL")
+    slack_enabled: bool = Field(False, env="SLACK_ENABLED")
+
     # API server settings
     api_host: str = Field("0.0.0.0", env="API_HOST")
     api_port: int = Field(8000, env="API_PORT")
