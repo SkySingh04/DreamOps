@@ -14,19 +14,19 @@ export async function GET() {
     const name = headersList.get('X-Authentik-Name') || headersList.get('x-authentik-name');
     const groups = headersList.get('X-Authentik-Groups') || headersList.get('x-authentik-groups');
 
-    // If no Authentik headers, user is not authenticated
+    // If no Authentik headers, return mock user for demo
+    // In production with Authentik, the proxy will always set these headers
     if (!email) {
-      // For development/testing, return a mock user if no auth headers
-      if (process.env.NODE_ENV === 'development' || process.env.ALLOW_MOCK_USER === 'true') {
-        return Response.json({
-          id: 1,
-          email: 'dev@dreamops.local',
-          name: 'Dev User',
-          accountTier: 'free',
-          role: 'admin',
-        });
-      }
-      return Response.json(null);
+      return Response.json({
+        id: 1,
+        email: 'demo@dreamops.local',
+        name: 'Demo User',
+        accountTier: 'free',
+        role: 'admin',
+        alertsUsed: 0,
+        alertsLimit: 3,
+        isSetupComplete: false,
+      });
     }
 
     // Get database instance
