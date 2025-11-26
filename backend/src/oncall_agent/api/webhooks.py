@@ -16,7 +16,7 @@ from src.oncall_agent.api.models import (
     PagerDutyWebhookPayload,
 )
 from src.oncall_agent.api.oncall_agent_trigger import OncallAgentTrigger
-from src.oncall_agent.api.routers.incidents import INCIDENTS_DB
+from src.oncall_agent.api.routers.incidents import ANALYSIS_DB, INCIDENTS_DB
 from src.oncall_agent.api.schemas import Incident, IncidentStatus, Severity
 from src.oncall_agent.config import get_config
 from src.oncall_agent.services.slack_notifier import get_slack_notifier
@@ -266,6 +266,16 @@ async def pagerduty_webhook(
 
                 # Log the result
                 logger.info(f"📊 Agent processing result: {result}")
+
+                # Store the analysis in ANALYSIS_DB for report downloads
+                if result.get("agent_response", {}).get("analysis"):
+                    ANALYSIS_DB[incident.id] = {
+                        "analysis": result["agent_response"]["analysis"],
+                        "ai_mode": result["agent_response"].get("ai_mode", "standard"),
+                        "k8s_alert_type": result["agent_response"].get("k8s_alert_type"),
+                        "context": result.get("context", {}),
+                        "processed_at": datetime.now(UTC).isoformat()
+                    }
 
                 # Post analysis to Slack if configured
                 try:
