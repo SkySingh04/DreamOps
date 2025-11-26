@@ -75,11 +75,12 @@ DEFAULT_RISK_MATRIX = {
 }
 
 # In-memory configuration storage (in production, this would be database-backed)
+# Default to PLAN mode - analysis only, no pod modifications
 AGENT_CONFIG = AIAgentConfig(
-    mode=AIMode.YOLO,
+    mode=AIMode.PLAN,
     confidence_threshold=70,
     risk_matrix=DEFAULT_RISK_MATRIX,
-    auto_execute_enabled=True,
+    auto_execute_enabled=False,  # Disabled by default - PLAN mode is read-only
     approval_required_for=[RiskLevel.MEDIUM, RiskLevel.HIGH],
     notification_preferences=NotificationPreferences(
         slack_enabled=True,

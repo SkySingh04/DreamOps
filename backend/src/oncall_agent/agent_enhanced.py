@@ -31,11 +31,14 @@ from .strategies.kubernetes_resolver import KubernetesResolver
 class EnhancedOncallAgent:
     """Enhanced AI agent with actual command execution capabilities."""
 
-    def __init__(self, ai_mode: AIMode = AIMode.YOLO):
+    def __init__(self, ai_mode: AIMode = AIMode.PLAN):
         """Initialize the enhanced oncall agent.
-        
+
         Args:
-            ai_mode: AI operation mode (YOLO, APPROVAL, PLAN)
+            ai_mode: AI operation mode (PLAN, APPROVAL, YOLO)
+                     PLAN (default): Analysis only, no pod modifications
+                     APPROVAL: Requires manual approval for actions
+                     YOLO: Auto-execute all actions (dangerous)
         """
         self.config = get_config()
         self.logger = logging.getLogger(__name__)
