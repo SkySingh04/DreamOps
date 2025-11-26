@@ -9,6 +9,7 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from src.oncall_agent.api.dependencies import get_user_from_request
 from src.oncall_agent.api.log_streaming import log_stream_manager
 from src.oncall_agent.api.models import (
     PagerDutyIncidentData,
@@ -199,8 +200,9 @@ async def pagerduty_webhook(
                     html_url=incident_data.get('html_url', '')
                 )
 
-                # Check alert usage - using user_id "1" for now (should be from incident context)
-                user_id = "1"  # Auth handled by Authentik proxy - using default user
+                # Get user from request headers (falls back to demo user if no Authentik headers)
+                current_user = await get_user_from_request(request)
+                user_id = current_user.user_id
                 allowed, usage_data = await record_alert_usage(user_id, incident.id)
 
                 if not allowed:
@@ -254,7 +256,7 @@ async def pagerduty_webhook(
                         "source_id": incident.id,
                         "urgency": incident.urgency,
                         "html_url": incident.html_url,
-                        "userId": 1
+                        "userId": int(user_id) if user_id.isdigit() else 1
                     }
                 )
                 INCIDENTS_DB[incident.id] = memory_incident
@@ -323,8 +325,9 @@ async def pagerduty_webhook(
 
                 # Only process triggered incidents
                 if event == "incident.trigger":
-                    # Check alert usage - using user_id "1" for now
-                    user_id = "1"  # Auth handled by Authentik proxy - using default user
+                    # Get user from request headers (falls back to demo user if no Authentik headers)
+                    current_user = await get_user_from_request(request)
+                    user_id = current_user.user_id
                     allowed, usage_data = await record_alert_usage(user_id, incident.id)
 
                     if not allowed:
@@ -378,7 +381,7 @@ async def pagerduty_webhook(
                         metadata={
                             "source_id": incident.id,
                             "urgency": getattr(incident, 'urgency', 'medium'),
-                            "userId": 1
+                            "userId": int(user_id) if user_id.isdigit() else 1
                         }
                     )
                     INCIDENTS_DB[incident.id] = memory_incident
