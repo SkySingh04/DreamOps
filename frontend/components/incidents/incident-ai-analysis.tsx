@@ -109,14 +109,16 @@ export function IncidentAIAnalysis({ incidentId, className }: IncidentAIAnalysis
     )
   }
   
-  if (analysis?.status === 'analyzed' || analysis?.parsed_analysis) {
+  // Check if analysis data exists (either from API or from logs)
+  // API returns { analysis: "...", ai_mode: "...", ... } directly
+  if (analysis?.status === 'analyzed' || analysis?.parsed_analysis || analysis?.analysis) {
     return (
       <AIAnalysisDisplay
         analysis={analysis.analysis || ''}
-        timestamp={analysis.timestamp}
+        timestamp={analysis.timestamp || analysis.processed_at}
         responseTime={analysis.response_time || analysis.processing_time}
         parsedAnalysis={analysis.parsed_analysis}
-        confidenceScore={analysis.confidence_score}
+        confidenceScore={analysis.confidence_score || analysis.context?.confidence_score}
         riskLevel={analysis.risk_level}
         className={className}
       />
