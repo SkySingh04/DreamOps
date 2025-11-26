@@ -1,0 +1,47 @@
+{
+  "report_generated_at": "2025-11-26T10:55:29.143306+00:00",
+  "report_type": "incident_analysis",
+  "incident": {
+    "id": "INC-FINAL-E2E",
+    "title": "K8s Pod OOMKilled - backend-api in namespace production",
+    "description": "Pod backend-api-7d8f9e5c4-xyz789 terminated with OOMKilled. Exit code 137. Memory limit: 1Gi. Restart count: 5.",
+    "severity": "high",
+    "status": "triggered",
+    "service_name": "Production Backend",
+    "alert_source": "pagerduty",
+    "assignee": null,
+    "created_at": "2025-11-26T10:35:19.020057+00:00",
+    "resolved_at": null,
+    "resolution": null
+  },
+  "ai_analysis": {
+    "analysis": "# \ud83d\udea8 CRITICAL INCIDENT ANALYSIS - OOMKilled Pod\n\n## \ud83d\udcca INCIDENT SUMMARY\n**Status**: ACTIVE PRODUCTION OUTAGE  \n**Pod**: `backend-api-7d8f9e5c4-xyz789`  \n**Issue**: Out of Memory (OOMKilled) - Exit Code 137  \n**Restart Loop**: 5 restarts (CrashLoopBackOff likely)  \n**Time**: Wednesday Morning (Business Hours) - HIGH IMPACT PERIOD\n\n---\n\n## \ud83d\udd25 IMMEDIATE ACTION (Next 5 Minutes)\n\n### Step 1: Stop the Bleeding (30 seconds)\n```bash\n# Check current pod status\nkubectl get pods -n production -l app=backend-api -o wide\n\n# Check restart count and current state\nkubectl describe pod backend-api-7d8f9e5c4-xyz789 -n production | grep -A 10 \"State:\"\n```\n\n### Step 2: Emergency Memory Increase (2 minutes)\n```bash\n# Patch deployment with 2x memory (1Gi \u2192 2Gi)\nkubectl patch deployment backend-api -n production --type json -p '[\n  {\"op\": \"replace\", \"path\": \"/spec/template/spec/containers/0/resources/limits/memory\", \"value\": \"2Gi\"},\n  {\"op\": \"replace\", \"path\": \"/spec/template/spec/containers/0/resources/requests/memory\", \"value\": \"1.5Gi\"}\n]'\n\n# Verify patch applied\nkubectl get deployment backend-api -n production -o jsonpath='{.spec.template.spec.containers[0].resources}'\n```\n\n### Step 3: Scale Horizontally (1 minute)\n```bash\n# Scale to 3 replicas to distribute load while pods restart\nkubectl scale deployment backend-api -n production --replicas=3\n\n# Watch rollout\nkubectl rollout status deployment/backend-api -n production\n```\n\n### Step 4: Monitor Recovery (1 minute)\n```bash\n# Watch pod status\nwatch -n 2 'kubectl get pods -n production -l app=backend-api'\n\n# Check for new OOM events\nkubectl get events -n production --field-selector involvedObject.name=backend-api --sort-by='.lastTimestamp' | tail -20\n```\n\n---\n\n## \ud83d\udd0d ROOT CAUSE ANALYSIS\n\n### Primary Cause: **Memory Leak or Insufficient Resources**\n\n**Evidence:**\n- Exit code 137 (128 + 9 SIGKILL) = OOM Kill by kernel\n- 5 restarts = systematic issue, not transient spike\n- 1Gi limit exceeded repeatedly = workload exceeds allocation\n\n**Most Likely Scenarios (Ranked):**\n\n1. **Memory Leak in Application Code (70% probability)**\n   - Java heap not tuned (-Xmx not set < 1Gi)\n   - Unbounded cache/connection pools\n   - Resource not being garbage collected\n\n2. **Traffic Spike During Business Hours (20% probability)**\n   - Wednesday morning = typical high-traffic period\n   - Legitimate load exceeds capacity planning\n\n3. **Recent Deployment Change (10% probability)**\n   - New feature with memory-intensive operations\n   - Dependency update with higher memory footprint\n\n---\n\n## \ud83d\udca5 IMPACT ASSESSMENT\n\n### Severity: **CRITICAL** \u26a0\ufe0f\n\n**Current Impact:**\n- \u2705 **Service Status**: Likely DEGRADED (not complete outage due to multiple replicas)\n- \u26a0\ufe0f **User Impact**: HIGH - 503 errors, slow responses, failed transactions\n- \ud83d\udcc9 **Business Impact**: Revenue loss during peak business hours\n- \ud83d\udd04 **Recovery Time**: 3-5 minutes with immediate actions above\n\n**Affected Systems:**\n- Production backend API (primary)\n- Dependent downstream services (secondary)\n- User-facing features relying on this backend\n\n**Estimated User Impact:**\n- If single replica: ~33-100% request failure rate\n- If multi-replica: ~10-30% request failure rate during pod restarts\n\n---\n\n## \ud83d\udee0\ufe0f DETAILED REMEDIATION STEPS\n\n### Phase 1: Stabilization (COMPLETE ABOVE)\n\n### Phase 2: Investigation (Next 15 minutes)\n```bash\n# Get memory usage before OOM\nkubectl top pod -n production -l app=backend-api --containers\n\n# Check historical memory usage from monitoring\n# (Adjust for your monitoring stack)\n# Prometheus query: container_memory_usage_bytes{pod=~\"backend-api.*\", namespace=\"production\"}\n\n# Review application logs before crash\nkubectl logs backend-api-7d8f9e5c4-xyz789 -n production --previous --tail=200 | grep -i -E \"memory|heap|oom|fatal\"\n\n# Check for memory-intensive operations\nkubectl logs -n production -l app=backend-api --tail=500 | grep -i -E \"query|cache|load|batch\"\n\n# Identify deployment changes\nkubectl rollout history deployment/backend-api -n production\n```\n\n### Phase 3: Validate Fix (Next 10 minutes)\n```bash\n# Confirm no new OOM kills\nkubectl get events -n production --field-selector reason=OOMKilling --watch\n\n# Monitor memory usage approaching new limits\nkubectl top pod -n production -l app=backend-api --containers\n\n# Check error rates in APM/logs\n# [Use your monitoring tool: Datadog, New Relic, etc.]\n\n# Verify API health\ncurl -f https://backend-api.production.example.com/health || echo \"Still unhealthy\"\n```\n\n---\n\n## \ud83c\udfaf LONG-TERM RECOMMENDATIONS\n\n### 1. **Immediate (This Week)**\n```bash\n# Set proper resource requests/limits with headroom\nkubectl patch deployment backend-api -n production --type json -p '[\n  {\"op\": \"replace\", \"path\": \"/spec/template/spec/containers/0/resources/limits/memory\", \"value\": \"2.5Gi\"},\n  {\"op\": \"replace\", \"path\": \"/spec/template/spec/containers/0/resources/requests/memory\", \"value\": \"2Gi\"},\n  {\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/resources/limits/cpu\", \"value\": \"2000m\"}\n]'\n\n# Implement memory-based autoscaling\nkubectl autoscale deployment backend-api -n production \\\n  --cpu-percent=70 --memory-percent=80 --min=3 --max=10\n```\n\n### 2. **Application-Level Fixes (Next Sprint)**\n- **If Java/JVM**: Set `-Xmx1536m -Xms1536m` (75% of 2Gi limit)\n- **If Node.js**: Set `--max-old-space-size=1536`\n- **If Python**: Investigate memory profiling with `memory_profiler`\n- Implement connection pool limits (database, HTTP clients)\n- Add memory usage metrics/alerts in application code\n- Review and cap cache sizes\n\n### 3. **Monitoring & Alerting (Next 2 Weeks)**\n```yaml\n# Prometheus Alert Example\n- alert: PodMemoryUsageHigh\n  expr: |\n    container_memory_usage_bytes{pod=~\"backend-api.*\"} \n    / container_spec_memory_limit_bytes{pod=~\"backend-api.*\"} > 0.85\n  for: 5m\n  annotations:\n    summary: \"Pod {{ $labels.pod }} memory usage above 85%\"\n```\n\n### 4. **Process Improvements**\n- [ ] Implement load testing with memory profiling pre-deployment\n- [ ] Add memory usage dashboards to deployment pipeline\n- [ ] Document baseline memory usage per replica\n- [ ] Create runbook for OOM incidents (link this analysis)\n- [ ] Schedule monthly capacity planning reviews\n\n### 5. **Architecture Review (Next Quarter)**\n- Evaluate microservices decomposition if single service too large\n- Consider implementing circuit breakers for cascading failures\n- Review data caching strategies (Redis/Memcached for offloading)\n- Implement request queuing/rate limiting for traffic spikes\n\n---\n\n## \ud83d\udce2 STAKEHOLDER COMMUNICATION TEMPLATE\n\n### Initial Alert (Sent at Detection)\n```\nSubject: [CRITICAL] Production API Experiencing Service Degradation\n\nTeam,\n\nWe are currently experiencing a critical incident affecting the Production Backend API",
+    "ai_mode": "yolo",
+    "k8s_alert_type": "oom_kill",
+    "context": {
+      "alert_type": "kubernetes",
+      "technical_details": {
+        "error_code": "137",
+        "pod_name": "",
+        "namespace": "production"
+      },
+      "confidence_score": 0.6499999999999999,
+      "time_context": {
+        "time_period": "morning",
+        "day_of_week": "Wednesday",
+        "business_hours": "yes",
+        "timestamp": "2025-11-26T10:35:00+00:00"
+      },
+      "suggested_prompt": "Kubernetes incident detected: K8s Pod OOMKilled - backend-api in namespace production\nTechnical context: {'error_code': '137', 'pod_name': '', 'namespace': 'production'}\nFocus on: pod health, deployment status, resource constraints, and cluster state."
+    },
+    "processed_at": "2025-11-26T10:36:29.218455+00:00"
+  },
+  "timeline": [],
+  "actions_taken": [],
+  "metadata": {
+    "source_id": "INC-FINAL-E2E",
+    "urgency": "high",
+    "html_url": "https://example.pagerduty.com/incidents/PFINAL",
+    "userId": 1
+  }
+}
