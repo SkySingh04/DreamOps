@@ -12,7 +12,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build the application
+# Build the application with empty NEXT_PUBLIC_API_URL for production
+# This makes the frontend use relative paths (nginx proxies /api to backend)
+ENV NEXT_PUBLIC_API_URL=""
 RUN npm run build
 
 # Production image

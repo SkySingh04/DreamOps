@@ -10,7 +10,11 @@ import {
   AIAction
 } from './types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Use relative URL in production (nginx proxies /api to backend)
+// In development, use NEXT_PUBLIC_API_URL or fallback to localhost
+const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+  ? ''  // Use relative path in production (nginx handles /api proxy)
+  : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
 
 // Auth removed - handled by Authentik reverse proxy
 
