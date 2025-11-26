@@ -39,8 +39,12 @@ export function AlertUsageCard({ userId, teamId, className }: AlertUsageCardProp
     try {
       // Use userId if available (new user-based model), otherwise fall back to teamId
       const id = userId || teamId || "team_123";
+      // Use relative URL in production (nginx proxies /api to backend)
+      const apiUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+        ? ''
+        : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/alert-tracking/usage/${id}`
+        `${apiUrl}/api/v1/alert-tracking/usage/${id}`
       );
       if (response.ok) {
         const data = await response.json();

@@ -223,7 +223,10 @@ export default function IncidentsPage() {
   // Test PagerDuty event mutation - triggers and IMMEDIATELY resolves
   const testPagerDutyMutation = useMutation({
     mutationFn: async () => {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      // Use relative URL in production (nginx proxies /api to backend)
+      const apiUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+        ? ''
+        : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
       const response = await fetch(`${apiUrl}/webhook/pagerduty/test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -747,7 +750,10 @@ export default function IncidentsPage() {
                                 size="sm"
                                 className="flex-1"
                                 onClick={() => {
-                                  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+                                  // Use relative URL in production (nginx proxies /api to backend)
+                                  const apiUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+                                    ? ''
+                                    : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
                                   window.open(`${apiUrl}/api/v1/incidents/${incident.id}/report/json`, '_blank');
                                 }}
                               >
@@ -759,7 +765,10 @@ export default function IncidentsPage() {
                                 size="sm"
                                 className="flex-1"
                                 onClick={() => {
-                                  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+                                  // Use relative URL in production (nginx proxies /api to backend)
+                                  const apiUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+                                    ? ''
+                                    : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
                                   window.open(`${apiUrl}/api/v1/incidents/${incident.id}/report/markdown`, '_blank');
                                 }}
                               >
