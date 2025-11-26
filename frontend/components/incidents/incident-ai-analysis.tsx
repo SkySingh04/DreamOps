@@ -20,7 +20,11 @@ export function IncidentAIAnalysis({ incidentId, className }: IncidentAIAnalysis
   const { data: analysisData, isLoading, error, refetch } = useQuery({
     queryKey: ['incident-analysis', incidentId],
     queryFn: async () => {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/incidents/${incidentId}/analysis`)
+      // Use relative URL in production (nginx proxies /api to backend)
+      const baseUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+        ? ''
+        : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
+      const response = await fetch(`${baseUrl}/api/v1/incidents/${incidentId}/analysis`)
       if (!response.ok) throw new Error('Failed to fetch analysis')
       return response.json()
     },
