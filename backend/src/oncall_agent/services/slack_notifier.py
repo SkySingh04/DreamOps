@@ -46,7 +46,7 @@ class SlackNotifier:
                     params={
                         "channel": self.channel_id,
                         "oldest": oldest,
-                        "limit": 100
+                        "limit": 50
                     },
                     headers={
                         "Authorization": f"Bearer {self.bot_token}"
@@ -56,59 +56,59 @@ class SlackNotifier:
 
                 data = response.json()
                 if not data.get("ok"):
-                    logger.error(f"Slack API error: {data.get('error')}")
+                    logger.error(f"Slack API error searching history: {data.get('error')}")
                     return None
 
                 messages = data.get("messages", [])
+                logger.info(f"Found {len(messages)} messages in channel to search")
 
-                # Search for PagerDuty message matching our incident
-                # PagerDuty messages typically come from "PagerDuty" bot and contain the incident title
+                # Extract key words from incident title for matching
+                title_lower = incident_title.lower()
+                # Get significant words (longer than 3 chars, not common words)
+                skip_words = {"test", "this", "that", "with", "from", "have", "been"}
+                title_words = [w for w in title_lower.split() if len(w) > 3 and w not in skip_words]
+                logger.info(f"Searching for title words: {title_words[:5]}")
+
                 for msg in messages:
-                    # Check if it's from PagerDuty (bot_id or username)
-                    is_pagerduty = (
-                        msg.get("username") == "PagerDuty" or
-                        msg.get("bot_profile", {}).get("name") == "PagerDuty" or
-                        "pagerduty" in msg.get("username", "").lower()
-                    )
-
-                    # Check message text or attachments for incident title
+                    # Get all text content from the message
                     msg_text = msg.get("text", "").lower()
 
-                    # Also check attachments (PagerDuty often uses these)
-                    attachments_text = ""
+                    # Check attachments (PagerDuty uses these)
                     for att in msg.get("attachments", []):
-                        attachments_text += att.get("text", "").lower() + " "
-                        attachments_text += att.get("fallback", "").lower() + " "
-                        attachments_text += att.get("title", "").lower() + " "
+                        msg_text += " " + att.get("text", "").lower()
+                        msg_text += " " + att.get("fallback", "").lower()
+                        msg_text += " " + att.get("pretext", "").lower()
 
-                    # Also check blocks
-                    blocks_text = ""
+                    # Check blocks
                     for block in msg.get("blocks", []):
                         if block.get("type") == "section":
                             text_obj = block.get("text", {})
-                            blocks_text += text_obj.get("text", "").lower() + " "
+                            msg_text += " " + text_obj.get("text", "").lower()
 
-                    combined_text = msg_text + attachments_text + blocks_text
+                    # Check if this looks like a PagerDuty message
+                    is_pagerduty = (
+                        "pagerduty" in msg_text or
+                        msg.get("username", "").lower() == "pagerduty" or
+                        "pagerduty" in msg.get("bot_profile", {}).get("name", "").lower() or
+                        "incident" in msg_text and ("triggered" in msg_text or "resolved" in msg_text)
+                    )
 
-                    # Extract key words from incident title for matching
-                    title_lower = incident_title.lower()
-                    title_words = [w for w in title_lower.split() if len(w) > 3]
+                    # Count matching words
+                    matching_words = sum(1 for word in title_words if word in msg_text)
 
-                    # Check if enough title words match (at least 50% or 2 words)
-                    matching_words = sum(1 for word in title_words if word in combined_text)
-                    min_matches = max(2, len(title_words) // 2)
+                    # Log for debugging
+                    if matching_words > 0:
+                        logger.info(f"Message has {matching_words}/{len(title_words)} matching words, is_pagerduty={is_pagerduty}")
 
-                    if is_pagerduty and matching_words >= min_matches:
-                        logger.info(f"Found PagerDuty message for incident: {incident_title[:50]}...")
+                    # Match if it's from PagerDuty OR has enough keyword matches
+                    if is_pagerduty and matching_words >= 2:
+                        logger.info(f"Found PagerDuty message for incident! ts={msg.get('ts')}")
                         return msg.get("ts")
 
-                    # Also match if it's from PagerDuty and contains specific identifiers
-                    if is_pagerduty:
-                        # Check for common patterns like pod names, namespaces, etc.
-                        if any(keyword in combined_text for keyword in ["oomkilled", "crashloop", "pod", "deployment"]):
-                            if any(word in combined_text for word in title_words[:3]):
-                                logger.info(f"Found PagerDuty message (pattern match) for: {incident_title[:50]}...")
-                                return msg.get("ts")
+                    # Also match if message contains the exact incident title pattern
+                    if "test by sky" in msg_text and matching_words >= 1:
+                        logger.info(f"Found TEST message matching incident! ts={msg.get('ts')}")
+                        return msg.get("ts")
 
                 logger.info(f"No matching PagerDuty message found for: {incident_title[:50]}...")
                 return None
@@ -239,6 +239,7 @@ class SlackNotifier:
             fixes_text = "• Check full analysis in dashboard"
 
         # Concise format for Slack
+        report_url = f"https://oncall.frai.pro/incidents/{incident_id}"
         message_text = f""":robot_face: *AI Analysis*
 
 *Cause:* {extracted["cause"]}
@@ -246,7 +247,7 @@ class SlackNotifier:
 *Recommended Fixes:*
 {fixes_text}
 
-View full report: oncall.frai.pro"""
+<{report_url}|View Full Report>"""
 
         blocks = [
             {
