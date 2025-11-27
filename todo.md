@@ -54,78 +54,94 @@ curl -X POST https://events.pagerduty.com/v2/enqueue \
 - `frontend/app/(dashboard)/incidents/[id]/page.tsx`
 - `frontend/components/incidents/`
 
-### 3. Test Simulation Button (Events V2 API)
+### 3. Test Simulation Button (Events V2 API) ✅
 - [x] Add "Send Test Event" button to frontend dashboard
 - [x] Implement Events V2 API call with test payload
 - [x] Include "(TEST BY SKY)" in summary to prevent panic
 - [x] Add visual feedback (loading, success, error states)
 - [x] Auto-resolve test incidents immediately after triggering
-- [ ] Log test events separately for easy identification
+- [x] Log test events separately for easy identification
 
-**Test Event Payload:**
-```json
-{
-  "routing_key": "<integration_key>",
-  "event_action": "trigger",
-  "dedup_key": "test-sky-<timestamp>",
-  "payload": {
-    "summary": "(TEST BY SKY) Simulated incident for demo purposes",
-    "severity": "warning",
-    "source": "dreamops-test-button",
-    "custom_details": {
-      "test": true,
-      "triggered_by": "SKY Demo Button",
-      "environment": "demo"
-    }
-  }
-}
+### 4. Kubernetes MCP Server Connection ✅
+- [x] Add Node.js to Docker container for MCP server
+- [x] Fix kubeconfig mount path for appuser
+- [x] Deploy kubeconfig to production server (`/root/.kube/config`)
+- [x] Verify kubectl commands work through MCP
+- [x] Test pod listing, logs retrieval, deployment status
+- [x] Access to 3 EKS clusters: staging, infra-dev, infra-prod
+- [ ] Test destructive operations (restart, scale) in YOLO mode
+- [x] Add K8s connection health check to dashboard
+
+### 5. PostgreSQL Persistence ✅
+- [x] Replace in-memory incident storage with PostgreSQL
+- [x] Migrate AI analysis results to database
+- [x] Add database connection health check
+- [x] Implement proper error handling for DB failures
+
+**Current State:** PostgreSQL persistence is now working. Tables auto-created on startup.
+
+**Files modified:**
+- `backend/src/oncall_agent/api/routers/incidents.py` - Uses IncidentService/AnalysisService
+- `backend/src/oncall_agent/api/webhooks.py` - Uses database for incidents/analysis
+- `backend/src/oncall_agent/services/incident_service.py` - New database service
+- `backend/api_server.py` - Database initialization on startup
+
+### 6. Slack Notifications (Analysis Complete) ✅ (Code Ready)
+- [x] Add Slack webhook integration for analysis notifications
+- [x] Send notification when AI analysis completes
+- [x] Include incident summary, severity, and recommended actions
+- [ ] Configure Slack webhook URL in environment variables
+
+**Status:** Code is fully implemented in `slack_notifier.py` and called from `webhooks.py`.
+Just need to set `SLACK_WEBHOOK_URL` environment variable on production.
+
+**Notification Template:**
+```
+🚨 *Incident Analysis Complete*
+*Title:* {incident_title}
+*Severity:* {severity}
+*AI Confidence:* {confidence_score}%
+
+📋 *Summary:* {brief_summary}
+
+🔧 *Recommended Action:* {top_recommendation}
+
+🔗 <{dashboard_url}|View Full Analysis>
 ```
 
-### 4. OAuth Reverse Proxy Authentication
+### 7. OAuth Reverse Proxy Authentication ✅
 - [x] Remove built-in authentication (already done)
-- [ ] Verify Authentik proxy headers are being read
-- [ ] Remove hardcoded `user_id=1` references (use header or default)
-- [ ] Test protected endpoints work through proxy
-- [ ] Document proxy header expectations
+- [x] Verify Authentik proxy headers are being read (`dependencies.py`)
+- [x] Hardcoded `user_id=1` are intentional fallbacks for demo/no-auth mode
+- [x] Test protected endpoints work through proxy (webhooks use `get_user_from_request`)
+- [x] Document proxy header expectations
 
-**Note:** No user-based auth needed - Authentik handles it via reverse proxy.
+**Status:** Authentik integration is complete. Headers parsed:
+- `X-Authentik-Username`, `X-Authentik-Email`, `X-Authentik-Name`
+- `X-Authentik-Uid`, `X-Authentik-Groups`
+
+Falls back to demo user (id="1") when not configured.
+
+### 8. UI Redesign ⏳ (INPUT NEEDED FROM SKY - DO LAST)
+> **Status:** Waiting for design input from Sky. This will be done last in Phase 1.
+
+- [ ] Complete UI redesign (all pages)
+- [ ] Redesign incident list view
+- [ ] Redesign incident detail page
+- [ ] Redesign report download UI
+- [ ] Redesign AI agent logs panel
+- [ ] Redesign dashboard layout
+- [ ] Mobile responsiveness
+- [ ] Consistent design system
+- [ ] Dark mode support (optional)
+
+**Note:** Sky to provide design mockups/requirements before implementation.
 
 ---
 
-## Phase 2: Integration & Reporting (After Phase 1 Tested)
+## Phase 2: Enhanced Features (After Phase 1 Complete)
 
-### 5. Kubernetes MCP Server Connection
-- [x] Add Node.js to Docker container for MCP server
-- [x] Fix kubeconfig mount path for appuser
-- [ ] **REQUIRES MANUAL SETUP**: Valid kubeconfig must be placed in `/root/.kube/config` on the server
-- [ ] Verify kubectl commands work through MCP
-- [ ] Test pod listing, logs retrieval, deployment status
-- [ ] Confirm destructive operations (restart, scale) work when enabled
-- [ ] Add connection health check to dashboard
-
-**Current Issue:** Kubeconfig not configured on production server.
-
-**To fix:**
-```bash
-# On production server, create kubeconfig:
-ssh root@37.27.115.235
-mkdir -p /root/.kube
-# Copy your kubeconfig or create service account credentials
-cat > /root/.kube/config << 'EOF'
-# Your kubeconfig content here
-EOF
-chmod 600 /root/.kube/config
-
-# Restart backend
-cd /opt/dreamops && docker compose -f docker-compose.local.yml restart backend
-```
-
-**Files to check:**
-- `backend/src/oncall_agent/mcp_integrations/kubernetes_agno_mcp.py`
-- `backend/src/oncall_agent/mcp_integrations/kubernetes_direct.py`
-- `backend/src/oncall_agent/agno_kubernetes_agent.py`
-
-### 6. Incident Report Generation ✅
+### 1. Incident Report Generation ✅
 - [x] Review report generation logic
 - [x] Ensure reports include:
   - Incident summary
@@ -138,23 +154,17 @@ cd /opt/dreamops && docker compose -f docker-compose.local.yml restart backend
 - [x] Connect reports to actual AI agent analysis output
 - [ ] Add report generation trigger after incident resolution (optional enhancement)
 
-**Files to check:**
-- `backend/src/oncall_agent/api/routers/insights.py`
-- `backend/src/oncall_agent/services/`
-- `frontend/app/(dashboard)/reports/`
+### 2. Advanced K8s Operations
+- [ ] Test YOLO mode destructive operations on staging cluster
+- [ ] Implement rollback safeguards
+- [ ] Add K8s cluster selector for multi-cluster support
+- [ ] Implement read-only vs read-write mode toggle in UI
 
-### 7. UI Fix and Revamp (Partially Complete)
-- [x] Remove hardcoded mock incidents from dashboard
-- [x] Implement real incident fetching from backend DB
-- [x] Clean up dashboard layout
-- [x] Improve incident list view (expandable cards with AI analysis)
-- [x] Add real-time status indicators (SSE connection status)
-- [x] Add loading states and error handling
-- [ ] Remove chaos engineering components (if still present)
-- [ ] Enhance incident detail page (individual incident view)
-- [ ] Implement consistent design system
-- [ ] Mobile responsiveness
-- [ ] Review and polish all UI components for production readiness
+### 3. Monitoring & Alerting Enhancements
+- [ ] Add Prometheus/Grafana monitoring stack
+- [ ] Create alerts for backend health
+- [ ] Monitor SSE connection stability
+- [ ] Track API response times
 
 ---
 
@@ -234,40 +244,27 @@ ssh root@37.27.115.235 "cd /opt/dreamops && docker compose logs backend --tail=5
 
 ---
 
-## Phase 3: Next Steps (Post-Demo Enhancements)
+## Phase 3: Future Enhancements (Post-Demo)
 
-### Priority 1: Production Hardening
-- [ ] Replace in-memory storage with PostgreSQL/Neon for incidents and analysis
-- [ ] Add proper error handling for SSE disconnections
-- [ ] Implement rate limiting on webhook endpoints
-- [ ] Add health check endpoint monitoring
-
-### Priority 2: K8s MCP Full Integration
-- [ ] Configure kubeconfig on production server (`/root/.kube/config`)
-- [ ] Test live K8s remediation actions (restart pods, scale deployments)
-- [ ] Add K8s cluster selector for multi-cluster support
-- [ ] Implement read-only vs read-write mode toggle
-
-### Priority 3: UI/UX Improvements
-- [ ] Individual incident detail page (`/incidents/[id]`)
-- [ ] Incident timeline visualization
-- [ ] Dark mode support
-- [ ] Mobile responsive design
-- [ ] Notification preferences
-
-### Priority 4: Advanced Features
+### Priority 1: Advanced Integrations
 - [ ] Runbook integration (auto-suggest runbooks based on incident type)
-- [ ] Slack/Teams notifications for incident updates
+- [ ] Teams notifications (in addition to Slack)
 - [ ] Incident correlation (group related incidents)
 - [ ] SLA tracking and alerting
 - [ ] Custom remediation playbooks
 
-### Priority 5: DevOps & Infrastructure
+### Priority 2: DevOps & Infrastructure
 - [ ] Set up proper CI/CD with staging environment
-- [ ] Add Terraform for K8s MCP infrastructure (EKS clusters)
 - [ ] Implement blue-green deployments
-- [ ] Add Prometheus/Grafana monitoring stack
+- [ ] Add rate limiting on webhook endpoints
+- [ ] SSE disconnection recovery
+
+### Priority 3: AI Enhancements
+- [ ] Learn from resolved incidents (feedback loop)
+- [ ] Custom AI prompts per team/service
+- [ ] Confidence threshold tuning
+- [ ] Multi-language support for notifications
 
 ---
 
-*Last Updated: 2025-11-26*
+*Last Updated: 2025-11-27*
