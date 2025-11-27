@@ -260,13 +260,20 @@ async def health_check():
                 health_status["checks"]["agent"] = "ok"
                 health_status["checks"]["queue_size"] = queue_status["queue_size"]
 
-                # Check K8s MCP integration status
+                # Check K8s MCP integration status (with timeout to avoid blocking health checks)
                 if agent_trigger.agent and hasattr(agent_trigger.agent, 'mcp_integrations'):
                     k8s_integration = agent_trigger.agent.mcp_integrations.get('kubernetes')
                     if k8s_integration:
                         try:
-                            k8s_healthy = await k8s_integration.health_check()
+                            import asyncio
+                            # Use 3 second timeout to avoid blocking health checks
+                            k8s_healthy = await asyncio.wait_for(
+                                k8s_integration.health_check(),
+                                timeout=3.0
+                            )
                             health_status["checks"]["k8s_mcp"] = "connected" if k8s_healthy else "disconnected"
+                        except asyncio.TimeoutError:
+                            health_status["checks"]["k8s_mcp"] = "timeout"
                         except Exception as k8s_err:
                             health_status["checks"]["k8s_mcp"] = f"error: {str(k8s_err)}"
                     else:
