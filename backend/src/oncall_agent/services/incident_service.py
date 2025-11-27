@@ -419,6 +419,223 @@ class AnalysisService:
         return result.split()[-1] != '0'
 
 
+class ReportService:
+    """Service for incident report generation and storage."""
+
+    @staticmethod
+    async def generate_and_save(incident_id: str) -> dict[str, Any]:
+        """Generate and save both JSON and Markdown reports for an incident."""
+        # Get incident data
+        incident = await IncidentService.get(incident_id)
+        if not incident:
+            raise ValueError(f"Incident {incident_id} not found")
+
+        # Get AI analysis
+        analysis = await AnalysisService.get(incident_id) or {}
+
+        # Generate JSON report
+        json_report = ReportService._generate_json_report(incident, analysis)
+
+        # Generate Markdown report
+        md_report = ReportService._generate_markdown_report(incident, analysis)
+
+        # Save to database
+        pool = await get_pool()
+        now = datetime.now(UTC)
+
+        async with pool.acquire() as conn:
+            # Create reports table if not exists
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS incident_reports (
+                    incident_id TEXT PRIMARY KEY REFERENCES incidents(id) ON DELETE CASCADE,
+                    json_report JSONB NOT NULL,
+                    markdown_report TEXT NOT NULL,
+                    generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
+
+            await conn.execute(
+                """
+                INSERT INTO incident_reports (incident_id, json_report, markdown_report, generated_at)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (incident_id) DO UPDATE SET
+                    json_report = $2,
+                    markdown_report = $3,
+                    generated_at = $4
+                """,
+                incident_id,
+                json.dumps(json_report),
+                md_report,
+                now,
+            )
+
+        logger.info(f"Generated and saved reports for incident {incident_id}")
+        return {"json_report": json_report, "markdown_report": md_report}
+
+    @staticmethod
+    def _generate_json_report(incident: Incident, analysis: dict) -> dict:
+        """Generate JSON report content."""
+        return {
+            "report_generated_at": datetime.now(UTC).isoformat(),
+            "report_type": "incident_resolution",
+            "incident": {
+                "id": incident.id,
+                "title": incident.title,
+                "description": incident.description,
+                "severity": incident.severity.value if hasattr(incident.severity, 'value') else str(incident.severity),
+                "status": incident.status.value if hasattr(incident.status, 'value') else str(incident.status),
+                "service_name": incident.service_name,
+                "alert_source": incident.alert_source,
+                "assignee": incident.assignee,
+                "created_at": incident.created_at.isoformat() if incident.created_at else None,
+                "resolved_at": incident.resolved_at.isoformat() if incident.resolved_at else None,
+                "resolution": incident.resolution,
+                "duration_minutes": (
+                    (incident.resolved_at - incident.created_at).total_seconds() / 60
+                    if incident.resolved_at and incident.created_at else None
+                ),
+            },
+            "ai_analysis": analysis if analysis else (
+                incident.ai_analysis.model_dump() if incident.ai_analysis else None
+            ),
+            "timeline": incident.timeline,
+            "actions_taken": [
+                {
+                    "action_type": a.action_type.value if hasattr(a.action_type, 'value') else str(a.action_type),
+                    "description": a.description,
+                    "automated": a.automated,
+                    "user": a.user,
+                    "timestamp": a.timestamp.isoformat() if a.timestamp else None,
+                    "result": a.result
+                }
+                for a in incident.actions_taken
+            ],
+            "metadata": incident.metadata
+        }
+
+    @staticmethod
+    def _generate_markdown_report(incident: Incident, analysis: dict) -> str:
+        """Generate Markdown report content."""
+        # Calculate duration
+        duration_str = "N/A"
+        if incident.resolved_at and incident.created_at:
+            duration_minutes = (incident.resolved_at - incident.created_at).total_seconds() / 60
+            if duration_minutes < 60:
+                duration_str = f"{int(duration_minutes)} minutes"
+            else:
+                hours = int(duration_minutes / 60)
+                mins = int(duration_minutes % 60)
+                duration_str = f"{hours}h {mins}m"
+
+        md_lines = [
+            f"# Incident Resolution Report: {incident.title}",
+            "",
+            f"**Generated:** {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}",
+            "",
+            "---",
+            "",
+            "## Summary",
+            "",
+            "| Field | Value |",
+            "|-------|-------|",
+            f"| **ID** | `{incident.id}` |",
+            f"| **Severity** | {incident.severity.value if hasattr(incident.severity, 'value') else str(incident.severity)} |",
+            f"| **Status** | {incident.status.value if hasattr(incident.status, 'value') else str(incident.status)} |",
+            f"| **Service** | {incident.service_name} |",
+            f"| **Alert Source** | {incident.alert_source} |",
+            f"| **Assignee** | {incident.assignee or 'Unassigned'} |",
+            f"| **Created** | {incident.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') if incident.created_at else 'N/A'} |",
+            f"| **Resolved** | {incident.resolved_at.strftime('%Y-%m-%d %H:%M:%S UTC') if incident.resolved_at else 'N/A'} |",
+            f"| **Duration** | {duration_str} |",
+            "",
+            "## Description",
+            "",
+            incident.description or "No description provided.",
+            "",
+        ]
+
+        # Add AI Analysis section
+        ai_data = analysis if analysis else (incident.ai_analysis.model_dump() if incident.ai_analysis else None)
+        if ai_data:
+            md_lines.extend(["## AI Analysis", ""])
+            if isinstance(ai_data, dict):
+                if 'analysis' in ai_data:
+                    md_lines.append(ai_data['analysis'])
+                else:
+                    if ai_data.get('summary'):
+                        md_lines.extend([f"### Summary", "", ai_data['summary'], ""])
+                    if ai_data.get('root_cause'):
+                        md_lines.extend([f"### Root Cause", "", ai_data['root_cause'], ""])
+                    if ai_data.get('impact_assessment'):
+                        md_lines.extend([f"### Impact Assessment", "", ai_data['impact_assessment'], ""])
+                    if ai_data.get('recommended_actions'):
+                        md_lines.extend([f"### Recommended Actions", ""])
+                        for i, action in enumerate(ai_data['recommended_actions'], 1):
+                            if isinstance(action, dict):
+                                md_lines.append(f"{i}. **{action.get('action', 'Unknown')}**: {action.get('reason', '')}")
+                            else:
+                                md_lines.append(f"{i}. {action}")
+                        md_lines.append("")
+            md_lines.append("")
+
+        # Add Timeline section
+        if incident.timeline:
+            md_lines.extend(["## Timeline", ""])
+            for event in incident.timeline:
+                timestamp = event.get('timestamp', 'N/A')
+                event_type = event.get('event', 'unknown')
+                description = event.get('description', '')
+                user = event.get('user', 'system')
+                md_lines.append(f"- **{timestamp}** - `{event_type}` - {description} (by {user})")
+            md_lines.append("")
+
+        # Add Actions Taken section
+        if incident.actions_taken:
+            md_lines.extend(["## Actions Taken", ""])
+            for action in incident.actions_taken:
+                md_lines.extend([
+                    f"### {action.action_type.value if hasattr(action.action_type, 'value') else str(action.action_type)}",
+                    f"- **Description:** {action.description}",
+                    f"- **Automated:** {'Yes' if action.automated else 'No'}",
+                    f"- **User:** {action.user or 'System'}",
+                    f"- **Result:** {action.result or 'N/A'}",
+                    "",
+                ])
+
+        # Add Resolution section
+        if incident.resolution:
+            md_lines.extend(["## Resolution", "", incident.resolution, ""])
+
+        md_lines.extend([
+            "---",
+            "",
+            "*Report auto-generated by DreamOps AI Incident Management Platform upon incident resolution*",
+        ])
+
+        return "\n".join(md_lines)
+
+    @staticmethod
+    async def get_saved_report(incident_id: str) -> dict[str, Any] | None:
+        """Get saved reports for an incident."""
+        pool = await get_pool()
+
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT json_report, markdown_report, generated_at FROM incident_reports WHERE incident_id = $1",
+                incident_id
+            )
+
+        if not row:
+            return None
+
+        json_data = row['json_report']
+        return {
+            "json_report": json_data if isinstance(json_data, dict) else json.loads(json_data),
+            "markdown_report": row['markdown_report'],
+            "generated_at": row['generated_at'].isoformat() if row['generated_at'] else None,
+        }
+
+
 async def check_database_health() -> dict[str, Any]:
     """Check database connection health."""
     try:
