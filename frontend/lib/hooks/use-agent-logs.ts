@@ -53,9 +53,10 @@ export function useAgentLogs(incidentId?: string) {
     params.append('client_id', `web-${Date.now()}`)
 
     // SSE streams must connect directly to backend - Next.js rewrites buffer responses
-    // and don't properly stream SSE events. In production, use nginx proxy (relative URL).
-    const apiUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-      ? ''  // Use relative path in production (nginx handles /api proxy)
+    // and don't properly stream SSE events. In production, connect to backend via nginx on port 8001.
+    const isProduction = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+    const apiUrl = isProduction
+      ? `${window.location.protocol}//${window.location.hostname}:8001`  // Direct to backend via nginx
       : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')
     const url = `${apiUrl}/api/v1/agent-logs/stream?${params}`
 
