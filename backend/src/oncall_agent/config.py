@@ -78,7 +78,8 @@ class Config(BaseSettings):
     # Slack integration settings
     slack_webhook_url: str | None = Field(None, env="SLACK_WEBHOOK_URL")
     slack_bot_token: str | None = Field(None, env="SLACK_BOT_TOKEN")
-    slack_channel: str = Field("#incidents", env="SLACK_CHANNEL")
+    slack_channel: str = Field("#oncall", env="SLACK_CHANNEL")
+    slack_channel_id: str | None = Field(None, env="SLACK_CHANNEL_ID")
     slack_enabled: bool = Field(False, env="SLACK_ENABLED")
 
     # API server settings
