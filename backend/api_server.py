@@ -259,8 +259,23 @@ async def health_check():
                 queue_status = agent_trigger.get_queue_status()
                 health_status["checks"]["agent"] = "ok"
                 health_status["checks"]["queue_size"] = queue_status["queue_size"]
+
+                # Check K8s MCP integration status
+                if agent_trigger.agent and hasattr(agent_trigger.agent, 'mcp_integrations'):
+                    k8s_integration = agent_trigger.agent.mcp_integrations.get('kubernetes')
+                    if k8s_integration:
+                        try:
+                            k8s_healthy = await k8s_integration.health_check()
+                            health_status["checks"]["k8s_mcp"] = "connected" if k8s_healthy else "disconnected"
+                        except Exception as k8s_err:
+                            health_status["checks"]["k8s_mcp"] = f"error: {str(k8s_err)}"
+                    else:
+                        health_status["checks"]["k8s_mcp"] = "not_configured"
+                else:
+                    health_status["checks"]["k8s_mcp"] = "agent_not_ready"
             else:
                 health_status["checks"]["agent"] = "not_initialized"
+                health_status["checks"]["k8s_mcp"] = "agent_not_initialized"
         except Exception as e:
             health_status["checks"]["agent"] = f"error: {str(e)}"
             health_status["status"] = "degraded"
