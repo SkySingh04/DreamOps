@@ -51,8 +51,16 @@ const nextConfig: NextConfig = {
         destination: `${apiUrl}/api/v1/agent-logs/:path*`, // Backend SSE stream for agent logs
       },
       {
+        source: '/api/v1/agent/config',
+        destination: `${apiUrl}/api/v1/agent/config/`, // Backend agent config (with trailing slash)
+      },
+      {
         source: '/api/v1/agent/:path*',
         destination: `${apiUrl}/api/v1/agent/:path*`, // Backend agent endpoints
+      },
+      {
+        source: '/api/v1/incidents',
+        destination: `${apiUrl}/api/v1/incidents/`, // Backend incidents list endpoint (with trailing slash to avoid 307)
       },
       {
         source: '/api/v1/incidents/:path*',
