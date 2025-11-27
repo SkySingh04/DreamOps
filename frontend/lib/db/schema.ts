@@ -36,7 +36,6 @@ export const users = pgTable('users', {
   alertsUsed: integer('alerts_used').default(0),
   alertsLimit: integer('alerts_limit').default(3),
   billingCycleStart: timestamp('billing_cycle_start').defaultNow(),
-  phonepeCustomerId: text('phonepe_customer_id'),
   lastPaymentAt: timestamp('last_payment_at'),
 });
 

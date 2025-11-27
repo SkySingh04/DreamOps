@@ -105,19 +105,6 @@ class Config(BaseSettings):
     aws_profile: str | None = Field(None, env="AWS_PROFILE")
     aws_default_region: str = Field("us-east-1", env="AWS_DEFAULT_REGION")
 
-    # PhonePe payment gateway settings
-    phonepe_merchant_id: str | None = Field(None, env="PHONEPE_MERCHANT_ID")
-    phonepe_salt_key: str | None = Field(None, env="PHONEPE_SALT_KEY")
-    phonepe_salt_index: str = Field("1", env="PHONEPE_SALT_INDEX")
-    phonepe_base_url: str = Field("https://api.phonepe.com/apis/hermes", env="PHONEPE_BASE_URL")
-    phonepe_redirect_url: str | None = Field(None, env="PHONEPE_REDIRECT_URL")
-    phonepe_callback_url: str | None = Field(None, env="PHONEPE_CALLBACK_URL")
-
-    # General settings
-    environment: str = Field("production", env="ENVIRONMENT")
-
-    # CORS settings
-    cors_origins: str = Field("http://localhost:3000,http://127.0.0.1:3000", env="CORS_ORIGINS")
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

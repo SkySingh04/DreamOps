@@ -41,7 +41,6 @@ async def init_dashboard_tables() -> None:
                 alerts_used INTEGER DEFAULT 0,
                 alerts_limit INTEGER DEFAULT 3,
                 billing_cycle_start TIMESTAMPTZ DEFAULT NOW(),
-                phonepe_customer_id TEXT,
                 last_payment_at TIMESTAMPTZ
             )
         """)

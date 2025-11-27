@@ -14,10 +14,9 @@
   - [Kubernetes Integration Options](#kubernetes-integration-options)
   - [Notion Integration](#notion-integration)
   - [Grafana Integration](#grafana-integration-setup)
-  - [PhonePe Payment Integration](#phonepe-payment-integration)
   - [Environment Separation](#environment-separation)
 - [Features & Integrations](#features--integrations)
-- [Payment System](#payment-system)
+- [Alert System](#alert-system)
 - [Deployment](#deployment)
   - [Docker Setup](#docker-setup)
   - [AWS Deployment](#aws-deployment)
@@ -71,7 +70,7 @@ DreamOps is an intelligent AI-powered incident response and infrastructure manag
 - 🔧 **YOLO Mode**: Autonomous operation that executes fixes without human approval
 - 🎯 **Smart Alert Routing**: Intelligent alert categorization and prioritization
 - 🔌 **MCP Integrations**: Kubernetes, GitHub, PagerDuty, Notion, and Grafana
-- 💳 **Flexible Payment System**: PhonePe integration with free tier (3 alerts/month)
+- 💳 **Flexible Alert System**: Free tier with 3 alerts/month
 - 📊 **Real-time Dashboard**: Next.js frontend with live incident tracking
 - 🚀 **Cloud-Native**: Docker, Terraform, and AWS deployment ready
 - 🔒 **Enterprise Security**: Complete environment separation and secure secrets management
@@ -85,7 +84,6 @@ DreamOps is an intelligent AI-powered incident response and infrastructure manag
 - **Database**: Neon PostgreSQL with environment separation
 - **Infrastructure**: Docker, Terraform, AWS (ECS Fargate, S3, CloudFront)
 - **Authentication**: Handled by Authentik reverse proxy (no built-in auth)
-- **Payments**: PhonePe Payment Gateway SDK
 - **Monitoring**: CloudWatch, custom metrics and dashboards
 
 ## Quick Start Guide
@@ -138,9 +136,8 @@ npm install
 cp .env.example .env.local
 # Edit .env.local with your database URL
 
-# Run with mock payments (development)
-cd ..
-./start-dev-with-mock-payments.sh
+# Start development servers
+npm run dev
 ```
 
 Access the application:
@@ -246,10 +243,8 @@ K8S_ENABLED=true
 K8S_CONFIG_PATH=~/.kube/config
 K8S_ENABLE_DESTRUCTIVE_OPERATIONS=false
 
-# Payment Settings
-USE_MOCK_PAYMENTS=true  # For development
-PHONEPE_MERCHANT_ID=MERCHANTUAT
-PHONEPE_SALT_KEY=099eb0cd-02cf-4e2a-8aca-3e6c6aff0399
+# Alert Settings
+# Free tier: 3 alerts/month
 ```
 
 3. **Run the Backend**:
@@ -280,8 +275,6 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 NODE_ENV=development
 AUTH_SECRET=development-secret-key
 
-# Payment Configuration
-NEXT_PUBLIC_USE_MOCK_PAYMENTS=true
 ```
 
 3. **Run Database Migrations**:
@@ -616,32 +609,6 @@ docker-compose up -d
 pytest test_grafana_integration.py -v
 ```
 
-### Payment System Configuration
-
-#### PhonePe Integration
-
-1. **Test Credentials** (UAT):
-   ```env
-   PHONEPE_MERCHANT_ID=MERCHANTUAT
-   PHONEPE_SALT_KEY=099eb0cd-02cf-4e2a-8aca-3e6c6aff0399
-   PHONEPE_SALT_INDEX=1
-   PHONEPE_ENV=UAT
-   ```
-
-2. **Production Credentials**:
-   ```env
-   PHONEPE_MERCHANT_ID=your-production-merchant-id
-   PHONEPE_SALT_KEY=your-production-salt-key
-   PHONEPE_SALT_INDEX=1
-   PHONEPE_ENV=PRODUCTION
-   ```
-
-3. **Callback URLs**:
-   ```env
-   PHONEPE_CALLBACK_URL=https://your-domain.com/api/v1/payments/callback
-   PHONEPE_REDIRECT_URL=https://your-domain.com/payment/callback
-   ```
-
 ### Environment Separation
 
 DreamOps uses strict environment separation to ensure development features don't leak into production.
@@ -665,7 +632,7 @@ When `NEXT_PUBLIC_DEV_MODE=true` OR `NODE_ENV=development`:
 
 - **Automatic Pro Plan**: All new users start with Pro plan
 - **All Integrations Enabled**: No plan restrictions for integrations
-- **Mock Payments**: Use mock payment system
+- **Unlimited Alerts**: No alert limits in development
 - **Debug Logging**: Enhanced logging for debugging
 - **Hot Reload**: API server auto-reloads on file changes
 
@@ -883,24 +850,24 @@ GET /api/v1/insights/report
 - Tracks incident frequency trends
 - Builds knowledge base over time
 
-## Payment System
+## Alert System
 
 ### Overview
 
-DreamOps uses a freemium model with PhonePe payment integration:
+DreamOps uses a freemium model:
 
 - **Free Tier**: 3 alerts per month
-- **Starter**: ₹999/month - 50 alerts
-- **Professional**: ₹4,999/month - Unlimited alerts
-- **Enterprise**: Custom pricing
+- **Starter**: 50 alerts/month
+- **Professional**: Unlimited alerts
+- **Enterprise**: Custom limits
 
-### Alert Tracking System
+### Alert Tracking
 
-The system tracks alert usage per team:
+The system tracks alert usage per user:
 
 ```typescript
 interface AlertUsage {
-  team_id: string;
+  user_id: string;
   alerts_used: number;
   alerts_limit: number;
   billing_cycle_start: Date;
@@ -908,63 +875,17 @@ interface AlertUsage {
 }
 ```
 
-### Payment Flow
-
-1. **Alert Limit Check**:
-   ```typescript
-   // When alert count exceeds limit
-   if (alertsUsed >= alertsLimit) {
-     showUpgradeModal();
-   }
-   ```
-
-2. **Payment Initiation**:
-   ```bash
-   POST /api/v1/payments/initiate
-   {
-     "team_id": "team_123",
-     "amount": 99900,  // ₹999 in paise
-     "plan": "STARTER"
-   }
-   ```
-
-3. **Payment Completion**:
-   - User redirected to PhonePe
-   - Callback updates team plan
-   - Alert limit increased
-   - UI shows Pro badge
-
-### Testing Payments
-
-For development, use mock payments:
-
-```env
-USE_MOCK_PAYMENTS=true
-NEXT_PUBLIC_USE_MOCK_PAYMENTS=true
-```
-
-Test endpoints:
-```bash
-# Create mock payment
-POST /api/v1/payments/test/mock-payment
-
-# Complete mock payment
-POST /api/v1/payments/test/complete-mock/{payment_id}
-
-# View all mock transactions
-GET /api/v1/payments/test/mock-transactions
-```
+When alert count exceeds limit, users are prompted to upgrade.
 
 ## Deployment
 
 ### Local Development
 
 ```bash
-# Start all services with mock payments
-./start-dev-with-mock-payments.sh
+# Start backend
+cd backend && uv run python api_server.py
 
-# Or manually:
-cd backend && USE_MOCK_PAYMENTS=true uv run python api_server.py
+# Start frontend (in another terminal)
 cd frontend && npm run dev
 ```
 
@@ -1048,7 +969,7 @@ curl http://localhost:8000/api/v1/payments/debug/environment
 The Docker setup automatically configures:
 - `NODE_ENV=development` - Development mode
 - `NEXT_PUBLIC_DEV_MODE=true` - Enable all features
-- `USE_MOCK_PAYMENTS=true` - Mock payment system
+- `ALERTS_LIMIT=100` - Increased alert limit for development
 - `CORS_ORIGINS` - Configured for frontend access
 - Database connections pre-configured
 
@@ -1305,9 +1226,6 @@ curl -X POST http://localhost:8000/webhook/pagerduty \
 
 # Test Kubernetes integration
 uv run python test_k8s_pagerduty_integration.py
-
-# Test payment flow
-curl -X POST http://localhost:8000/api/v1/payments/test/mock-payment
 ```
 
 ### YOLO Mode Testing
@@ -1506,17 +1424,7 @@ def to_dict(self) -> dict[str, Any]:
 - Check Neon project is active
 - Remove `&channel_binding=require` if present
 
-#### 4. PhonePe Integration Errors
-**Problem**: "Client Not Found"
-
-**Solution**:
-```env
-# Use test credentials for development
-PHONEPE_MERCHANT_ID=MERCHANTUAT
-USE_MOCK_PAYMENTS=true
-```
-
-#### 5. Kubernetes Connection Failed
+#### 4. Kubernetes Connection Failed
 **Problem**: kubectl connection test failed
 
 **Solution**:
@@ -1524,7 +1432,7 @@ USE_MOCK_PAYMENTS=true
 - Check `~/.kube/config` exists
 - Set correct context: `K8S_CONTEXT=your-context`
 
-#### 6. Notion Integration Issues
+#### 5. Notion Integration Issues
 
 **Common Problems**:
 
@@ -1619,41 +1527,6 @@ GET /api/v1/alert-tracking/check-integration-access/{team_id}/{integration_name}
 Response: {
   "has_access": true,
   "reason": "Integration allowed on pro plan"
-}
-```
-
-### Payment Endpoints
-
-#### Initiate Payment
-```http
-POST /api/v1/payments/initiate
-{
-  "team_id": "team_123",
-  "amount": 99900,
-  "plan": "STARTER"
-}
-Response: {
-  "payment_id": "PAY_123",
-  "redirect_url": "https://phonepe.com/pay/..."
-}
-```
-
-#### Check Payment Status
-```http
-POST /api/v1/payments/status
-{
-  "merchant_transaction_id": "ORDER_123"
-}
-```
-
-#### Get Plans
-```http
-GET /api/v1/payments/plans
-Response: {
-  "plans": [
-    {"id": "starter", "name": "Starter", "price": 999, "alerts": 50},
-    {"id": "pro", "name": "Professional", "price": 4999, "alerts": -1}
-  ]
 }
 ```
 

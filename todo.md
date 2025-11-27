@@ -303,8 +303,8 @@ kubernetes_agno_mcp - INFO - Query: Execute Kubernetes operation: increase_memor
 
 1. ~~**Claude Model Mismatch**: `kubernetes_agno_mcp.py:65` uses `claude-sonnet-4-20250514` instead of config value~~ ✅ Fixed
 2. **Hardcoded user_id**: Multiple routers have `user_id=1  # TODO: Get from auth` (works with Authentik proxy)
-3. **Backup files to clean**: `agent.py.bak`, `uv.lock.bak`
-4. **Database persistence**: PhonePe service TODOs for database storage
+3. ~~**Backup files to clean**: `agent.py.bak`, `uv.lock.bak`~~ ✅ Cleaned
+4. ~~**Database persistence**: PhonePe service TODOs for database storage~~ ✅ PhonePe removed
 5. **307 Redirect Console Errors**: `/api/v1/agent/config` shows redirect warnings (non-blocking)
 
 ---
