@@ -256,6 +256,36 @@ export const setupValidationLogs = pgTable('setup_validation_logs', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
+// AI Agent Settings table - stores user-specific agent configuration
+export const agentSettings = pgTable('agent_settings', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id)
+    .unique(), // One settings record per user
+  mode: varchar('mode', { length: 20 }).notNull().default('plan'), // yolo, plan, approval
+  confidenceThreshold: integer('confidence_threshold').notNull().default(70),
+  autoExecuteEnabled: boolean('auto_execute_enabled').notNull().default(false),
+  approvalRequiredFor: jsonb('approval_required_for').notNull().default(['medium', 'high']),
+  riskMatrix: jsonb('risk_matrix').notNull().default({
+    low: ['Read metrics and logs', 'Query monitoring systems', 'Generate reports', 'Send notifications', 'Update incident status'],
+    medium: ['Restart services', 'Scale deployments', 'Clear caches', 'Rotate credentials', 'Update configurations'],
+    high: ['Delete resources', 'Modify production data', 'Change security settings', 'Perform database operations', 'Execute custom scripts']
+  }),
+  notificationPreferences: jsonb('notification_preferences').notNull().default({
+    slack_enabled: true,
+    email_enabled: false,
+    channels: []
+  }),
+  // Safety config
+  dryRunMode: boolean('dry_run_mode').notNull().default(false),
+  safetyConfidenceThreshold: integer('safety_confidence_threshold').notNull().default(80),
+  riskTolerance: varchar('risk_tolerance', { length: 20 }).notNull().default('medium'),
+  emergencyStopActive: boolean('emergency_stop_active').notNull().default(false),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   activityLogs: many(activityLogs),
@@ -436,6 +466,8 @@ export type SetupValidationLog = typeof setupValidationLogs.$inferSelect;
 export type NewSetupValidationLog = typeof setupValidationLogs.$inferInsert;
 export type TeamMember = typeof teamMembers.$inferSelect;
 export type NewTeamMember = typeof teamMembers.$inferInsert;
+export type AgentSettings = typeof agentSettings.$inferSelect;
+export type NewAgentSettings = typeof agentSettings.$inferInsert;
 
 export enum ActivityType {
   SIGN_UP = 'SIGN_UP',

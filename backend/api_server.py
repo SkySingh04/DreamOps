@@ -67,6 +67,16 @@ async def lifespan(app: FastAPI):
             from src.oncall_agent.services.incident_service import get_pool
             await get_pool()
             logger.info("PostgreSQL database connection pool initialized")
+
+            # Initialize agent settings table
+            from src.oncall_agent.services.agent_settings_service import init_agent_settings_table
+            await init_agent_settings_table()
+            logger.info("Agent settings table initialized")
+
+            # Initialize dashboard tables for frontend data
+            from src.oncall_agent.services.dashboard_sync_service import init_dashboard_tables
+            await init_dashboard_tables()
+            logger.info("Dashboard tables initialized")
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
             logger.warning("Continuing without database persistence - data will be lost on restart!")

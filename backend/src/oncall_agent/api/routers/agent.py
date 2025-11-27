@@ -31,6 +31,7 @@ from src.oncall_agent.api.schemas import (
     SuccessResponse,
 )
 from src.oncall_agent.approval_manager import approval_manager
+from src.oncall_agent.services import agent_settings_service
 from src.oncall_agent.utils import get_logger
 
 logger = get_logger(__name__)
@@ -826,29 +827,63 @@ async def submit_feedback(
 
 @router.get("/config", response_model=AIAgentConfig)
 async def get_agent_config() -> AIAgentConfig:
-    """Get current AI agent configuration."""
+    """Get current AI agent configuration from database."""
     try:
+        global AGENT_CONFIG
+
+        # Load settings from database
+        settings = await agent_settings_service.get_agent_settings(user_id=1)
+
+        # Convert to AIAgentConfig
+        AGENT_CONFIG = AIAgentConfig(
+            mode=AIMode(settings["mode"]),
+            confidence_threshold=settings["confidence_threshold"],
+            risk_matrix=settings["risk_matrix"],
+            auto_execute_enabled=settings["auto_execute_enabled"],
+            approval_required_for=[RiskLevel(r) for r in settings["approval_required_for"]],
+            notification_preferences=NotificationPreferences(**settings["notification_preferences"]),
+        )
+
         return AGENT_CONFIG
     except Exception as e:
         logger.error(f"Error getting agent config: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Return default config on error
+        return AGENT_CONFIG
 
 
 @router.put("/config", response_model=AIAgentConfig)
 async def update_agent_config(config_update: AIAgentConfigUpdate) -> AIAgentConfig:
-    """Update AI agent configuration."""
+    """Update AI agent configuration and persist to database."""
     try:
         global AGENT_CONFIG, enhanced_agent_instance
 
         # Update only provided fields
         update_data = config_update.model_dump(exclude_unset=True)
 
-        # Create new config with updates
-        current_config = AGENT_CONFIG.model_dump()
-        current_config.update(update_data)
+        # Convert enums to strings for database storage
+        db_updates = {}
+        for key, value in update_data.items():
+            if key == "mode" and hasattr(value, "value"):
+                db_updates["mode"] = value.value
+            elif key == "approval_required_for":
+                db_updates["approval_required_for"] = [r.value if hasattr(r, "value") else r for r in value]
+            elif key == "notification_preferences" and hasattr(value, "model_dump"):
+                db_updates["notification_preferences"] = value.model_dump()
+            else:
+                db_updates[key] = value
 
-        # Validate and create new config
-        AGENT_CONFIG = AIAgentConfig(**current_config)
+        # Save to database
+        saved_settings = await agent_settings_service.update_agent_settings(user_id=1, updates=db_updates)
+
+        # Update global AGENT_CONFIG
+        AGENT_CONFIG = AIAgentConfig(
+            mode=AIMode(saved_settings["mode"]),
+            confidence_threshold=saved_settings["confidence_threshold"],
+            risk_matrix=saved_settings["risk_matrix"],
+            auto_execute_enabled=saved_settings["auto_execute_enabled"],
+            approval_required_for=[RiskLevel(r) for r in saved_settings["approval_required_for"]],
+            notification_preferences=NotificationPreferences(**saved_settings["notification_preferences"]),
+        )
 
         # If mode changed, reset agent instances to use new mode
         if "mode" in update_data:
@@ -861,7 +896,7 @@ async def update_agent_config(config_update: AIAgentConfigUpdate) -> AIAgentConf
 
             logger.info(f"AI mode changed to {AGENT_CONFIG.mode.value}, agent instances will be recreated")
 
-        logger.info(f"Agent configuration updated: {update_data}")
+        logger.info(f"Agent configuration updated and persisted: {db_updates}")
         return AGENT_CONFIG
 
     except Exception as e:
@@ -873,26 +908,48 @@ async def update_agent_config(config_update: AIAgentConfigUpdate) -> AIAgentConf
 
 @router.get("/safety-config", response_model=SafetyConfig)
 async def get_safety_config() -> SafetyConfig:
-    """Get current safety configuration."""
+    """Get current safety configuration from database."""
     try:
+        global SAFETY_CONFIG
+
+        # Load safety settings from database
+        safety_data = await agent_settings_service.get_safety_settings(user_id=1)
+
+        SAFETY_CONFIG = SafetyConfig(
+            dry_run_mode=safety_data["dry_run_mode"],
+            confidence_threshold=safety_data["confidence_threshold"],
+            risk_tolerance=RiskLevel(safety_data["risk_tolerance"]),
+            auto_execute_permissions=safety_data["auto_execute_permissions"],
+            mandatory_approval_actions=safety_data["mandatory_approval_actions"],
+            emergency_stop_active=safety_data["emergency_stop_active"],
+        )
+
         return SAFETY_CONFIG
     except Exception as e:
         logger.error(f"Error getting safety config: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return SAFETY_CONFIG
 
 
 @router.put("/safety-config", response_model=SafetyConfig)
 async def update_safety_config(config_update: dict) -> SafetyConfig:
-    """Update safety configuration."""
+    """Update safety configuration and persist to database."""
     try:
         global SAFETY_CONFIG
 
-        # Update configuration fields
-        for key, value in config_update.items():
-            if hasattr(SAFETY_CONFIG, key):
-                setattr(SAFETY_CONFIG, key, value)
+        # Save to database
+        safety_data = await agent_settings_service.update_safety_settings(user_id=1, updates=config_update)
 
-        logger.info(f"Safety configuration updated: {config_update}")
+        # Update global SAFETY_CONFIG
+        SAFETY_CONFIG = SafetyConfig(
+            dry_run_mode=safety_data["dry_run_mode"],
+            confidence_threshold=safety_data["confidence_threshold"],
+            risk_tolerance=RiskLevel(safety_data["risk_tolerance"]),
+            auto_execute_permissions=safety_data["auto_execute_permissions"],
+            mandatory_approval_actions=safety_data["mandatory_approval_actions"],
+            emergency_stop_active=safety_data["emergency_stop_active"],
+        )
+
+        logger.info(f"Safety configuration updated and persisted: {config_update}")
         return SAFETY_CONFIG
 
     except Exception as e:

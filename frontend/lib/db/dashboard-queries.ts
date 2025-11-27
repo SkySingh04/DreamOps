@@ -1,15 +1,34 @@
 import { getDb } from './drizzle';
 import { eq, desc, sql, and, gte, lt } from 'drizzle-orm';
-import { 
-  incidents, 
-  metrics, 
-  aiActions, 
+import { pgTable, serial, varchar, text, timestamp, integer, boolean } from 'drizzle-orm/pg-core';
+import {
+  incidents,
+  metrics,
+  aiActions,
   incidentLogs,
   users,
   type Incident,
   type AiAction,
-  type Metric 
+  type Metric
 } from './schema';
+
+// Dashboard incidents table - matches backend's dashboard_sync_service schema
+const dashboardIncidents = pgTable('dashboard_incidents', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull(),
+  title: varchar('title', { length: 255 }).notNull(),
+  description: text('description'),
+  severity: varchar('severity', { length: 20 }).notNull(),
+  status: varchar('status', { length: 20 }).notNull().default('open'),
+  source: varchar('source', { length: 50 }).notNull(),
+  sourceId: varchar('source_id', { length: 255 }),
+  assignedTo: integer('assigned_to'),
+  resolvedBy: integer('resolved_by'),
+  resolvedAt: timestamp('resolved_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  metadata: text('metadata'),
+});
 
 export interface DashboardMetrics {
   activeIncidents: number;
@@ -38,12 +57,12 @@ export interface RecentAiAction {
 export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   try {
     const db = await getDb();
-    // Get active incidents count
+    // Get active incidents count from dashboard_incidents table
     const activeIncidentsResult = await db
       .select({ count: sql<number>`count(*)` })
-      .from(incidents)
+      .from(dashboardIncidents)
       .where(
-        sql`${incidents.status} IN ('open', 'investigating')`
+        sql`${dashboardIncidents.status} IN ('open', 'investigating')`
       );
 
     // Get resolved incidents today
@@ -54,12 +73,12 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
 
     const resolvedTodayResult = await db
       .select({ count: sql<number>`count(*)` })
-      .from(incidents)
+      .from(dashboardIncidents)
       .where(
         and(
-          eq(incidents.status, 'resolved'),
-          gte(incidents.resolvedAt, today),
-          lt(incidents.resolvedAt, tomorrow)
+          eq(dashboardIncidents.status, 'resolved'),
+          gte(dashboardIncidents.resolvedAt, today),
+          lt(dashboardIncidents.resolvedAt, tomorrow)
         )
       );
 
@@ -116,16 +135,17 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
 export async function getRecentIncidents(limit: number = 10): Promise<RecentIncident[]> {
   try {
     const db = await getDb();
+    // Query from dashboard_incidents table populated by backend
     const result = await db
       .select({
-        id: incidents.id,
-        title: incidents.title,
-        severity: incidents.severity,
-        status: incidents.status,
-        createdAt: incidents.createdAt,
+        id: dashboardIncidents.id,
+        title: dashboardIncidents.title,
+        severity: dashboardIncidents.severity,
+        status: dashboardIncidents.status,
+        createdAt: dashboardIncidents.createdAt,
       })
-      .from(incidents)
-      .orderBy(desc(incidents.createdAt))
+      .from(dashboardIncidents)
+      .orderBy(desc(dashboardIncidents.createdAt))
       .limit(limit);
 
     return result;

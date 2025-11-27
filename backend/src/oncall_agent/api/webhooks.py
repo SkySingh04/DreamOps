@@ -19,6 +19,11 @@ from src.oncall_agent.api.models import (
 from src.oncall_agent.api.oncall_agent_trigger import OncallAgentTrigger
 from src.oncall_agent.api.schemas import Incident, IncidentStatus, Severity
 from src.oncall_agent.config import get_config
+from src.oncall_agent.services.dashboard_sync_service import (
+    record_ai_action,
+    sync_incident_to_dashboard,
+    update_incident_status,
+)
 from src.oncall_agent.services.incident_service import (
     AnalysisService,
     IncidentService,
@@ -100,7 +105,7 @@ async def pagerduty_webhook(
 ) -> JSONResponse:
     """
     Handle PagerDuty webhook events.
-    
+
     Processes incident.triggered events and automatically triggers the DreamOps agent.
     """
     logger.info("=" * 80)
@@ -161,6 +166,13 @@ async def pagerduty_webhook(
                             await IncidentService.update(existing_incident)
                     except Exception as db_err:
                         logger.warning(f"Could not update incident status in DB: {db_err}")
+
+                    # Update dashboard incident status
+                    try:
+                        await update_incident_status(incident_id, "resolved")
+                        logger.info(f"Updated dashboard incident status: {incident_id}")
+                    except Exception as sync_err:
+                        logger.warning(f"Could not update dashboard incident status: {sync_err}")
 
                     # Send resolution log to frontend
                     resolved_by = 'System'
@@ -272,6 +284,27 @@ async def pagerduty_webhook(
                 except Exception as db_err:
                     logger.warning(f"Could not store incident in DB: {db_err}")
 
+                # Sync to dashboard table for frontend
+                dashboard_incident_id = None
+                try:
+                    dashboard_incident_id = await sync_incident_to_dashboard(
+                        source_id=incident.id,
+                        title=incident.title,
+                        description=incident.description or "",
+                        severity="high" if incident.urgency == 'high' else "medium",
+                        status="triggered",
+                        source="pagerduty",
+                        user_id=int(user_id) if user_id.isdigit() else None,
+                        metadata={
+                            "urgency": incident.urgency,
+                            "html_url": incident.html_url,
+                            "service": incident.service.name if incident.service else "Unknown"
+                        }
+                    )
+                    logger.info(f"Synced incident to dashboard: {dashboard_incident_id}")
+                except Exception as sync_err:
+                    logger.warning(f"Could not sync incident to dashboard: {sync_err}")
+
                 # Process incident via agent
                 logger.info(f"🤖 Processing incident via agent: {incident.id}")
                 result = await trigger.trigger_oncall_agent(incident)
@@ -279,6 +312,26 @@ async def pagerduty_webhook(
 
                 # Log the result
                 logger.info(f"📊 Agent processing result: {result}")
+
+                # Record AI action in dashboard
+                if dashboard_incident_id:
+                    try:
+                        ai_mode = result.get("agent_response", {}).get("ai_mode", "analysis")
+                        action_type = f"incident_analysis ({ai_mode})"
+                        await record_ai_action(
+                            action=action_type,
+                            description=f"Analyzed incident: {incident.title}",
+                            incident_id=dashboard_incident_id,
+                            user_id=int(user_id) if user_id.isdigit() else None,
+                            status="completed",
+                            metadata={
+                                "ai_mode": ai_mode,
+                                "k8s_alert_type": result.get("agent_response", {}).get("k8s_alert_type"),
+                                "pagerduty_incident_id": incident.id
+                            }
+                        )
+                    except Exception as action_err:
+                        logger.warning(f"Could not record AI action: {action_err}")
 
                 # Store the analysis in database for report downloads
                 if result.get("agent_response", {}).get("analysis"):
@@ -403,6 +456,26 @@ async def pagerduty_webhook(
                         await IncidentService.create(db_incident)
                     except Exception as db_err:
                         logger.warning(f"Could not store incident in DB: {db_err}")
+
+                    # Sync to dashboard table for frontend
+                    dashboard_incident_id = None
+                    try:
+                        dashboard_incident_id = await sync_incident_to_dashboard(
+                            source_id=incident.id,
+                            title=incident.title,
+                            description=incident.description or "",
+                            severity="high" if getattr(incident, 'urgency', 'medium') == 'high' else "medium",
+                            status="triggered",
+                            source="pagerduty",
+                            user_id=int(user_id) if user_id.isdigit() else None,
+                            metadata={
+                                "urgency": getattr(incident, 'urgency', 'medium'),
+                                "service": incident.service.name if hasattr(incident, 'service') and incident.service else "Unknown"
+                            }
+                        )
+                        logger.info(f"Synced incident to dashboard: {dashboard_incident_id}")
+                    except Exception as sync_err:
+                        logger.warning(f"Could not sync incident to dashboard: {sync_err}")
 
                     # Process with agent
                     logger.info(f"🤖 Triggering DreamOps agent for incident: {incident.id}")
