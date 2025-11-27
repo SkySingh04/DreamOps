@@ -1,0 +1,135 @@
+# DreamOps Alert Rules
+groups:
+  - name: dreamops.rules
+    rules:
+      # High incident count alert
+      - alert: HighActiveIncidents
+        expr: dreamops_incidents_active{severity="critical"} > 3
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High number of critical incidents"
+          description: "There are {{ $value }} active critical incidents"
+
+      # Agent not processing
+      - alert: AgentNotProcessing
+        expr: rate(dreamops_agent_analysis_total[5m]) == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AI Agent not processing incidents"
+          description: "No AI analysis has been performed in the last 10 minutes"
+
+      # High agent analysis duration
+      - alert: SlowAgentAnalysis
+        expr: histogram_quantile(0.95, rate(dreamops_agent_analysis_seconds_bucket[5m])) > 120
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AI Agent analysis is slow"
+          description: "95th percentile of analysis duration is {{ $value }}s"
+
+      # Integration unhealthy
+      - alert: IntegrationUnhealthy
+        expr: dreamops_integration_health == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Integration {{ $labels.integration_name }} is unhealthy"
+          description: "The {{ $labels.integration_name }} integration has been unhealthy for more than 2 minutes"
+
+      # High error rate on API
+      - alert: HighAPIErrorRate
+        expr: rate(dreamops_http_requests_total{status="error"}[5m]) / rate(dreamops_http_requests_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API error rate"
+          description: "API error rate is {{ $value | humanizePercentage }}"
+
+      # Slow HTTP requests
+      - alert: SlowHTTPRequests
+        expr: histogram_quantile(0.95, rate(dreamops_http_request_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow HTTP requests"
+          description: "95th percentile of HTTP request duration is {{ $value }}s"
+
+      # Database connection issues
+      - alert: DatabaseConnectionsLow
+        expr: dreamops_db_connections_active < 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low database connections"
+          description: "Only {{ $value }} active database connections"
+
+      # Webhook processing slow
+      - alert: SlowWebhookProcessing
+        expr: histogram_quantile(0.95, rate(dreamops_webhook_processing_seconds_bucket[5m])) > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow webhook processing"
+          description: "95th percentile of webhook processing is {{ $value }}s"
+
+      # Long incident resolution time
+      - alert: LongIncidentResolution
+        expr: histogram_quantile(0.50, rate(dreamops_incident_resolution_seconds_bucket[1h])) > 7200
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Long incident resolution times"
+          description: "Median incident resolution time is {{ $value | humanizeDuration }}"
+
+  - name: infrastructure.rules
+    rules:
+      # Backend down
+      - alert: BackendDown
+        expr: up{job="dreamops-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DreamOps backend is down"
+          description: "Backend has been unreachable for more than 1 minute"
+
+      # High CPU usage (if node exporter is deployed)
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value }}%"
+
+      # High memory usage (if node exporter is deployed)
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value }}%"
+
+      # Disk space low (if node exporter is deployed)
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk space low on {{ $labels.instance }}"
+          description: "Only {{ $value }}% disk space remaining"

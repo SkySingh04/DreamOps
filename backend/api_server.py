@@ -290,6 +290,13 @@ async def health_check():
     return health_status
 
 
+@app.get("/metrics")
+async def prometheus_metrics():
+    """Prometheus metrics endpoint."""
+    from src.oncall_agent.metrics import get_metrics
+    return get_metrics()
+
+
 @app.get("/integrations")
 async def get_mcp_integrations():
     """Get MCP integration status for frontend."""
