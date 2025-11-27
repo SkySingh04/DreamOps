@@ -173,7 +173,7 @@ Falls back to demo user (id="1") when not configured.
 | Service | URL |
 |---------|-----|
 | Backend API | `http://oncall.frai.pro:8001/api/v1/` |
-| PagerDuty Webhook | `http://oncall.frai.pro:8001/api/v1/webhook/pagerduty` |
+| PagerDuty Webhook | `http://oncall.frai.pro:8001/webhook/pagerduty` |
 | Health Check | `http://oncall.frai.pro:8001/health` |
 | API Docs | `http://oncall.frai.pro:8001/docs` |
 

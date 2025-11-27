@@ -344,7 +344,7 @@ The project uses Neon PostgreSQL with complete environment separation:
 1. Go to **Integrations** → **Generic Webhooks (v3)**
 2. Click **New Webhook**
 3. Configure:
-   - **Webhook URL**: `http://oncall.frai.pro:8001/api/v1/webhook/pagerduty`
+   - **Webhook URL**: `http://oncall.frai.pro:8001/webhook/pagerduty`
    - **Description**: DreamOps AI Agent Webhook
    - **Scope Type**: Service
    - **Scope**: Select your service (e.g., `frai-backend`)
@@ -356,6 +356,8 @@ The project uses Neon PostgreSQL with complete environment separation:
      - ✅ `incident.priority_updated`
 4. Click **Add Webhook**
 5. **Important**: Copy the webhook secret provided (optional, for signature verification)
+
+> ⚠️ **IMPORTANT**: The webhook URL is `/webhook/pagerduty` (NOT `/api/v1/webhook/pagerduty`). The webhook router is mounted at the root level, not under the `/api/v1` prefix.
 
 #### 3. Environment Variables
 
@@ -396,7 +398,7 @@ curl -X POST https://events.pagerduty.com/v2/enqueue \
 ##### Option B: Direct Webhook Test (V3 Format)
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/webhook/pagerduty \
+curl -X POST http://localhost:8000/webhook/pagerduty \
   -H "Content-Type: application/json" \
   -d '{
   "event": {
