@@ -60,6 +60,19 @@ async def lifespan(app: FastAPI):
     logger.info(f"PagerDuty webhook secret configured: {bool(config.pagerduty_webhook_secret)}")
     logger.info(f"Log level: {config.log_level}")
 
+    # Initialize database connection
+    postgres_url = config.postgres_url or config.database_url or getattr(config, 'neon_database_url', None)
+    if postgres_url:
+        try:
+            from src.oncall_agent.services.incident_service import get_pool
+            await get_pool()
+            logger.info("PostgreSQL database connection pool initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize database: {e}")
+            logger.warning("Continuing without database persistence - data will be lost on restart!")
+    else:
+        logger.warning("No PostgreSQL URL configured - incidents will not be persisted!")
+
     # Initialize webhook handler
     if config.pagerduty_enabled:
         from src.oncall_agent.api.webhooks import get_agent_trigger
@@ -102,6 +115,15 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down Oncall Agent API Server")
+
+    # Close database connection
+    try:
+        from src.oncall_agent.services.incident_service import close_pool
+        await close_pool()
+        logger.info("Database connection pool closed")
+    except Exception as e:
+        logger.error(f"Error closing database pool: {e}")
+
     if config.pagerduty_enabled:
         from src.oncall_agent.api.webhooks import agent_trigger
         if agent_trigger:
@@ -214,6 +236,20 @@ async def health_check():
             "pagerduty_enabled": config.pagerduty_enabled,
         }
     }
+
+    # Check database connection
+    try:
+        from src.oncall_agent.services.incident_service import check_database_health
+        db_health = await check_database_health()
+        health_status["checks"]["database"] = db_health["status"]
+        if db_health.get("connected"):
+            health_status["checks"]["incident_count"] = db_health.get("incident_count", 0)
+        elif db_health.get("error"):
+            health_status["checks"]["database_error"] = db_health["error"]
+            health_status["status"] = "degraded"
+    except Exception as e:
+        health_status["checks"]["database"] = f"error: {str(e)}"
+        health_status["status"] = "degraded"
 
     # Check agent if initialized
     if config.pagerduty_enabled:

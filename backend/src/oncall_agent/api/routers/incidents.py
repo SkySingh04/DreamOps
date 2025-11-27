@@ -19,15 +19,15 @@ from src.oncall_agent.api.schemas import (
     Severity,
     SuccessResponse,
 )
+from src.oncall_agent.services.incident_service import (
+    AnalysisService,
+    IncidentService,
+)
 from src.oncall_agent.services.slack_notifier import get_slack_notifier
 from src.oncall_agent.utils import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/incidents", tags=["incidents"])
-
-# In-memory storage for demo - replace with database
-INCIDENTS_DB: dict[str, Incident] = {}
-ANALYSIS_DB: dict[str, dict] = {}  # Store full AI analysis
 
 
 def create_mock_incident(data: IncidentCreate) -> Incident:
@@ -87,7 +87,7 @@ async def create_incident(
     try:
         # Create incident
         incident = create_mock_incident(incident_data)
-        INCIDENTS_DB[incident.id] = incident
+        await IncidentService.create(incident)
 
         logger.info(f"Created incident {incident.id}: {incident.title}")
 
@@ -122,40 +122,18 @@ async def list_incidents(
 ) -> IncidentList:
     """List incidents with filtering and pagination."""
     try:
-        # Filter incidents
-        filtered_incidents = list(INCIDENTS_DB.values())
+        # Get incidents from database
+        incidents, total = await IncidentService.list(
+            page=page,
+            page_size=page_size,
+            status=status,
+            severity=severity,
+            service=service,
+            sort_by=sort_by,
+            sort_order=sort_order
+        )
 
-        if status:
-            filtered_incidents = [i for i in filtered_incidents if i.status == status]
-        if severity:
-            filtered_incidents = [i for i in filtered_incidents if i.severity == severity]
-        if service:
-            filtered_incidents = [i for i in filtered_incidents if i.service_name == service]
-
-        # Sort incidents
-        reverse = sort_order == "desc"
-        if sort_by == "created_at":
-            filtered_incidents.sort(key=lambda x: x.created_at, reverse=reverse)
-        elif sort_by == "severity":
-            severity_order = {
-                Severity.CRITICAL: 0,
-                Severity.HIGH: 1,
-                Severity.MEDIUM: 2,
-                Severity.LOW: 3,
-                Severity.INFO: 4
-            }
-            filtered_incidents.sort(
-                key=lambda x: severity_order[x.severity],
-                reverse=not reverse  # Reverse logic for severity
-            )
-
-        # Paginate
-        total = len(filtered_incidents)
-        start_idx = (page - 1) * page_size
-        end_idx = start_idx + page_size
-
-        incidents = filtered_incidents[start_idx:end_idx]
-        has_next = end_idx < total
+        has_next = (page * page_size) < total
 
         return IncidentList(
             incidents=incidents,
@@ -174,10 +152,11 @@ async def get_incident(
     incident_id: str = Path(..., description="Incident ID")
 ) -> Incident:
     """Get incident details."""
-    if incident_id not in INCIDENTS_DB:
+    incident = await IncidentService.get(incident_id)
+    if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
 
-    return INCIDENTS_DB[incident_id]
+    return incident
 
 
 @router.patch("/{incident_id}", response_model=Incident)
@@ -186,10 +165,10 @@ async def update_incident(
     update_data: IncidentUpdate = ...
 ) -> Incident:
     """Update incident details."""
-    if incident_id not in INCIDENTS_DB:
+    incident = await IncidentService.get(incident_id)
+    if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
 
-    incident = INCIDENTS_DB[incident_id]
     now = datetime.now(UTC)
 
     # Update fields
@@ -227,6 +206,9 @@ async def update_incident(
 
     incident.updated_at = now
 
+    # Persist to database
+    await IncidentService.update(incident)
+
     logger.info(f"Updated incident {incident_id}")
     return incident
 
@@ -238,10 +220,9 @@ async def execute_action(
     background_tasks: BackgroundTasks = ...
 ) -> SuccessResponse:
     """Execute an action on an incident."""
-    if incident_id not in INCIDENTS_DB:
+    incident = await IncidentService.get(incident_id)
+    if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
-
-    incident = INCIDENTS_DB[incident_id]
 
     # Add action to incident
     incident.actions_taken.append(action)
@@ -252,6 +233,9 @@ async def execute_action(
         "automated": action.automated,
         "user": action.user or "system"
     })
+
+    # Persist to database
+    await IncidentService.update(incident)
 
     # Mock action execution
     background_tasks.add_task(
@@ -280,10 +264,9 @@ async def get_incident_timeline(
     incident_id: str = Path(..., description="Incident ID")
 ) -> JSONResponse:
     """Get incident timeline."""
-    if incident_id not in INCIDENTS_DB:
+    incident = await IncidentService.get(incident_id)
+    if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
-
-    incident = INCIDENTS_DB[incident_id]
 
     return JSONResponse(content={
         "incident_id": incident_id,
@@ -297,20 +280,25 @@ async def get_related_incidents(
     limit: int = Query(5, ge=1, le=20)
 ) -> JSONResponse:
     """Get related incidents."""
-    if incident_id not in INCIDENTS_DB:
+    incident = await IncidentService.get(incident_id)
+    if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
 
-    incident = INCIDENTS_DB[incident_id]
+    # Get related incidents by service name from database
+    all_incidents, _ = await IncidentService.list(
+        page=1,
+        page_size=limit + 1,  # +1 to exclude current incident
+        service=incident.service_name
+    )
 
-    # Mock related incidents
     related = []
-    for i, inc in enumerate(INCIDENTS_DB.values()):
-        if inc.id != incident_id and inc.service_name == incident.service_name:
+    for i, inc in enumerate(all_incidents):
+        if inc.id != incident_id:
             related.append({
                 "id": inc.id,
                 "title": inc.title,
-                "severity": inc.severity,
-                "status": inc.status,
+                "severity": inc.severity.value if hasattr(inc.severity, 'value') else str(inc.severity),
+                "status": inc.status.value if hasattr(inc.status, 'value') else str(inc.status),
                 "created_at": inc.created_at.isoformat(),
                 "similarity_score": 0.85 - (i * 0.1)  # Mock similarity
             })
@@ -328,12 +316,14 @@ async def get_incident_analysis(
     incident_id: str = Path(..., description="Incident ID")
 ) -> JSONResponse:
     """Get detailed AI analysis for an incident."""
-    if incident_id not in INCIDENTS_DB:
+    incident = await IncidentService.get(incident_id)
+    if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
 
     # Check if we have analysis data
-    if incident_id in ANALYSIS_DB:
-        return JSONResponse(content=ANALYSIS_DB[incident_id])
+    analysis = await AnalysisService.get(incident_id)
+    if analysis:
+        return JSONResponse(content=analysis)
 
     # Return placeholder if no analysis yet
     return JSONResponse(content={
@@ -349,10 +339,9 @@ async def acknowledge_incident(
     user: str = Query(..., description="User acknowledging the incident")
 ) -> SuccessResponse:
     """Acknowledge an incident."""
-    if incident_id not in INCIDENTS_DB:
+    incident = await IncidentService.get(incident_id)
+    if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
-
-    incident = INCIDENTS_DB[incident_id]
 
     if incident.status != IncidentStatus.TRIGGERED:
         raise HTTPException(
@@ -369,6 +358,9 @@ async def acknowledge_incident(
         "user": user
     })
 
+    # Persist to database
+    await IncidentService.update(incident)
+
     logger.info(f"Incident {incident_id} acknowledged by {user}")
 
     return SuccessResponse(
@@ -384,10 +376,9 @@ async def resolve_incident(
     user: str = Query(..., description="User resolving the incident")
 ) -> SuccessResponse:
     """Resolve an incident."""
-    if incident_id not in INCIDENTS_DB:
+    incident = await IncidentService.get(incident_id)
+    if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
-
-    incident = INCIDENTS_DB[incident_id]
 
     if incident.status == IncidentStatus.RESOLVED:
         raise HTTPException(
@@ -406,6 +397,9 @@ async def resolve_incident(
         "user": user
     })
 
+    # Persist to database
+    await IncidentService.update(incident)
+
     logger.info(f"Incident {incident_id} resolved by {user}")
 
     return SuccessResponse(
@@ -419,11 +413,11 @@ async def share_incident_to_slack(
     incident_id: str = Path(..., description="Incident ID")
 ) -> JSONResponse:
     """Share incident analysis to Slack."""
-    if incident_id not in INCIDENTS_DB:
+    incident = await IncidentService.get(incident_id)
+    if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
 
-    incident = INCIDENTS_DB[incident_id]
-    analysis = ANALYSIS_DB.get(incident_id, {})
+    analysis = await AnalysisService.get(incident_id) or {}
 
     # Get analysis text
     analysis_text = ""
@@ -474,11 +468,11 @@ async def download_incident_report_json(
     incident_id: str = Path(..., description="Incident ID")
 ) -> StreamingResponse:
     """Download incident report as JSON."""
-    if incident_id not in INCIDENTS_DB:
+    incident = await IncidentService.get(incident_id)
+    if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
 
-    incident = INCIDENTS_DB[incident_id]
-    analysis = ANALYSIS_DB.get(incident_id, {})
+    analysis = await AnalysisService.get(incident_id) or {}
 
     # Build comprehensive report
     report = {
@@ -535,11 +529,11 @@ async def download_incident_report_markdown(
     incident_id: str = Path(..., description="Incident ID")
 ) -> StreamingResponse:
     """Download incident report as Markdown (for PDF conversion)."""
-    if incident_id not in INCIDENTS_DB:
+    incident = await IncidentService.get(incident_id)
+    if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
 
-    incident = INCIDENTS_DB[incident_id]
-    analysis = ANALYSIS_DB.get(incident_id, {})
+    analysis = await AnalysisService.get(incident_id) or {}
 
     # Build Markdown report
     md_lines = [

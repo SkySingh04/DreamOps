@@ -17,9 +17,12 @@ from src.oncall_agent.api.models import (
     PagerDutyWebhookPayload,
 )
 from src.oncall_agent.api.oncall_agent_trigger import OncallAgentTrigger
-from src.oncall_agent.api.routers.incidents import ANALYSIS_DB, INCIDENTS_DB
 from src.oncall_agent.api.schemas import Incident, IncidentStatus, Severity
 from src.oncall_agent.config import get_config
+from src.oncall_agent.services.incident_service import (
+    AnalysisService,
+    IncidentService,
+)
 from src.oncall_agent.services.slack_notifier import get_slack_notifier
 from src.oncall_agent.utils import get_logger
 
@@ -149,10 +152,15 @@ async def pagerduty_webhook(
                     # Log incident resolution
                     logger.info(f"Incident {incident_id} resolved")
 
-                    # Update incident status in DB
-                    if incident_id in INCIDENTS_DB:
-                        INCIDENTS_DB[incident_id].status = IncidentStatus.RESOLVED
-                        INCIDENTS_DB[incident_id].resolved_at = datetime.now(UTC)
+                    # Update incident status in database
+                    try:
+                        existing_incident = await IncidentService.get(incident_id)
+                        if existing_incident:
+                            existing_incident.status = IncidentStatus.RESOLVED
+                            existing_incident.resolved_at = datetime.now(UTC)
+                            await IncidentService.update(existing_incident)
+                    except Exception as db_err:
+                        logger.warning(f"Could not update incident status in DB: {db_err}")
 
                     # Send resolution log to frontend
                     resolved_by = 'System'
@@ -242,8 +250,8 @@ async def pagerduty_webhook(
                     }
                 )
 
-                # Store incident in memory
-                memory_incident = Incident(
+                # Store incident in database
+                db_incident = Incident(
                     id=incident.id,
                     title=incident.title,
                     description=incident.description or "",
@@ -259,7 +267,10 @@ async def pagerduty_webhook(
                         "userId": int(user_id) if user_id.isdigit() else 1
                     }
                 )
-                INCIDENTS_DB[incident.id] = memory_incident
+                try:
+                    await IncidentService.create(db_incident)
+                except Exception as db_err:
+                    logger.warning(f"Could not store incident in DB: {db_err}")
 
                 # Process incident via agent
                 logger.info(f"🤖 Processing incident via agent: {incident.id}")
@@ -269,15 +280,19 @@ async def pagerduty_webhook(
                 # Log the result
                 logger.info(f"📊 Agent processing result: {result}")
 
-                # Store the analysis in ANALYSIS_DB for report downloads
+                # Store the analysis in database for report downloads
                 if result.get("agent_response", {}).get("analysis"):
-                    ANALYSIS_DB[incident.id] = {
+                    analysis_data = {
                         "analysis": result["agent_response"]["analysis"],
                         "ai_mode": result["agent_response"].get("ai_mode", "standard"),
                         "k8s_alert_type": result["agent_response"].get("k8s_alert_type"),
                         "context": result.get("context", {}),
                         "processed_at": datetime.now(UTC).isoformat()
                     }
+                    try:
+                        await AnalysisService.save(incident.id, analysis_data)
+                    except Exception as db_err:
+                        logger.warning(f"Could not store analysis in DB: {db_err}")
 
                 # Post analysis to Slack if configured
                 try:
@@ -368,8 +383,8 @@ async def pagerduty_webhook(
                         }
                     )
 
-                    # Store incident in memory
-                    memory_incident = Incident(
+                    # Store incident in database
+                    db_incident = Incident(
                         id=incident.id,
                         title=incident.title,
                         description=incident.description or "",
@@ -384,7 +399,10 @@ async def pagerduty_webhook(
                             "userId": int(user_id) if user_id.isdigit() else 1
                         }
                     )
-                    INCIDENTS_DB[incident.id] = memory_incident
+                    try:
+                        await IncidentService.create(db_incident)
+                    except Exception as db_err:
+                        logger.warning(f"Could not store incident in DB: {db_err}")
 
                     # Process with agent
                     logger.info(f"🤖 Triggering DreamOps agent for incident: {incident.id}")
