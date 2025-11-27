@@ -57,9 +57,17 @@ class GitHubAgnoMCPIntegration(MCPIntegration):
             self.mcp_tools = MCPTools(command, env=env)
             await self.mcp_tools.__aenter__()
 
-            # Create Agno agent with Claude or GPT-4
+            # Create Agno agent with LiteLLM, Claude, or GPT-4
             model = None
-            if self.global_config.anthropic_api_key:
+            if self.global_config.use_litellm and self.global_config.litellm_api_key:
+                self.logger.info(f"Using LiteLLM for GitHub agent at {self.global_config.litellm_api_base}")
+                model = OpenAIChat(
+                    id=self.global_config.claude_model,
+                    api_key=self.global_config.litellm_api_key,
+                    base_url=self.global_config.litellm_api_base
+                )
+            elif self.global_config.anthropic_api_key:
+                self.logger.info("Using direct Anthropic API for GitHub agent")
                 model = Claude(
                     api_key=self.global_config.anthropic_api_key,
                     id=self.global_config.claude_model
@@ -67,7 +75,7 @@ class GitHubAgnoMCPIntegration(MCPIntegration):
             elif os.getenv('OPENAI_API_KEY'):
                 model = OpenAIChat(id="gpt-4")
             else:
-                raise ValueError("No AI model API key found (Anthropic or OpenAI)")
+                raise ValueError("No AI model API key found (LiteLLM, Anthropic, or OpenAI)")
 
             self.agent = Agent(
                 name="GitHub Operations Agent",

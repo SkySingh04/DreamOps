@@ -10,6 +10,7 @@ from typing import Any
 
 from agno.agent import Agent
 from agno.models.anthropic import Claude
+from agno.models.openai import OpenAIChat
 from agno.tools.mcp import MCPTools
 
 from src.oncall_agent.config import get_config
@@ -59,10 +60,22 @@ class KubernetesAgnoMCPIntegration(MCPIntegration):
 
             self.logger.info("MCP tools connected, creating agent...")
 
+            # Choose model based on LiteLLM configuration
+            if self.config.use_litellm and self.config.litellm_api_key:
+                self.logger.info(f"Using LiteLLM for Agno agent at {self.config.litellm_api_base}")
+                model = OpenAIChat(
+                    id=self.config.claude_model,
+                    api_key=self.config.litellm_api_key,
+                    base_url=self.config.litellm_api_base
+                )
+            else:
+                self.logger.info("Using direct Anthropic API for Agno agent")
+                model = Claude(id=self.config.claude_model)
+
             # Create Agno agent with MCP tools
             self.agent = Agent(
                 name="KubernetesAgent",
-                model=Claude(id=self.config.claude_model),
+                model=model,
                 tools=[self.mcp_tools],
                 instructions=f"""
 You are a Kubernetes operations assistant with access to MCP tools for managing Kubernetes resources.

@@ -40,9 +40,15 @@ class AgnoGitHubAgent:
         self.mcp_tools = MCPTools(command, env=env)
         await self.mcp_tools.__aenter__()
 
-        # Create the Agno agent with appropriate model
+        # Create the Agno agent with appropriate model (LiteLLM, Anthropic, or OpenAI)
         model = None
-        if self.config.anthropic_api_key:
+        if self.config.use_litellm and self.config.litellm_api_key:
+            model = OpenAIChat(
+                id=self.config.claude_model,
+                api_key=self.config.litellm_api_key,
+                base_url=self.config.litellm_api_base
+            )
+        elif self.config.anthropic_api_key:
             model = Claude(
                 api_key=self.config.anthropic_api_key,
                 id=self.config.claude_model
@@ -50,7 +56,7 @@ class AgnoGitHubAgent:
         elif os.getenv('OPENAI_API_KEY'):
             model = OpenAIChat(id="gpt-4")
         else:
-            raise ValueError("No AI model API key found (Anthropic or OpenAI)")
+            raise ValueError("No AI model API key found (LiteLLM, Anthropic, or OpenAI)")
 
         self.agent = Agent(
             name="GitHub Operations Agent",
