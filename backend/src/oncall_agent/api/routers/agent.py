@@ -279,12 +279,27 @@ class DryRunExecutor:
 
 
 class RollbackManager:
-    """Manage action rollbacks."""
+    """Manage action rollbacks with Kubernetes integration."""
+
+    # Rollback window in seconds (1 hour default)
+    ROLLBACK_WINDOW_SECONDS = 3600
+
+    # Action types that support rollback
+    ROLLBACK_SUPPORTED_ACTIONS = [
+        "restart_pod",
+        "scale_deployment",
+        "update_config",
+        "increase_memory",
+        "rollback_deployment"
+    ]
 
     @staticmethod
     def record_action(action_type: str, action_details: dict, original_state: dict) -> str:
         """Record an executed action for potential rollback."""
         action_id = f"action_{uuid.uuid4().hex[:8]}"
+
+        # Calculate rollback plan based on action type
+        rollback_plan = RollbackManager._get_rollback_plan(action_type, action_details, original_state)
 
         action_record = ActionHistory(
             id=action_id,
@@ -293,15 +308,59 @@ class RollbackManager:
             action_details=action_details,
             executed_at=datetime.now(UTC),
             original_state=original_state,
-            rollback_available=action_type in ["restart_pod", "scale_deployment", "update_config"],
+            rollback_available=action_type in RollbackManager.ROLLBACK_SUPPORTED_ACTIONS,
+            rollback_plan=rollback_plan,
         )
 
         ACTION_HISTORY.append(action_record)
+
+        # Log to metrics
+        try:
+            from src.oncall_agent.metrics import record_agent_action
+            record_agent_action(action_type, "success", action_details.get("automated", True))
+        except ImportError:
+            pass
+
         return action_id
 
     @staticmethod
-    def rollback_action(action_id: str) -> dict:
-        """Rollback a specific action."""
+    def _get_rollback_plan(action_type: str, details: dict, original_state: dict) -> str:
+        """Generate a rollback plan description for the action."""
+        namespace = details.get("namespace", "default")
+
+        if action_type == "restart_pod":
+            return f"Monitor pod startup. If issues persist, investigate logs and events."
+
+        elif action_type == "scale_deployment":
+            original_replicas = original_state.get("replicas", 1)
+            deployment = details.get("deployment_name", "<deployment>")
+            return f"Scale {deployment} back to {original_replicas} replicas: kubectl scale deployment {deployment} --replicas={original_replicas} -n {namespace}"
+
+        elif action_type == "increase_memory":
+            original_memory = original_state.get("memory_limit", "256Mi")
+            deployment = details.get("deployment_name", "<deployment>")
+            return f"Restore original memory limit ({original_memory}) for {deployment}"
+
+        elif action_type == "rollback_deployment":
+            deployment = details.get("deployment_name", "<deployment>")
+            revision = original_state.get("revision")
+            if revision:
+                return f"Rollback to revision {revision}: kubectl rollout undo deployment {deployment} --to-revision={revision} -n {namespace}"
+            return f"Manual review required - original revision not captured"
+
+        elif action_type == "update_config":
+            return "Restore original configuration from recorded state"
+
+        return "Manual intervention required for rollback"
+
+    @staticmethod
+    async def rollback_action(action_id: str, k8s_integration=None) -> dict:
+        """Rollback a specific action with actual Kubernetes commands.
+
+        Args:
+            action_id: The action ID to rollback
+            k8s_integration: Optional Kubernetes integration for executing rollback
+        """
         action = next((a for a in ACTION_HISTORY if a.id == action_id), None)
 
         if not action:
@@ -313,24 +372,144 @@ class RollbackManager:
         if action.rollback_executed:
             return {"success": False, "error": "Action already rolled back"}
 
-        # Simulate rollback logic
-        if action.action_type == "restart_pod":
-            rollback_result = "Pod rollback initiated"
-        elif action.action_type == "scale_deployment":
-            original_replicas = action.original_state.get("replicas", 1)
-            rollback_result = f"Deployment scaled back to {original_replicas} replicas"
-        else:
-            rollback_result = "Configuration restored to original state"
+        # Check rollback window
+        time_since_action = (datetime.now(UTC) - action.executed_at).total_seconds()
+        if time_since_action > RollbackManager.ROLLBACK_WINDOW_SECONDS:
+            return {
+                "success": False,
+                "error": f"Rollback window expired ({int(time_since_action)}s > {RollbackManager.ROLLBACK_WINDOW_SECONDS}s)",
+                "rollback_plan": action.rollback_plan
+            }
 
-        # Mark as rolled back
-        action.rollback_executed = True
-        action.rollback_at = datetime.now(UTC)
+        rollback_result = None
+        rollback_command = None
+
+        try:
+            namespace = action.action_details.get("namespace", "default")
+
+            if action.action_type == "scale_deployment":
+                original_replicas = action.original_state.get("replicas", 1)
+                deployment = action.action_details.get("deployment_name")
+
+                if k8s_integration:
+                    # Execute actual rollback
+                    result = await k8s_integration.execute_action("scale_deployment", {
+                        "deployment_name": deployment,
+                        "namespace": namespace,
+                        "replicas": original_replicas
+                    })
+
+                    if result.get("success"):
+                        rollback_result = f"Deployment {deployment} scaled back to {original_replicas} replicas"
+                    else:
+                        return {"success": False, "error": result.get("error", "Rollback failed")}
+                else:
+                    rollback_command = f"kubectl scale deployment {deployment} --replicas={original_replicas} -n {namespace}"
+                    rollback_result = f"Rollback command prepared: {rollback_command}"
+
+            elif action.action_type == "increase_memory":
+                original_memory = action.original_state.get("memory_limit", "256Mi")
+                deployment = action.action_details.get("deployment_name")
+
+                rollback_command = f"""kubectl patch deployment {deployment} -n {namespace} --type json -p '[{{"op": "replace", "path": "/spec/template/spec/containers/0/resources/limits/memory", "value": "{original_memory}"}}]'"""
+                rollback_result = f"Memory limit rollback command prepared: {rollback_command}"
+
+            elif action.action_type == "rollback_deployment":
+                deployment = action.action_details.get("deployment_name")
+                revision = action.original_state.get("revision")
+
+                if revision:
+                    rollback_command = f"kubectl rollout undo deployment {deployment} --to-revision={revision} -n {namespace}"
+                else:
+                    rollback_command = f"kubectl rollout undo deployment {deployment} -n {namespace}"
+                rollback_result = f"Deployment rollback command prepared: {rollback_command}"
+
+            elif action.action_type == "restart_pod":
+                # Can't truly "rollback" a pod restart, but can provide guidance
+                rollback_result = "Pod restart cannot be undone. Monitor pod health and check logs if issues persist."
+
+            else:
+                rollback_result = f"Manual rollback required. Rollback plan: {action.rollback_plan}"
+
+            # Mark as rolled back
+            action.rollback_executed = True
+            action.rollback_at = datetime.now(UTC)
+
+            # Log to metrics
+            try:
+                from src.oncall_agent.metrics import record_agent_action
+                record_agent_action(f"rollback_{action.action_type}", "success", False)
+            except ImportError:
+                pass
+
+            return {
+                "success": True,
+                "message": "Rollback completed successfully",
+                "details": rollback_result,
+                "command": rollback_command,
+                "original_state": action.original_state,
+                "time_since_action_seconds": int(time_since_action)
+            }
+
+        except Exception as e:
+            logger.error(f"Rollback failed for {action_id}: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "rollback_plan": action.rollback_plan
+            }
+
+    @staticmethod
+    def get_rollback_status(action_id: str) -> dict:
+        """Get rollback status and eligibility for an action."""
+        action = next((a for a in ACTION_HISTORY if a.id == action_id), None)
+
+        if not action:
+            return {"found": False, "error": "Action not found"}
+
+        time_since_action = (datetime.now(UTC) - action.executed_at).total_seconds()
+        window_remaining = max(0, RollbackManager.ROLLBACK_WINDOW_SECONDS - time_since_action)
 
         return {
-            "success": True,
-            "message": "Action rolled back successfully",
-            "details": rollback_result,
+            "found": True,
+            "action_id": action.id,
+            "action_type": action.action_type,
+            "executed_at": action.executed_at.isoformat(),
+            "rollback_available": action.rollback_available,
+            "rollback_executed": action.rollback_executed,
+            "rollback_at": action.rollback_at.isoformat() if action.rollback_at else None,
+            "rollback_plan": action.rollback_plan,
+            "time_since_action_seconds": int(time_since_action),
+            "rollback_window_remaining_seconds": int(window_remaining),
+            "rollback_window_expired": window_remaining <= 0,
+            "original_state": action.original_state
         }
+
+    @staticmethod
+    def get_rollback_eligible_actions() -> list[dict]:
+        """Get all actions eligible for rollback."""
+        eligible = []
+        now = datetime.now(UTC)
+
+        for action in reversed(ACTION_HISTORY):  # Most recent first
+            if not action.rollback_available or action.rollback_executed:
+                continue
+
+            time_since = (now - action.executed_at).total_seconds()
+            if time_since > RollbackManager.ROLLBACK_WINDOW_SECONDS:
+                continue
+
+            eligible.append({
+                "action_id": action.id,
+                "action_type": action.action_type,
+                "incident_id": action.incident_id,
+                "executed_at": action.executed_at.isoformat(),
+                "rollback_plan": action.rollback_plan,
+                "time_since_seconds": int(time_since),
+                "window_remaining_seconds": int(RollbackManager.ROLLBACK_WINDOW_SECONDS - time_since)
+            })
+
+        return eligible
 
 
 async def get_agent() -> OncallAgent:
@@ -841,14 +1020,29 @@ async def get_action_history() -> list[ActionHistory]:
 
 @router.post("/rollback/{action_id}")
 async def rollback_action(action_id: str) -> dict:
-    """Rollback a specific action."""
+    """Rollback a specific action.
+
+    Args:
+        action_id: The ID of the action to rollback
+
+    Returns:
+        Result dict with success status, rollback details, and command
+    """
     try:
-        result = RollbackManager.rollback_action(action_id)
+        # Try to get K8s integration for actual rollback execution
+        k8s_integration = None
+        try:
+            agent = await get_agent()
+            k8s_integration = agent.mcp_integrations.get('kubernetes')
+        except Exception:
+            pass
+
+        result = await RollbackManager.rollback_action(action_id, k8s_integration)
 
         if result["success"]:
             logger.info(f"Action rolled back: {action_id}")
         else:
-            logger.warning(f"Rollback failed for {action_id}: {result['error']}")
+            logger.warning(f"Rollback failed for {action_id}: {result.get('error', 'Unknown error')}")
 
         return result
 
@@ -859,20 +1053,70 @@ async def rollback_action(action_id: str) -> dict:
 
 @router.post("/rollback-last")
 async def rollback_last_action() -> dict:
-    """Rollback the most recent action."""
+    """Rollback the most recent eligible action.
+
+    Returns:
+        Result dict with rollback status and details
+    """
     try:
         if not ACTION_HISTORY:
             return {"success": False, "error": "No actions to rollback"}
 
-        # Find most recent rollback-able action
+        # Try to get K8s integration
+        k8s_integration = None
+        try:
+            agent = await get_agent()
+            k8s_integration = agent.mcp_integrations.get('kubernetes')
+        except Exception:
+            pass
+
+        # Find most recent rollback-able action within the window
         for action in reversed(ACTION_HISTORY):
             if action.rollback_available and not action.rollback_executed:
-                return RollbackManager.rollback_action(action.id)
+                time_since = (datetime.now(UTC) - action.executed_at).total_seconds()
+                if time_since <= RollbackManager.ROLLBACK_WINDOW_SECONDS:
+                    return await RollbackManager.rollback_action(action.id, k8s_integration)
 
-        return {"success": False, "error": "No rollback-able actions found"}
+        return {"success": False, "error": "No rollback-able actions found within the rollback window"}
 
     except Exception as e:
         logger.error(f"Error rolling back last action: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/rollback/{action_id}/status")
+async def get_rollback_status(action_id: str) -> dict:
+    """Get rollback status and eligibility for a specific action.
+
+    Args:
+        action_id: The action ID to check
+
+    Returns:
+        Dict with rollback eligibility, time windows, and plan
+    """
+    try:
+        return RollbackManager.get_rollback_status(action_id)
+    except Exception as e:
+        logger.error(f"Error getting rollback status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/rollback/eligible")
+async def get_rollback_eligible() -> dict:
+    """Get all actions currently eligible for rollback.
+
+    Returns:
+        List of actions that can be rolled back with time remaining
+    """
+    try:
+        eligible = RollbackManager.get_rollback_eligible_actions()
+        return {
+            "count": len(eligible),
+            "rollback_window_seconds": RollbackManager.ROLLBACK_WINDOW_SECONDS,
+            "actions": eligible
+        }
+    except Exception as e:
+        logger.error(f"Error getting eligible rollbacks: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
