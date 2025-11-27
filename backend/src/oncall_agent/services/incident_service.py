@@ -127,7 +127,9 @@ def _incident_from_row(row: asyncpg.Record) -> Incident:
     ai_analysis = None
     if row['ai_analysis']:
         ai_data = row['ai_analysis'] if isinstance(row['ai_analysis'], dict) else json.loads(row['ai_analysis'])
-        ai_analysis = AIAnalysis(**ai_data)
+        # Handle JSON null case - ai_data could be None after json.loads("null")
+        if ai_data is not None and isinstance(ai_data, dict):
+            ai_analysis = AIAnalysis(**ai_data)
 
     actions = []
     if row['actions_taken']:
