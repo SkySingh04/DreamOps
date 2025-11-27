@@ -203,6 +203,82 @@ ssh root@37.27.115.235 "cd /opt/dreamops && docker compose logs backend --tail=5
 
 ---
 
+## ✅ LiteLLM Integration Complete (2025-11-28)
+
+**Migration from Direct Anthropic API to LiteLLM Proxy:**
+
+| Component | Status | Model |
+|-----------|--------|-------|
+| `agent.py` | ✅ Updated | Uses OpenAI SDK with LiteLLM base_url |
+| `agent_enhanced.py` | ✅ Updated | AsyncOpenAI client |
+| `enhanced_agent.py` | ✅ Updated | AsyncOpenAI client |
+| `kubernetes_agno_mcp.py` | ✅ Updated | Agno OpenAIChat with LiteLLM |
+| `github_agno_mcp.py` | ✅ Updated | Agno OpenAIChat with LiteLLM |
+| `agno_github_agent.py` | ✅ Updated | Agno OpenAIChat with LiteLLM |
+| Production Config | ✅ Deployed | `gpt-4o` via Azure fallback |
+
+**Configuration:**
+```env
+USE_LITELLM=true
+LITELLM_API_BASE=https://litellm.calmdune-a4eb8421.westus.azurecontainerapps.io
+LITELLM_API_KEY=sk--_QXj0LN6knTEtPI3N2StQ
+CLAUDE_MODEL=gpt-4o
+```
+
+**E2E Test Results (Playwright):**
+- AI Analysis: ✅ Working (85% confidence, 15.27s response time)
+- Model Used: gpt-4o via LiteLLM proxy
+- Real-time Logs: ✅ Streaming via SSE
+
+---
+
+## ✅ K8s MCP & Settings Persistence Verification (2025-11-28)
+
+### Proof #1: Kubernetes MCP Used for Triage
+
+**Backend Logs Evidence:**
+```
+kubernetes_agno_mcp - INFO - Executing action: identify_oom_pods
+kubernetes_agno_mcp - INFO - Query: Execute Kubernetes operation: identify_oom_pods with parameters: {'namespace': 'default', 'timeframe': '1h', 'dry_run': True}
+kubernetes_agno_mcp - INFO - Executing action: increase_memory_limits
+kubernetes_agno_mcp - INFO - Query: Execute Kubernetes operation: increase_memory_limits with parameters: {'namespace': 'default', 'increase_percentage': 50, 'target_deployments': 'auto-detect', 'dry_run': True}
+```
+
+**K8s-Specific Detection:**
+- Alert Type: `oom_kill` (correctly identified)
+- Resolution Actions Generated:
+  - `identify_oom_pods` (95% confidence)
+  - `increase_memory_limits` (90% confidence)
+  - `scale_deployment` (75% confidence)
+
+**K8s Commands in Analysis:**
+- `kubectl get pods -n production --field-selector=status.phase=Failed`
+- `kubectl patch deployment payment-service-deployment -n production`
+- `kubectl scale deployment payment-service-deployment -n production --replicas=3`
+- `kubectl top pod -n production`
+
+**Screenshots:** `.playwright-mcp/k8s-mcp-evidence.png`
+
+### Proof #2: AI Agent Settings Persistence
+
+**Settings Verified in UI:**
+- Mode: **Approval Mode** (Active)
+- Confidence Threshold: **70%**
+- Risk Matrix: Low (5 auto), Medium (5 approval), High (5 approval)
+
+**Applied to Agent Processing:**
+- `'ai_mode': 'plan'` - Confirms Approval Mode is active
+- `'auto_remediation_enabled': False` - Agent respects settings
+- Actions generated but NOT auto-executed (per Approval Mode)
+
+**Recent Configuration Changes Audit Trail:**
+- "Mode changed to approval" - Just now
+- "Confidence threshold updated to 70%" - 2 minutes ago
+
+**Screenshots:** `.playwright-mcp/ai-agents-settings-proof.png`
+
+---
+
 ## ✅ E2E Verification Complete (2025-11-26)
 
 **Verified with Playwright MCP:**
@@ -267,4 +343,4 @@ ssh root@37.27.115.235 "cd /opt/dreamops && docker compose logs backend --tail=5
 
 ---
 
-*Last Updated: 2025-11-27*
+*Last Updated: 2025-11-28*
