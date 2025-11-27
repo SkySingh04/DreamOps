@@ -6,18 +6,20 @@ from src.oncall_agent.config import get_config
 from src.oncall_agent.utils import get_logger
 
 logger = get_logger(__name__)
-config = get_config()
 
 
 class SlackNotifier:
     """Service for posting incident analysis to Slack as thread replies under PagerDuty messages."""
 
     def __init__(self):
+        # Load config fresh each time to pick up env var changes
+        config = get_config()
         self.webhook_url = config.slack_webhook_url
         self.bot_token = config.slack_bot_token
         self.channel = config.slack_channel
         self.channel_id = config.slack_channel_id
         self.enabled = config.slack_enabled or bool(self.webhook_url) or bool(self.bot_token)
+        logger.info(f"SlackNotifier initialized - enabled: {self.enabled}, bot_token: {'set' if self.bot_token else 'not set'}, channel_id: {self.channel_id}")
 
     async def find_pagerduty_message(self, incident_title: str, lookback_minutes: int = 60) -> str | None:
         """
@@ -115,6 +117,73 @@ class SlackNotifier:
             logger.error(f"Error searching for PagerDuty message: {e}")
             return None
 
+    def _extract_concise_analysis(self, analysis: str) -> dict:
+        """Extract cause, evidence, and fixes from verbose AI analysis."""
+        import re
+
+        result = {
+            "cause": "",
+            "evidence": "",
+            "fixes": []
+        }
+
+        # Try to extract root cause
+        cause_patterns = [
+            r"root cause[:\s]+([^\n]+)",
+            r"cause[:\s]+([^\n]+)",
+            r"oom[_-]?kill",
+            r"crashloop",
+            r"memory leak",
+            r"cpu throttl",
+        ]
+
+        analysis_lower = analysis.lower()
+
+        # Detect cause type
+        if "oom" in analysis_lower or "out-of-memory" in analysis_lower or "out of memory" in analysis_lower:
+            result["cause"] = "Out of Memory (OOM) - Pod exceeded memory limits"
+        elif "crashloop" in analysis_lower:
+            result["cause"] = "CrashLoopBackOff - Pod repeatedly crashing"
+        elif "imagepull" in analysis_lower:
+            result["cause"] = "ImagePullBackOff - Cannot pull container image"
+        elif "cpu" in analysis_lower and "throttl" in analysis_lower:
+            result["cause"] = "CPU Throttling - Pod hitting CPU limits"
+        else:
+            # Try to find a cause statement
+            for line in analysis.split('\n'):
+                if 'cause' in line.lower() and len(line) < 200:
+                    result["cause"] = line.strip().lstrip('-*').strip()
+                    break
+
+        if not result["cause"]:
+            result["cause"] = "Issue detected - see full analysis"
+
+        # Extract kubectl commands as fixes
+        kubectl_pattern = r'kubectl\s+[^\n`]+(?=[\n`]|$)'
+        commands = re.findall(kubectl_pattern, analysis)
+
+        # Clean up and dedupe commands
+        seen = set()
+        for cmd in commands[:3]:  # Max 3 commands
+            cmd = cmd.strip().rstrip('`').strip()
+            if cmd and cmd not in seen and len(cmd) < 150:
+                seen.add(cmd)
+                result["fixes"].append(cmd)
+
+        # If no kubectl commands, try to find action items
+        if not result["fixes"]:
+            action_patterns = [
+                r"increase.*memory",
+                r"scale.*deployment",
+                r"restart.*pod",
+                r"check.*logs",
+            ]
+            for pattern in action_patterns:
+                if re.search(pattern, analysis_lower):
+                    result["fixes"].append(pattern.replace(".*", " ").title())
+
+        return result
+
     async def post_incident_analysis(
         self,
         incident_id: str,
@@ -142,106 +211,54 @@ class SlackNotifier:
             logger.warning("Slack notifications disabled - no credentials configured")
             return {"success": False, "error": "Slack not configured"}
 
+        # Log current config for debugging
+        logger.info(f"Slack config - bot_token: {'set' if self.bot_token else 'not set'}, channel_id: {self.channel_id}")
+
         # Try to find the PagerDuty message to reply to
         if not thread_ts and auto_find_thread:
             thread_ts = await self.find_pagerduty_message(title)
             if thread_ts:
                 logger.info(f"Will reply to PagerDuty thread: {thread_ts}")
 
-        # Map severity to emoji and color
-        severity_map = {
-            "critical": {"emoji": ":red_circle:", "color": "#FF0000"},
-            "high": {"emoji": ":large_orange_circle:", "color": "#FF8C00"},
-            "medium": {"emoji": ":large_yellow_circle:", "color": "#FFD700"},
-            "low": {"emoji": ":large_blue_circle:", "color": "#0000FF"},
-            "info": {"emoji": ":white_circle:", "color": "#808080"},
-        }
+        # Map severity to emoji
+        severity_emoji = {
+            "critical": ":red_circle:",
+            "high": ":large_orange_circle:",
+            "medium": ":large_yellow_circle:",
+            "low": ":large_blue_circle:",
+        }.get(severity.lower(), ":white_circle:")
 
-        sev_info = severity_map.get(severity.lower(), severity_map["info"])
+        # Extract concise info from verbose analysis
+        extracted = self._extract_concise_analysis(analysis)
 
-        # Truncate analysis if too long for Slack (max ~3000 chars per block)
-        max_analysis_length = 2900
-        if len(analysis) > max_analysis_length:
-            analysis = analysis[:max_analysis_length] + "\n\n... [truncated - view full report in dashboard]"
-
-        # Build Slack message payload - simplified for thread replies
-        if thread_ts:
-            # Simpler format for thread replies
-            blocks = [
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f":robot_face: *AI Analysis Complete*\n\n{analysis}"
-                    }
-                },
-                {
-                    "type": "context",
-                    "elements": [
-                        {
-                            "type": "mrkdwn",
-                            "text": f"Severity: {sev_info['emoji']} {severity.upper()} | ID: `{incident_id}`"
-                        }
-                    ]
-                }
-            ]
+        # Build concise message
+        fixes_text = ""
+        if extracted["fixes"]:
+            fixes_text = "\n".join([f"• `{fix}`" for fix in extracted["fixes"]])
         else:
-            # Full format for standalone messages
-            blocks = [
-                {
-                    "type": "header",
-                    "text": {
-                        "type": "plain_text",
-                        "text": f"{sev_info['emoji']} AI Analysis: {title[:100]}",
-                        "emoji": True
-                    }
-                },
-                {
-                    "type": "section",
-                    "fields": [
-                        {
-                            "type": "mrkdwn",
-                            "text": f"*Incident ID:*\n`{incident_id}`"
-                        },
-                        {
-                            "type": "mrkdwn",
-                            "text": f"*Severity:*\n{severity.upper()}"
-                        }
-                    ]
-                },
-                {
-                    "type": "divider"
-                },
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"*AI Analysis:*\n{analysis}"
-                    }
-                },
-                {
-                    "type": "divider"
-                },
-                {
-                    "type": "context",
-                    "elements": [
-                        {
-                            "type": "mrkdwn",
-                            "text": ":robot_face: Generated by DreamOps AI Agent"
-                        }
-                    ]
-                }
-            ]
+            fixes_text = "• Check full analysis in dashboard"
 
-        payload = {
-            "blocks": blocks,
-            "attachments": [
-                {
-                    "color": sev_info["color"],
-                    "fallback": f"AI Analysis: {title}"
+        # Concise format for Slack
+        message_text = f""":robot_face: *AI Analysis*
+
+*Cause:* {extracted["cause"]}
+
+*Recommended Fixes:*
+{fixes_text}
+
+View full report: oncall.frai.pro"""
+
+        blocks = [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": message_text
                 }
-            ]
-        }
+            }
+        ]
+
+        payload = {"blocks": blocks}
 
         # Add thread_ts for threading
         if thread_ts:
@@ -364,13 +381,6 @@ class SlackNotifier:
         return {"success": False, "error": "No Slack credentials configured"}
 
 
-# Singleton instance
-_slack_notifier: SlackNotifier | None = None
-
-
 def get_slack_notifier() -> SlackNotifier:
-    """Get the Slack notifier singleton."""
-    global _slack_notifier
-    if _slack_notifier is None:
-        _slack_notifier = SlackNotifier()
-    return _slack_notifier
+    """Get a fresh Slack notifier instance with latest config."""
+    return SlackNotifier()
