@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 
 from .agent import PagerAlert
 from .agent_executor import AgentExecutor
@@ -45,8 +46,18 @@ class EnhancedOncallAgent:
         self.ai_mode = ai_mode
         self.mcp_integrations: dict[str, MCPIntegration] = {}
 
-        # Initialize Anthropic client
-        self.anthropic_client = AsyncAnthropic(api_key=self.config.anthropic_api_key)
+        # Initialize LLM client (LiteLLM or direct Anthropic)
+        if self.config.use_litellm and self.config.litellm_api_key:
+            self.logger.info(f"Using LiteLLM at {self.config.litellm_api_base}")
+            self.openai_client = AsyncOpenAI(
+                api_key=self.config.litellm_api_key,
+                base_url=self.config.litellm_api_base
+            )
+            self.use_litellm = True
+        else:
+            self.logger.info("Using direct Anthropic API")
+            self.anthropic_client = AsyncAnthropic(api_key=self.config.anthropic_api_key)
+            self.use_litellm = False
 
         # Initialize Kubernetes MCP integration
         self.k8s_mcp = None
@@ -118,11 +129,11 @@ class EnhancedOncallAgent:
 
     async def handle_pager_alert(self, alert: PagerAlert, auto_remediate: bool = None) -> dict[str, Any]:
         """Handle an incoming pager alert with optional auto-remediation.
-        
+
         Args:
             alert: The pager alert to handle
             auto_remediate: Override for auto-remediation (None uses mode default)
-            
+
         Returns:
             Complete incident response with analysis and execution results
         """
@@ -494,35 +505,44 @@ class EnhancedOncallAgent:
         return context
 
     async def _get_ai_analysis(self, alert: PagerAlert, context: dict[str, Any]) -> str:
-        """Get AI analysis from Claude."""
+        """Get AI analysis from Claude (via LiteLLM or direct Anthropic)."""
         prompt = f"""
         Analyze this production incident and provide actionable insights.
-        
+
         Alert Details:
         - Service: {alert.service_name}
         - Severity: {alert.severity}
         - Description: {alert.description}
         - Metadata: {alert.metadata}
-        
+
         Context Gathered:
         {self._format_context_for_prompt(context)}
-        
+
         Provide:
         1. Root cause analysis
         2. Impact assessment
         3. Immediate remediation steps (be specific with commands)
         4. Long-term recommendations
-        
+
         Current AI Mode: {self.ai_mode.value}
         """
 
-        response = await self.anthropic_client.messages.create(
-            model=self.config.claude_model,
-            max_tokens=2000,
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        return response.content[0].text if response.content else "No analysis available"
+        if self.use_litellm:
+            # Use OpenAI-compatible API via LiteLLM
+            response = await self.openai_client.chat.completions.create(
+                model=self.config.claude_model,
+                max_tokens=2000,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            return response.choices[0].message.content if response.choices else "No analysis available"
+        else:
+            # Use direct Anthropic API
+            response = await self.anthropic_client.messages.create(
+                model=self.config.claude_model,
+                max_tokens=2000,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            return response.content[0].text if response.content else "No analysis available"
 
     def _format_context_for_prompt(self, context: dict[str, Any]) -> str:
         """Format context for Claude prompt."""

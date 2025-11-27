@@ -9,8 +9,13 @@ from pydantic_settings import BaseSettings
 class Config(BaseSettings):
     """Application configuration."""
 
-    # Anthropic/Claude settings
-    anthropic_api_key: str = Field(..., env="ANTHROPIC_API_KEY")
+    # LiteLLM settings (primary)
+    litellm_api_base: str = Field("https://litellm.calmdune-a4eb8421.westus.azurecontainerapps.io", env="LITELLM_API_BASE")
+    litellm_api_key: str = Field("", env="LITELLM_API_KEY")
+    use_litellm: bool = Field(True, env="USE_LITELLM")
+
+    # Anthropic/Claude settings (fallback)
+    anthropic_api_key: str = Field("", env="ANTHROPIC_API_KEY")
     claude_model: str = Field("claude-sonnet-4-5-20250929", env="CLAUDE_MODEL")
 
     # Agent settings

@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 from .config import get_config
@@ -74,9 +75,8 @@ class OncallAgent:
         # Initialize Kubernetes integration if enabled
         if self.config.k8s_enabled:
             # Use MCP-only integration - no kubectl subprocess calls
-            contexts = []
             if self.config.k8s_context and self.config.k8s_context != "default":
-                contexts = [self.config.k8s_context]
+                pass
 
             enable_destructive = self.config.k8s_enable_destructive_operations
 
@@ -142,7 +142,16 @@ class OncallAgent:
         self.mcp_integrations[name] = integration
 
     async def _get_llm_client(self):
-        """Get the appropriate LLM client based on active API key."""
+        """Get the appropriate LLM client based on config (LiteLLM or direct API)."""
+        # Check if LiteLLM is enabled and configured
+        if self.config.use_litellm and self.config.litellm_api_key:
+            self.logger.debug(f"Using LiteLLM at {self.config.litellm_api_base}")
+            return ("litellm", AsyncOpenAI(
+                api_key=self.config.litellm_api_key,
+                base_url=self.config.litellm_api_base
+            ))
+
+        # Fall back to BYOK system
         active_key = self.api_key_service.get_active_key()
         if not active_key:
             raise ValueError("No active API key configured")
@@ -150,55 +159,65 @@ class OncallAgent:
         key_id, api_key, provider = active_key
 
         if provider == LLMProvider.ANTHROPIC:
-            return AsyncAnthropic(api_key=api_key)
+            return ("anthropic", AsyncAnthropic(api_key=api_key))
         elif provider == LLMProvider.OPENAI:
-            # For future OpenAI support
-            raise NotImplementedError("OpenAI provider not yet implemented")
+            return ("openai", AsyncOpenAI(api_key=api_key))
         else:
             raise ValueError(f"Unsupported provider: {provider}")
 
     async def _call_llm_with_fallback(self, prompt: str, max_retries: int = 3):
         """Call LLM with automatic fallback to next available key on failure."""
         last_error = None
+        key_id = None
 
         for attempt in range(max_retries):
             try:
-                # Get current active key info
-                active_key = self.api_key_service.get_active_key()
-                if not active_key:
-                    raise ValueError("No active API key available")
+                # Get the client (returns tuple of provider_type and client)
+                provider_type, client = await self._get_llm_client()
 
-                key_id, _, provider = active_key
+                # Get key_id for usage tracking (only if not using LiteLLM)
+                if provider_type != "litellm":
+                    active_key = self.api_key_service.get_active_key()
+                    if active_key:
+                        key_id = active_key[0]
 
-                # Get the client
-                client = await self._get_llm_client()
-
-                # Make the API call
-                if provider == LLMProvider.ANTHROPIC:
+                # Make the API call based on provider type
+                if provider_type in ("litellm", "openai"):
+                    # OpenAI-compatible API (LiteLLM or direct OpenAI)
+                    response = await client.chat.completions.create(
+                        model=self.config.claude_model,
+                        max_tokens=2000,
+                        messages=[{"role": "user", "content": prompt}]
+                    )
+                    # Record successful usage (if tracking)
+                    if key_id:
+                        self.api_key_service.record_key_usage(key_id, success=True)
+                    return response
+                elif provider_type == "anthropic":
+                    # Direct Anthropic API
                     response = await client.messages.create(
                         model=self.config.claude_model,
                         max_tokens=2000,
                         messages=[{"role": "user", "content": prompt}]
                     )
-
                     # Record successful usage
-                    self.api_key_service.record_key_usage(key_id, success=True)
-
+                    if key_id:
+                        self.api_key_service.record_key_usage(key_id, success=True)
                     return response
                 else:
-                    raise NotImplementedError(f"Provider {provider} not implemented")
+                    raise NotImplementedError(f"Provider {provider_type} not implemented")
 
             except Exception as e:
                 last_error = e
                 error_msg = str(e)
                 self.logger.error(f"LLM API call failed: {error_msg}")
 
-                # Record failure
-                if active_key:
+                # Record failure (if tracking)
+                if key_id:
                     self.api_key_service.record_key_usage(key_id, success=False, error=error_msg)
 
-                # Try to switch to fallback key
-                if "rate" in error_msg.lower() or "limit" in error_msg.lower():
+                # Try to switch to fallback key (only if not using LiteLLM)
+                if provider_type != "litellm" and ("rate" in error_msg.lower() or "limit" in error_msg.lower()):
                     self.logger.info("Rate limit detected, switching to fallback key")
                     next_key = self.api_key_service.get_next_fallback_key()
                     if next_key:
@@ -207,7 +226,7 @@ class OncallAgent:
 
                 # If not rate limit or no fallback, retry with same key
                 if attempt < max_retries - 1:
-                    self.logger.info(f"Retrying with same key (attempt {attempt + 2}/{max_retries})")
+                    self.logger.info(f"Retrying (attempt {attempt + 2}/{max_retries})")
                     await asyncio.sleep(2 ** attempt)  # Exponential backoff
 
         # All attempts failed

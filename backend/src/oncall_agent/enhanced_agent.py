@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 from .config import get_config
@@ -33,8 +34,18 @@ class EnhancedOncallAgent:
         self.logger = logging.getLogger(__name__)
         self.mcp_integrations: dict[str, MCPIntegration] = {}
 
-        # Initialize Anthropic client
-        self.anthropic_client = AsyncAnthropic(api_key=self.config.anthropic_api_key)
+        # Initialize LLM client (LiteLLM or direct Anthropic)
+        if self.config.use_litellm and self.config.litellm_api_key:
+            self.logger.info(f"Using LiteLLM at {self.config.litellm_api_base}")
+            self.openai_client = AsyncOpenAI(
+                api_key=self.config.litellm_api_key,
+                base_url=self.config.litellm_api_base
+            )
+            self.use_litellm = True
+        else:
+            self.logger.info("Using direct Anthropic API")
+            self.anthropic_client = AsyncAnthropic(api_key=self.config.anthropic_api_key)
+            self.use_litellm = False
 
         # Auto-register Enhanced GitHub MCP integration if configured
         if self.config.github_token:
@@ -173,58 +184,67 @@ class EnhancedOncallAgent:
         # Create comprehensive prompt with all available data
         prompt = f"""
         You are an expert site reliability engineer analyzing a critical production incident.
-        
+
         INCIDENT DETAILS:
         - Alert ID: {alert.alert_id}
-        - Service: {alert.service_name} 
+        - Service: {alert.service_name}
         - Severity: {alert.severity}
         - Description: {alert.description}
         - Alert Time: {alert.timestamp}
         - Incident Start: {full_analysis.get('incident_time', 'Unknown')}
-        
+
         COMPLETE REPOSITORY ANALYSIS:
         {self._format_analysis_for_claude(full_analysis)}
-        
-        Based on this comprehensive analysis of the entire codebase, recent changes, deployment history, 
+
+        Based on this comprehensive analysis of the entire codebase, recent changes, deployment history,
         and commit timeline, provide:
-        
+
         1. ROOT CAUSE ANALYSIS:
            - Most likely root cause based on evidence
            - Contributing factors
            - Timeline correlation analysis
-        
+
         2. IMPACT ASSESSMENT:
            - Affected components and services
            - User impact estimation
            - Business impact assessment
-        
+
         3. IMMEDIATE RESOLUTION STRATEGY:
            - Step-by-step resolution plan
            - Rollback considerations
            - Risk mitigation steps
-        
+
         4. CODE-LEVEL INSIGHTS:
            - Specific files/functions to investigate
            - Code patterns that may be causing issues
            - Configuration or dependency problems
-        
+
         5. PREVENTION ANALYSIS:
            - How this could have been prevented
            - Monitoring improvements needed
            - Process improvements required
-        
-        Be specific and actionable. Reference actual file names, commit hashes, and code patterns 
+
+        Be specific and actionable. Reference actual file names, commit hashes, and code patterns
         from the analysis data.
         """
 
         try:
-            response = await self.anthropic_client.messages.create(
-                model=self.config.claude_model,
-                max_tokens=2000,
-                messages=[{"role": "user", "content": prompt}]
-            )
-
-            analysis_text = response.content[0].text if response.content else "Analysis failed"
+            if self.use_litellm:
+                # Use OpenAI-compatible API via LiteLLM
+                response = await self.openai_client.chat.completions.create(
+                    model=self.config.claude_model,
+                    max_tokens=2000,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                analysis_text = response.choices[0].message.content if response.choices else "Analysis failed"
+            else:
+                # Use direct Anthropic API
+                response = await self.anthropic_client.messages.create(
+                    model=self.config.claude_model,
+                    max_tokens=2000,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                analysis_text = response.content[0].text if response.content else "Analysis failed"
 
             return {
                 "claude_analysis": analysis_text,
