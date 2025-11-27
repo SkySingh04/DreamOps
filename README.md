@@ -443,6 +443,64 @@ ports:
 >   -d '{"routing_key":"<YOUR_KEY>","event_action":"resolve","dedup_key":"<SAME_DEDUP_KEY>"}'
 > ```
 
+### Slack Integration
+
+DreamOps posts AI analysis results as thread replies under PagerDuty incident messages in Slack.
+
+#### 1. Create Slack App
+
+1. Go to https://api.slack.com/apps
+2. Click "Create New App" → "From scratch"
+3. Name it (e.g., "ONCALL AI") and select your workspace
+
+#### 2. Configure Bot Permissions
+
+In **OAuth & Permissions**, add these Bot Token Scopes:
+- `chat:write` - Post messages
+- `channels:history` - Read channel messages (to find PagerDuty threads)
+
+#### 3. Install App to Workspace
+
+Click "Install to Workspace" and authorize the app.
+
+#### 4. Get Credentials
+
+- **Bot Token**: Copy from OAuth & Permissions page (starts with `xoxb-`)
+- **Channel ID**: Right-click channel → View details → Copy Channel ID
+
+#### 5. Invite Bot to Channel
+
+In Slack, go to your incidents channel and type:
+```
+/invite @ONCALL AI
+```
+
+#### 6. Configure Environment Variables
+
+```env
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/xxx  # Optional fallback
+SLACK_BOT_TOKEN=xoxb-your-bot-token
+SLACK_CHANNEL_ID=C07A3NZAYSD
+SLACK_CHANNEL=#oncall
+SLACK_ENABLED=true
+```
+
+#### Slack Notification Format
+
+When AI analysis completes, a concise thread reply is posted:
+
+```
+🤖 AI Analysis
+
+Cause: Out of Memory (OOM) - Pod exceeded memory limits
+
+Recommended Fixes:
+• kubectl get pods -n production --field-selector=status.phase=Failed
+• kubectl rollout restart deployment api-service -n production
+
+View Full Report (clickable link to incident)
+```
+
 ### Kubernetes Integration Options
 
 DreamOps offers multiple ways to integrate with Kubernetes clusters:

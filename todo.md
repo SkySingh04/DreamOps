@@ -86,27 +86,36 @@ curl -X POST https://events.pagerduty.com/v2/enqueue \
 - `backend/src/oncall_agent/services/incident_service.py` - New database service
 - `backend/api_server.py` - Database initialization on startup
 
-### 6. Slack Notifications (Analysis Complete) ✅ (Code Ready)
+### 6. Slack Notifications (Analysis Complete) ✅ COMPLETE
 - [x] Add Slack webhook integration for analysis notifications
 - [x] Send notification when AI analysis completes
 - [x] Include incident summary, severity, and recommended actions
-- [ ] Configure Slack webhook URL in environment variables
+- [x] Configure Slack webhook URL in environment variables
+- [x] Post as thread reply under PagerDuty incident message
+- [x] Concise format with cause, fixes, and report link
 
-**Status:** Code is fully implemented in `slack_notifier.py` and called from `webhooks.py`.
-Just need to set `SLACK_WEBHOOK_URL` environment variable on production.
+**Status:** Fully deployed and working! Slack notifications post as thread replies under PagerDuty messages.
 
-**Notification Template:**
+**Configuration (Production):**
+```env
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/xxx
+SLACK_BOT_TOKEN=xoxb-xxx
+SLACK_CHANNEL_ID=C07A3NZAYSD
+SLACK_CHANNEL=#oncall
+SLACK_ENABLED=true
 ```
-🚨 *Incident Analysis Complete*
-*Title:* {incident_title}
-*Severity:* {severity}
-*AI Confidence:* {confidence_score}%
 
-📋 *Summary:* {brief_summary}
+**Notification Format:**
+```
+🤖 AI Analysis
 
-🔧 *Recommended Action:* {top_recommendation}
+Cause: Out of Memory (OOM) - Pod exceeded memory limits
 
-🔗 <{dashboard_url}|View Full Analysis>
+Recommended Fixes:
+• kubectl get pods -n production --field-selector=status.phase=Failed
+• kubectl rollout restart deployment api-service -n production
+
+View Full Report (link to incident)
 ```
 
 ### 7. OAuth Reverse Proxy Authentication ✅
