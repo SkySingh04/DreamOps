@@ -12,9 +12,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build the application with empty NEXT_PUBLIC_API_URL for production
-# This makes the frontend use relative paths (nginx proxies /api to backend)
-ENV NEXT_PUBLIC_API_URL=""
+# Build the application with internal Docker network URL for production
+# Next.js rewrites will proxy API calls to the backend service
+ENV NEXT_PUBLIC_API_URL="http://backend:8000"
 RUN npm run build
 
 # Production image
