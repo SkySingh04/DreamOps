@@ -1325,3 +1325,38 @@ async def get_k8s_audit_log(limit: int = 100) -> list[dict]:
     except Exception as e:
         logger.error(f"Error getting K8s audit log: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# AI Agent Toggle Endpoints
+
+@router.get("/toggle")
+async def get_ai_agent_toggle() -> dict:
+    """Get current AI agent enabled/disabled status."""
+    try:
+        enabled = await agent_settings_service.is_ai_agent_enabled(user_id=1)
+        return {
+            "ai_agent_enabled": enabled,
+            "message": "AI agent is enabled" if enabled else "AI agent is disabled"
+        }
+    except Exception as e:
+        logger.error(f"Error getting AI agent toggle status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/toggle")
+async def set_ai_agent_toggle(enabled: bool) -> dict:
+    """Enable or disable the AI agent. When disabled, incoming incidents will not trigger AI analysis or Slack notifications."""
+    try:
+        settings = await agent_settings_service.set_ai_agent_enabled(user_id=1, enabled=enabled)
+
+        action = "enabled" if enabled else "disabled"
+        logger.info(f"AI agent has been {action}")
+
+        return {
+            "success": True,
+            "ai_agent_enabled": settings.get("ai_agent_enabled", enabled),
+            "message": f"AI agent has been {action}. {'Incoming incidents will now trigger AI analysis.' if enabled else 'Incoming incidents will be logged but not analyzed.'}"
+        }
+    except Exception as e:
+        logger.error(f"Error toggling AI agent: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

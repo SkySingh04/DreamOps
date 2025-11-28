@@ -221,6 +221,17 @@ class APIClient {
     });
   }
 
+  // AI Agent Toggle endpoints
+  async getAIAgentToggle(): Promise<APIResponse<{ ai_agent_enabled: boolean; message: string }>> {
+    return this.request<{ ai_agent_enabled: boolean; message: string }>('/api/v1/agent/toggle');
+  }
+
+  async setAIAgentToggle(enabled: boolean): Promise<APIResponse<{ success: boolean; ai_agent_enabled: boolean; message: string }>> {
+    return this.request<{ success: boolean; ai_agent_enabled: boolean; message: string }>(`/api/v1/agent/toggle?enabled=${enabled}`, {
+      method: 'POST',
+    });
+  }
+
   // Safety and Risk Management endpoints
   async getSafetyConfig(): Promise<APIResponse<any>> {
     return this.request<any>('/api/v1/agent/safety-config');
@@ -578,6 +589,7 @@ export const queryKeys = {
   availableIntegrations: ['available-integrations'],
   integration: (id: string) => ['integration', id],
   aiConfig: ['ai-agent', 'config'],
+  aiAgentToggle: ['ai-agent', 'toggle'],
   agentStatus: ['ai-agent', 'status'],
   safetyConfig: ['ai-agent', 'safety-config'],
   pendingApprovals: ['ai-agent', 'approvals', 'pending'],

@@ -14,6 +14,7 @@ DEFAULT_SETTINGS = {
     "mode": "plan",
     "confidence_threshold": 70,
     "auto_execute_enabled": False,
+    "ai_agent_enabled": True,  # Master toggle for AI agent analysis
     "approval_required_for": ["medium", "high"],
     "risk_matrix": {
         "low": [
@@ -62,6 +63,7 @@ async def init_agent_settings_table() -> None:
                 mode VARCHAR(20) NOT NULL DEFAULT 'plan',
                 confidence_threshold INTEGER NOT NULL DEFAULT 70,
                 auto_execute_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                ai_agent_enabled BOOLEAN NOT NULL DEFAULT TRUE,
                 approval_required_for JSONB NOT NULL DEFAULT '["medium", "high"]',
                 risk_matrix JSONB NOT NULL DEFAULT '{}',
                 notification_preferences JSONB NOT NULL DEFAULT '{}',
@@ -72,6 +74,18 @@ async def init_agent_settings_table() -> None:
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
+        """)
+        # Add ai_agent_enabled column if it doesn't exist (migration for existing tables)
+        await conn.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'agent_settings' AND column_name = 'ai_agent_enabled'
+                ) THEN
+                    ALTER TABLE agent_settings ADD COLUMN ai_agent_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+                END IF;
+            END $$;
         """)
         logger.info("Agent settings table initialized")
 
@@ -92,6 +106,7 @@ async def get_agent_settings(user_id: int = 1) -> dict[str, Any]:
                     "mode": row["mode"],
                     "confidence_threshold": row["confidence_threshold"],
                     "auto_execute_enabled": row["auto_execute_enabled"],
+                    "ai_agent_enabled": row.get("ai_agent_enabled", True),  # Default to True if column missing
                     "approval_required_for": json.loads(row["approval_required_for"]) if isinstance(row["approval_required_for"], str) else row["approval_required_for"],
                     "risk_matrix": json.loads(row["risk_matrix"]) if isinstance(row["risk_matrix"], str) else row["risk_matrix"],
                     "notification_preferences": json.loads(row["notification_preferences"]) if isinstance(row["notification_preferences"], str) else row["notification_preferences"],
@@ -122,14 +137,15 @@ async def save_agent_settings(user_id: int, settings: dict[str, Any]) -> dict[st
             await conn.execute("""
                 INSERT INTO agent_settings (
                     user_id, mode, confidence_threshold, auto_execute_enabled,
-                    approval_required_for, risk_matrix, notification_preferences,
+                    ai_agent_enabled, approval_required_for, risk_matrix, notification_preferences,
                     dry_run_mode, safety_confidence_threshold, risk_tolerance,
                     emergency_stop_active, updated_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
                 ON CONFLICT (user_id) DO UPDATE SET
                     mode = EXCLUDED.mode,
                     confidence_threshold = EXCLUDED.confidence_threshold,
                     auto_execute_enabled = EXCLUDED.auto_execute_enabled,
+                    ai_agent_enabled = EXCLUDED.ai_agent_enabled,
                     approval_required_for = EXCLUDED.approval_required_for,
                     risk_matrix = EXCLUDED.risk_matrix,
                     notification_preferences = EXCLUDED.notification_preferences,
@@ -143,6 +159,7 @@ async def save_agent_settings(user_id: int, settings: dict[str, Any]) -> dict[st
                 settings.get("mode", DEFAULT_SETTINGS["mode"]),
                 settings.get("confidence_threshold", DEFAULT_SETTINGS["confidence_threshold"]),
                 settings.get("auto_execute_enabled", DEFAULT_SETTINGS["auto_execute_enabled"]),
+                settings.get("ai_agent_enabled", DEFAULT_SETTINGS["ai_agent_enabled"]),
                 json.dumps(settings.get("approval_required_for", DEFAULT_SETTINGS["approval_required_for"])),
                 json.dumps(settings.get("risk_matrix", DEFAULT_SETTINGS["risk_matrix"])),
                 json.dumps(settings.get("notification_preferences", DEFAULT_SETTINGS["notification_preferences"])),
@@ -218,3 +235,20 @@ async def update_safety_settings(user_id: int, updates: dict[str, Any]) -> dict[
         await update_agent_settings(user_id, settings_updates)
 
     return await get_safety_settings(user_id)
+
+
+async def is_ai_agent_enabled(user_id: int = 1) -> bool:
+    """Check if AI agent is enabled for a user. Used by webhook handler."""
+    try:
+        settings = await get_agent_settings(user_id)
+        return settings.get("ai_agent_enabled", True)
+    except Exception as e:
+        logger.error(f"Error checking ai_agent_enabled: {e}")
+        # Default to enabled on error to avoid blocking incidents
+        return True
+
+
+async def set_ai_agent_enabled(user_id: int, enabled: bool) -> dict[str, Any]:
+    """Toggle AI agent on/off for a user."""
+    logger.info(f"Setting ai_agent_enabled={enabled} for user {user_id}")
+    return await update_agent_settings(user_id, {"ai_agent_enabled": enabled})

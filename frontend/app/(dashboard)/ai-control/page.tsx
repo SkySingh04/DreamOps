@@ -292,6 +292,12 @@ export default function AIControlPage() {
   const [isRiskMatrixEditorOpen, setIsRiskMatrixEditorOpen] = useState(false);
   const queryClient = useQueryClient();
 
+  // Fetch AI Agent toggle state
+  const { data: toggleData, isLoading: toggleLoading } = useQuery({
+    queryKey: queryKeys.aiAgentToggle,
+    queryFn: () => apiClient.getAIAgentToggle(),
+  });
+
   // Fetch AI config
   const { data: configData, isLoading } = useQuery({
     queryKey: queryKeys.aiConfig,
@@ -350,6 +356,29 @@ export default function AIControlPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.safetyConfig });
       toast.success('Safety configuration updated');
+    },
+  });
+
+  // Toggle AI agent mutation
+  const toggleAIAgentMutation = useMutation({
+    mutationFn: (enabled: boolean) => apiClient.setAIAgentToggle(enabled),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.aiAgentToggle });
+      const enabled = result.data?.ai_agent_enabled;
+      if (enabled) {
+        toast.success('AI Agent Enabled', {
+          description: 'Incoming incidents will now trigger AI analysis and Slack notifications',
+        });
+      } else {
+        toast.warning('AI Agent Disabled', {
+          description: 'Incoming incidents will be logged but not analyzed',
+        });
+      }
+    },
+    onError: (error) => {
+      toast.error('Failed to toggle AI agent', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
     },
   });
 
@@ -557,6 +586,47 @@ export default function AIControlPage() {
           </AlertDescription>
         </Alert>
       )}
+
+      {/* AI Agent Master Toggle */}
+      <Card className={toggleData?.data?.ai_agent_enabled ? 'border-green-200 bg-green-50/30' : 'border-red-200 bg-red-50/30'}>
+        <CardContent className="py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className={`p-3 rounded-full ${toggleData?.data?.ai_agent_enabled ? 'bg-green-100' : 'bg-red-100'}`}>
+                {toggleData?.data?.ai_agent_enabled ? (
+                  <Bot className="h-8 w-8 text-green-600" />
+                ) : (
+                  <StopCircle className="h-8 w-8 text-red-600" />
+                )}
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold">
+                  AI Agent Service
+                </h2>
+                <p className="text-muted-foreground">
+                  {toggleData?.data?.ai_agent_enabled
+                    ? 'Active - Incoming incidents will trigger AI analysis and Slack notifications'
+                    : 'Disabled - Incidents are logged but not analyzed'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <Badge
+                variant={toggleData?.data?.ai_agent_enabled ? 'default' : 'destructive'}
+                className="text-sm px-3 py-1"
+              >
+                {toggleData?.data?.ai_agent_enabled ? 'ENABLED' : 'DISABLED'}
+              </Badge>
+              <Switch
+                checked={toggleData?.data?.ai_agent_enabled ?? true}
+                onCheckedChange={(checked) => toggleAIAgentMutation.mutate(checked)}
+                disabled={toggleAIAgentMutation.isPending || toggleLoading}
+                className="scale-125"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* AI Mode Selection */}
       <Card>

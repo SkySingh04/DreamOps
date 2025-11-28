@@ -29,6 +29,7 @@ from src.oncall_agent.services.incident_service import (
     IncidentService,
 )
 from src.oncall_agent.services.slack_notifier import get_slack_notifier
+from src.oncall_agent.services import agent_settings_service
 from src.oncall_agent.utils import get_logger
 
 router = APIRouter(prefix="/webhook", tags=["webhooks"])
@@ -305,6 +306,34 @@ async def pagerduty_webhook(
                 except Exception as sync_err:
                     logger.warning(f"Could not sync incident to dashboard: {sync_err}")
 
+                # Check if AI agent is enabled before processing
+                ai_agent_enabled = await agent_settings_service.is_ai_agent_enabled(user_id=1)
+
+                if not ai_agent_enabled:
+                    # AI agent is disabled - log incident but skip analysis
+                    logger.info(f"⏸️ AI agent is DISABLED - skipping analysis for incident: {incident.id}")
+                    await log_stream_manager.log_info(
+                        f"⏸️ AI agent is disabled - incident logged but not analyzed",
+                        incident_id=incident.id,
+                        stage="ai_agent_disabled",
+                        metadata={
+                            "ai_agent_enabled": False,
+                            "reason": "AI agent toggle is OFF"
+                        }
+                    )
+
+                    # Return early with skipped status
+                    return JSONResponse(
+                        status_code=200,
+                        content={
+                            "status": "skipped",
+                            "event_type": v3_payload.event.event_type,
+                            "incident_id": incident.id,
+                            "message": "AI agent is disabled. Incident logged but not analyzed.",
+                            "ai_agent_enabled": False
+                        }
+                    )
+
                 # Process incident via agent
                 logger.info(f"🤖 Processing incident via agent: {incident.id}")
                 result = await trigger.trigger_oncall_agent(incident)
@@ -476,6 +505,24 @@ async def pagerduty_webhook(
                         logger.info(f"Synced incident to dashboard: {dashboard_incident_id}")
                     except Exception as sync_err:
                         logger.warning(f"Could not sync incident to dashboard: {sync_err}")
+
+                    # Check if AI agent is enabled before processing
+                    ai_agent_enabled = await agent_settings_service.is_ai_agent_enabled(user_id=1)
+
+                    if not ai_agent_enabled:
+                        # AI agent is disabled - log incident but skip analysis
+                        logger.info(f"⏸️ AI agent is DISABLED - skipping analysis for incident: {incident.id}")
+                        await log_stream_manager.log_info(
+                            f"⏸️ AI agent is disabled - incident logged but not analyzed",
+                            incident_id=incident.id,
+                            stage="ai_agent_disabled",
+                            metadata={
+                                "ai_agent_enabled": False,
+                                "reason": "AI agent toggle is OFF"
+                            }
+                        )
+                        # Continue to next message, don't process this one
+                        continue
 
                     # Process with agent
                     logger.info(f"🤖 Triggering DreamOps agent for incident: {incident.id}")
