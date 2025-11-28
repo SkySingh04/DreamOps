@@ -501,6 +501,54 @@ Recommended Fixes:
 View Full Report (clickable link to incident)
 ```
 
+### AI Agent Toggle (Enable/Disable AI Analysis)
+
+> ⚠️ **CURRENT STATUS: AI Agent is DISABLED on production via `AI_AGENT_ENABLED=false`**
+>
+> The AI agent is currently disabled. Incoming PagerDuty incidents are logged but NOT analyzed.
+> To enable AI analysis, set `AI_AGENT_ENABLED=true` in the environment.
+
+DreamOps provides two ways to control the AI agent:
+
+#### 1. Environment Variable (Server-level, takes precedence)
+
+```env
+# Master toggle - set to false to completely disable AI analysis
+# When false, all incoming incidents are logged but NOT analyzed (no AI, no Slack messages)
+AI_AGENT_ENABLED=false  # Currently DISABLED on production
+```
+
+**This is the recommended way to disable AI in production.** It takes precedence over the UI toggle.
+
+#### 2. UI Toggle (Per-user, in AI Control Panel)
+
+The AI Control Panel (`/ai-control`) has a toggle switch to enable/disable AI analysis.
+However, if `AI_AGENT_ENABLED=false` is set in the environment, the UI toggle has no effect.
+
+#### Toggle Priority
+
+1. **ENV VAR (`AI_AGENT_ENABLED`)** - Checked first, takes precedence
+2. **UI Toggle** - Only checked if ENV VAR is true
+
+#### API Endpoints
+
+```bash
+# Check current status
+curl http://oncall.frai.pro:8001/api/v1/agent/toggle
+
+# Response shows both ENV VAR and UI status:
+# {
+#   "ai_agent_enabled": false,        # Effective status
+#   "env_var_enabled": false,         # AI_AGENT_ENABLED env var
+#   "ui_toggle_enabled": true,        # UI toggle (ignored if env_var_enabled is false)
+#   "disabled_by": "environment_variable",
+#   "message": "AI agent is DISABLED via environment variable (AI_AGENT_ENABLED=false)"
+# }
+
+# Toggle via UI (won't work if ENV VAR is false)
+curl -X POST "http://oncall.frai.pro:8001/api/v1/agent/toggle?enabled=true"
+```
+
 ### Kubernetes Integration Options
 
 DreamOps offers multiple ways to integrate with Kubernetes clusters:

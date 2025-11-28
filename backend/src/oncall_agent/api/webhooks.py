@@ -307,30 +307,57 @@ async def pagerduty_webhook(
                     logger.warning(f"Could not sync incident to dashboard: {sync_err}")
 
                 # Check if AI agent is enabled before processing
-                ai_agent_enabled = await agent_settings_service.is_ai_agent_enabled(user_id=1)
-
-                if not ai_agent_enabled:
-                    # AI agent is disabled - log incident but skip analysis
-                    logger.info(f"⏸️ AI agent is DISABLED - skipping analysis for incident: {incident.id}")
+                # ENV VAR takes precedence over UI toggle
+                env_ai_enabled = config.ai_agent_enabled
+                if not env_ai_enabled:
+                    # AI agent is disabled via ENV VAR - this takes precedence
+                    logger.info(f"⏸️ AI agent is DISABLED via ENV VAR (AI_AGENT_ENABLED=false) - skipping analysis for incident: {incident.id}")
                     await log_stream_manager.log_info(
-                        f"⏸️ AI agent is disabled - incident logged but not analyzed",
+                        f"⏸️ AI agent is disabled via environment variable - incident logged but not analyzed",
                         incident_id=incident.id,
                         stage="ai_agent_disabled",
                         metadata={
                             "ai_agent_enabled": False,
-                            "reason": "AI agent toggle is OFF"
+                            "reason": "AI_AGENT_ENABLED environment variable is set to false"
                         }
                     )
 
-                    # Return early with skipped status
                     return JSONResponse(
                         status_code=200,
                         content={
                             "status": "skipped",
                             "event_type": v3_payload.event.event_type,
                             "incident_id": incident.id,
-                            "message": "AI agent is disabled. Incident logged but not analyzed.",
-                            "ai_agent_enabled": False
+                            "message": "AI agent is disabled via environment variable. Incident logged but not analyzed.",
+                            "ai_agent_enabled": False,
+                            "disabled_by": "environment_variable"
+                        }
+                    )
+
+                # Check UI toggle (only if ENV VAR allows)
+                ui_ai_enabled = await agent_settings_service.is_ai_agent_enabled(user_id=1)
+                if not ui_ai_enabled:
+                    # AI agent is disabled via UI toggle
+                    logger.info(f"⏸️ AI agent is DISABLED via UI toggle - skipping analysis for incident: {incident.id}")
+                    await log_stream_manager.log_info(
+                        f"⏸️ AI agent is disabled via UI toggle - incident logged but not analyzed",
+                        incident_id=incident.id,
+                        stage="ai_agent_disabled",
+                        metadata={
+                            "ai_agent_enabled": False,
+                            "reason": "AI agent toggle is OFF in UI"
+                        }
+                    )
+
+                    return JSONResponse(
+                        status_code=200,
+                        content={
+                            "status": "skipped",
+                            "event_type": v3_payload.event.event_type,
+                            "incident_id": incident.id,
+                            "message": "AI agent is disabled via UI toggle. Incident logged but not analyzed.",
+                            "ai_agent_enabled": False,
+                            "disabled_by": "ui_toggle"
                         }
                     )
 
@@ -507,21 +534,33 @@ async def pagerduty_webhook(
                         logger.warning(f"Could not sync incident to dashboard: {sync_err}")
 
                     # Check if AI agent is enabled before processing
-                    ai_agent_enabled = await agent_settings_service.is_ai_agent_enabled(user_id=1)
-
-                    if not ai_agent_enabled:
-                        # AI agent is disabled - log incident but skip analysis
-                        logger.info(f"⏸️ AI agent is DISABLED - skipping analysis for incident: {incident.id}")
+                    # ENV VAR takes precedence over UI toggle
+                    env_ai_enabled = config.ai_agent_enabled
+                    if not env_ai_enabled:
+                        logger.info(f"⏸️ AI agent is DISABLED via ENV VAR (AI_AGENT_ENABLED=false) - skipping analysis for incident: {incident.id}")
                         await log_stream_manager.log_info(
-                            f"⏸️ AI agent is disabled - incident logged but not analyzed",
+                            f"⏸️ AI agent is disabled via environment variable - incident logged but not analyzed",
                             incident_id=incident.id,
                             stage="ai_agent_disabled",
                             metadata={
                                 "ai_agent_enabled": False,
-                                "reason": "AI agent toggle is OFF"
+                                "reason": "AI_AGENT_ENABLED environment variable is set to false"
                             }
                         )
-                        # Continue to next message, don't process this one
+                        continue
+
+                    ui_ai_enabled = await agent_settings_service.is_ai_agent_enabled(user_id=1)
+                    if not ui_ai_enabled:
+                        logger.info(f"⏸️ AI agent is DISABLED via UI toggle - skipping analysis for incident: {incident.id}")
+                        await log_stream_manager.log_info(
+                            f"⏸️ AI agent is disabled via UI toggle - incident logged but not analyzed",
+                            incident_id=incident.id,
+                            stage="ai_agent_disabled",
+                            metadata={
+                                "ai_agent_enabled": False,
+                                "reason": "AI agent toggle is OFF in UI"
+                            }
+                        )
                         continue
 
                     # Process with agent

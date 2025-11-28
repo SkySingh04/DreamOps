@@ -1331,12 +1331,37 @@ async def get_k8s_audit_log(limit: int = 100) -> list[dict]:
 
 @router.get("/toggle")
 async def get_ai_agent_toggle() -> dict:
-    """Get current AI agent enabled/disabled status."""
+    """Get current AI agent enabled/disabled status.
+
+    Shows both ENV VAR status (AI_AGENT_ENABLED) and UI toggle status.
+    ENV VAR takes precedence - if false, AI agent is disabled regardless of UI toggle.
+    """
     try:
-        enabled = await agent_settings_service.is_ai_agent_enabled(user_id=1)
+        from src.oncall_agent.config import get_config
+        config = get_config()
+
+        env_enabled = config.ai_agent_enabled
+        ui_enabled = await agent_settings_service.is_ai_agent_enabled(user_id=1)
+
+        # Effective status: both must be true
+        effective_enabled = env_enabled and ui_enabled
+
+        if not env_enabled:
+            message = "AI agent is DISABLED via environment variable (AI_AGENT_ENABLED=false)"
+            disabled_by = "environment_variable"
+        elif not ui_enabled:
+            message = "AI agent is DISABLED via UI toggle"
+            disabled_by = "ui_toggle"
+        else:
+            message = "AI agent is ENABLED"
+            disabled_by = None
+
         return {
-            "ai_agent_enabled": enabled,
-            "message": "AI agent is enabled" if enabled else "AI agent is disabled"
+            "ai_agent_enabled": effective_enabled,
+            "env_var_enabled": env_enabled,
+            "ui_toggle_enabled": ui_enabled,
+            "disabled_by": disabled_by,
+            "message": message
         }
     except Exception as e:
         logger.error(f"Error getting AI agent toggle status: {e}")
@@ -1345,17 +1370,39 @@ async def get_ai_agent_toggle() -> dict:
 
 @router.post("/toggle")
 async def set_ai_agent_toggle(enabled: bool) -> dict:
-    """Enable or disable the AI agent. When disabled, incoming incidents will not trigger AI analysis or Slack notifications."""
-    try:
-        settings = await agent_settings_service.set_ai_agent_enabled(user_id=1, enabled=enabled)
+    """Enable or disable the AI agent via UI toggle.
 
-        action = "enabled" if enabled else "disabled"
-        logger.info(f"AI agent has been {action}")
+    NOTE: This only controls the UI toggle. If AI_AGENT_ENABLED env var is false,
+    the AI agent will remain disabled regardless of this setting.
+    """
+    try:
+        from src.oncall_agent.config import get_config
+        config = get_config()
+
+        env_enabled = config.ai_agent_enabled
+
+        settings = await agent_settings_service.set_ai_agent_enabled(user_id=1, enabled=enabled)
+        ui_enabled = settings.get("ai_agent_enabled", enabled)
+
+        # Effective status
+        effective_enabled = env_enabled and ui_enabled
+
+        if not env_enabled:
+            message = f"UI toggle set to {'enabled' if enabled else 'disabled'}, but AI agent remains DISABLED because AI_AGENT_ENABLED env var is false."
+            logger.warning(f"AI agent UI toggle changed but env var override is active")
+        elif enabled:
+            message = "AI agent has been enabled. Incoming incidents will now trigger AI analysis."
+        else:
+            message = "AI agent has been disabled. Incoming incidents will be logged but not analyzed."
+
+        logger.info(f"AI agent UI toggle set to {enabled} (effective: {effective_enabled})")
 
         return {
             "success": True,
-            "ai_agent_enabled": settings.get("ai_agent_enabled", enabled),
-            "message": f"AI agent has been {action}. {'Incoming incidents will now trigger AI analysis.' if enabled else 'Incoming incidents will be logged but not analyzed.'}"
+            "ai_agent_enabled": effective_enabled,
+            "env_var_enabled": env_enabled,
+            "ui_toggle_enabled": ui_enabled,
+            "message": message
         }
     except Exception as e:
         logger.error(f"Error toggling AI agent: {e}")

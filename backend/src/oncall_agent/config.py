@@ -82,6 +82,10 @@ class Config(BaseSettings):
     slack_channel_id: str | None = Field(None, env="SLACK_CHANNEL_ID")
     slack_enabled: bool = Field(False, env="SLACK_ENABLED")
 
+    # AI Agent Master Toggle (env var override - takes precedence over UI toggle)
+    # Set to false to completely disable AI analysis on incoming incidents
+    ai_agent_enabled: bool = Field(True, env="AI_AGENT_ENABLED")
+
     # API server settings
     api_host: str = Field("0.0.0.0", env="API_HOST")
     api_port: int = Field(8000, env="API_PORT")
