@@ -148,11 +148,15 @@ async def lifespan(app: FastAPI):
 
 
 # Create FastAPI app
+# NOTE: redirect_slashes=False prevents 307 redirects that cause CORS issues
+# When frontend calls /api/v1/agent/config/ FastAPI would redirect to /api/v1/agent/config
+# but the redirect loses the port, going to port 80 (K3s ingress) instead of 8001
 app = FastAPI(
     title="DreamOps API",
     description="Dream easy while AI takes your on-call duty. AI-powered incident response platform with PagerDuty integration.",
     version="0.1.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    redirect_slashes=False
 )
 
 # Add CORS middleware
