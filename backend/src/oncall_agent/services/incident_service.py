@@ -9,8 +9,8 @@ import asyncpg
 from src.oncall_agent.api.schemas import (
     ActionType,
     AIAnalysis,
-    IncidentAction,
     Incident,
+    IncidentAction,
     IncidentStatus,
     Severity,
 )
@@ -44,7 +44,7 @@ async def get_pool() -> asyncpg.Pool:
         if not postgres_url:
             raise RuntimeError("No PostgreSQL connection URL configured (POSTGRES_URL, DATABASE_URL, or NEON_DATABASE_URL)")
 
-        logger.info(f"Connecting to PostgreSQL database...")
+        logger.info("Connecting to PostgreSQL database...")
         _pool = await asyncpg.create_pool(
             postgres_url,
             min_size=2,
@@ -102,6 +102,16 @@ async def _init_tables() -> None:
                 analysis_data JSONB NOT NULL,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 updated_at TIMESTAMPTZ
+            )
+        """)
+
+        # Create incident_reports table
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS incident_reports (
+                incident_id TEXT PRIMARY KEY REFERENCES incidents(id) ON DELETE CASCADE,
+                json_report JSONB NOT NULL,
+                markdown_report TEXT NOT NULL,
+                generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         """)
 
@@ -444,16 +454,6 @@ class ReportService:
         now = datetime.now(UTC)
 
         async with pool.acquire() as conn:
-            # Create reports table if not exists
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS incident_reports (
-                    incident_id TEXT PRIMARY KEY REFERENCES incidents(id) ON DELETE CASCADE,
-                    json_report JSONB NOT NULL,
-                    markdown_report TEXT NOT NULL,
-                    generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                )
-            """)
-
             await conn.execute(
                 """
                 INSERT INTO incident_reports (incident_id, json_report, markdown_report, generated_at)
@@ -563,13 +563,13 @@ class ReportService:
                     md_lines.append(ai_data['analysis'])
                 else:
                     if ai_data.get('summary'):
-                        md_lines.extend([f"### Summary", "", ai_data['summary'], ""])
+                        md_lines.extend(["### Summary", "", ai_data['summary'], ""])
                     if ai_data.get('root_cause'):
-                        md_lines.extend([f"### Root Cause", "", ai_data['root_cause'], ""])
+                        md_lines.extend(["### Root Cause", "", ai_data['root_cause'], ""])
                     if ai_data.get('impact_assessment'):
-                        md_lines.extend([f"### Impact Assessment", "", ai_data['impact_assessment'], ""])
+                        md_lines.extend(["### Impact Assessment", "", ai_data['impact_assessment'], ""])
                     if ai_data.get('recommended_actions'):
-                        md_lines.extend([f"### Recommended Actions", ""])
+                        md_lines.extend(["### Recommended Actions", ""])
                         for i, action in enumerate(ai_data['recommended_actions'], 1):
                             if isinstance(action, dict):
                                 md_lines.append(f"{i}. **{action.get('action', 'Unknown')}**: {action.get('reason', '')}")
@@ -617,23 +617,31 @@ class ReportService:
     @staticmethod
     async def get_saved_report(incident_id: str) -> dict[str, Any] | None:
         """Get saved reports for an incident."""
-        pool = await get_pool()
+        try:
+            pool = await get_pool()
 
-        async with pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT json_report, markdown_report, generated_at FROM incident_reports WHERE incident_id = $1",
-                incident_id
-            )
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT json_report, markdown_report, generated_at FROM incident_reports WHERE incident_id = $1",
+                    incident_id
+                )
 
-        if not row:
+            if not row:
+                return None
+
+            json_data = row['json_report']
+            return {
+                "json_report": json_data if isinstance(json_data, dict) else json.loads(json_data),
+                "markdown_report": row['markdown_report'],
+                "generated_at": row['generated_at'].isoformat() if row['generated_at'] else None,
+            }
+        except asyncpg.exceptions.UndefinedTableError:
+            # Table doesn't exist yet - return None and let caller generate on-the-fly
+            logger.warning(f"incident_reports table does not exist, returning None for incident {incident_id}")
             return None
-
-        json_data = row['json_report']
-        return {
-            "json_report": json_data if isinstance(json_data, dict) else json.loads(json_data),
-            "markdown_report": row['markdown_report'],
-            "generated_at": row['generated_at'].isoformat() if row['generated_at'] else None,
-        }
+        except Exception as e:
+            logger.error(f"Error getting saved report for {incident_id}: {e}")
+            return None
 
 
 async def check_database_health() -> dict[str, Any]:
@@ -642,7 +650,7 @@ async def check_database_health() -> dict[str, Any]:
         pool = await get_pool()
         async with pool.acquire() as conn:
             # Test query
-            result = await conn.fetchval("SELECT 1")
+            await conn.fetchval("SELECT 1")
 
             # Get some stats
             incident_count = await conn.fetchval("SELECT COUNT(*) FROM incidents")
