@@ -1,6 +1,6 @@
 """Integration management API endpoints."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Body, File, Form, HTTPException, Path, Query, UploadFile
@@ -94,19 +94,23 @@ async def list_integrations(user_id: str = Query(None, description="User ID to c
     try:
         integrations = []
         agent = await get_agent_instance()
-        
+
         # Import alert tracking to check user plan
-        from src.oncall_agent.api.routers.alert_tracking import USER_DATA, INTEGRATION_RESTRICTIONS
         import os
-        
+
+        from src.oncall_agent.api.routers.alert_tracking import (
+            INTEGRATION_RESTRICTIONS,
+            USER_DATA,
+        )
+
         # Check if in development mode
         is_dev_mode = os.getenv("NEXT_PUBLIC_DEV_MODE", "false").lower() == "true" or os.getenv("NODE_ENV", "") == "development"
-        
+
         # Get user's plan if user_id provided
         user_plan = "pro" if is_dev_mode else "free"  # Default to pro in dev mode
         if user_id and user_id in USER_DATA:
             user_plan = USER_DATA[user_id].get("account_tier", user_plan)
-        
+
         # Get allowed integrations for the plan
         allowed_integrations = INTEGRATION_RESTRICTIONS.get(user_plan, [])
 
@@ -120,7 +124,12 @@ async def list_integrations(user_id: str = Query(None, description="User ID to c
                 integration = agent.mcp_integrations[name]
                 is_healthy = await integration.health_check()
                 status = IntegrationStatus.CONNECTED if is_healthy else IntegrationStatus.ERROR
-                capabilities_dict = await integration.get_capabilities()
+                # Handle both sync and async get_capabilities methods
+                capabilities_result = integration.get_capabilities()
+                if hasattr(capabilities_result, '__await__'):
+                    capabilities_dict = await capabilities_result
+                else:
+                    capabilities_dict = capabilities_result
                 # Convert capabilities dict to list of strings
                 capabilities = []
                 if capabilities_dict:
@@ -138,7 +147,7 @@ async def list_integrations(user_id: str = Query(None, description="User ID to c
                 health = IntegrationHealth(
                     name=name,
                     status=status,
-                    last_check=datetime.now(timezone.utc),
+                    last_check=datetime.now(UTC),
                     metrics={
                         "requests_per_minute": 42,
                         "error_rate": 0.02,
@@ -148,7 +157,7 @@ async def list_integrations(user_id: str = Query(None, description="User ID to c
 
             # Check if integration is allowed for user's plan
             is_allowed = name in allowed_integrations if user_id else True
-            
+
             # Add plan restriction info to the integration
             integration_data = Integration(
                 name=name,
@@ -158,13 +167,13 @@ async def list_integrations(user_id: str = Query(None, description="User ID to c
                 config=config,
                 health=health
             )
-            
+
             # Add custom fields for plan restrictions
             integration_dict = integration_data.model_dump()
             integration_dict["is_allowed"] = is_allowed
             integration_dict["requires_plan"] = "pro" if name not in ["kubernetes_mcp", "pagerduty"] else "free"
             integration_dict["user_plan"] = user_plan
-            
+
             integrations.append(integration_dict)
 
         return integrations
@@ -265,7 +274,12 @@ async def get_integration(
         integration = agent.mcp_integrations[integration_name]
         is_healthy = await integration.health_check()
         status = IntegrationStatus.CONNECTED if is_healthy else IntegrationStatus.ERROR
-        capabilities_dict = await integration.get_capabilities()
+        # Handle both sync and async get_capabilities methods
+        capabilities_result = integration.get_capabilities()
+        if hasattr(capabilities_result, '__await__'):
+            capabilities_dict = await capabilities_result
+        else:
+            capabilities_dict = capabilities_result
         # Convert capabilities dict to list of strings
         capabilities = []
         if capabilities_dict:
@@ -283,7 +297,7 @@ async def get_integration(
         health = IntegrationHealth(
             name=integration_name,
             status=status,
-            last_check=datetime.now(timezone.utc),
+            last_check=datetime.now(UTC),
             metrics={}
         )
 
@@ -533,7 +547,7 @@ async def get_integration_logs(
             continue
 
         logs.append({
-            "timestamp": (datetime.now(timezone.utc) - timedelta(minutes=i*5)).isoformat(),
+            "timestamp": (datetime.now(UTC) - timedelta(minutes=i*5)).isoformat(),
             "level": log_level,
             "message": log_messages[i % len(log_messages)],
             "integration": integration_name,
@@ -663,8 +677,8 @@ async def list_kubernetes_configs() -> JSONResponse:
             "context": k8s_config.config.get("cluster", "unknown"),
             "namespace": k8s_config.config.get("namespace", "default"),
             "enabled": k8s_config.enabled,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(UTC).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat()
         })
 
     return JSONResponse(content={"configs": configs})
@@ -1203,12 +1217,12 @@ async def delete_cluster_credentials(
 async def get_grafana_requirements() -> dict[str, Any]:
     """Get Grafana integration requirements."""
     import os
-    
+
     # Get environment variables for placeholders
     grafana_url = os.getenv("GRAFANA_MCP_URL", os.getenv("GRAFANA_URL", "https://your-grafana-instance.com"))
     grafana_api_key = os.getenv("GRAFANA_MCP_API_KEY", os.getenv("GRAFANA_API_KEY", ""))
     grafana_api_key_hint = grafana_api_key[:10] + "..." if grafana_api_key else "glsa_xxxxxxxxxxxx"
-    
+
     return {
         "fields": [
             {
