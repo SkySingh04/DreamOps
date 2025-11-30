@@ -58,23 +58,39 @@ function parseAnalysis(analysis: string): ParsedAnalysis {
   let currentSection: keyof ParsedAnalysis | null = null
   let currentContent: string[] = []
 
+  // Support multiple header formats: uppercase, markdown headers, emoji headers
   const sectionMapping: Record<string, keyof ParsedAnalysis> = {
     'IMMEDIATE ACTIONS': 'immediateActions',
+    'IMMEDIATE ACTION': 'immediateActions',
     'ROOT CAUSE ANALYSIS': 'rootCause',
+    'ROOT CAUSE': 'rootCause',
     'IMPACT ASSESSMENT': 'impact',
+    'IMPACT': 'impact',
     'REMEDIATION STEPS': 'remediation',
+    'REMEDIATION': 'remediation',
     'MONITORING': 'monitoring',
     'AUTOMATION OPPORTUNITIES': 'automation',
+    'AUTOMATION': 'automation',
     'FOLLOW-UP ACTIONS': 'followUp',
+    'FOLLOW UP': 'followUp',
+    'FOLLOWUP': 'followUp',
   }
 
   for (const line of lines) {
     const trimmedLine = line.trim()
-    
+    // Normalize the line for comparison (remove markdown headers, emojis, and make uppercase)
+    const normalizedLine = trimmedLine
+      .replace(/^#{1,6}\s*/, '')  // Remove markdown headers (###)
+      .replace(/[🎯🔍💥🛠️📊🚀📝]/g, '')  // Remove emojis
+      .replace(/^\d+\.\s*/, '')  // Remove leading numbers
+      .replace(/[:\-*]/g, '')  // Remove colons, dashes, asterisks
+      .trim()
+      .toUpperCase()
+
     // Check for section headers
     let foundSection = false
     for (const [pattern, sectionKey] of Object.entries(sectionMapping)) {
-      if (trimmedLine.includes(pattern)) {
+      if (normalizedLine.includes(pattern) || normalizedLine === pattern) {
         // Save previous section
         if (currentSection && currentContent.length > 0) {
           sections[currentSection] = currentContent
@@ -87,9 +103,17 @@ function parseAnalysis(analysis: string): ParsedAnalysis {
     }
 
     if (!foundSection && currentSection && trimmedLine) {
-      // Skip numbered headers and emojis
-      if (!trimmedLine.match(/^\d+\.\s*🎯|🔍|💥|🛠️|📊|🚀|📝/)) {
-        currentContent.push(trimmedLine)
+      // Skip section header lines (lines that only contain header markers)
+      const isHeaderLine = /^[#\d\.\-\*🎯🔍💥🛠️📊🚀📝\s:]+$/.test(trimmedLine)
+      if (!isHeaderLine) {
+        // Clean up bullet points and numbering
+        let cleanedLine = trimmedLine
+          .replace(/^[\-\*•]\s*/, '')  // Remove bullet points
+          .replace(/^\d+\.\s*/, '')  // Remove numbering
+          .trim()
+        if (cleanedLine) {
+          currentContent.push(cleanedLine)
+        }
       }
     }
   }
@@ -212,6 +236,39 @@ export function AIAnalysisDisplay({
   }
   
   const hasAnalysis = Object.values(parsedAnalysis).some(arr => arr && arr.length > 0)
+
+  // If we have raw analysis but couldn't parse sections, show the raw text
+  if (!hasAnalysis && analysis && analysis.trim()) {
+    return (
+      <Card className={className}>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Brain className="h-5 w-5" />
+                AI Analysis
+              </CardTitle>
+              <CardDescription>
+                Claude's analysis for this incident
+              </CardDescription>
+            </div>
+            {responseTime && (
+              <Badge variant="secondary">
+                {responseTime} response time
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="prose prose-sm max-w-none">
+            <pre className="whitespace-pre-wrap text-sm font-sans bg-gray-50 p-4 rounded-lg overflow-x-auto">
+              {analysis}
+            </pre>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   if (!hasAnalysis) {
     return (

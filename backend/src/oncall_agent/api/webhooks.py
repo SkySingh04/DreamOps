@@ -19,6 +19,7 @@ from src.oncall_agent.api.models import (
 from src.oncall_agent.api.oncall_agent_trigger import OncallAgentTrigger
 from src.oncall_agent.api.schemas import Incident, IncidentStatus, Severity
 from src.oncall_agent.config import get_config
+from src.oncall_agent.services import agent_settings_service
 from src.oncall_agent.services.dashboard_sync_service import (
     record_ai_action,
     sync_incident_to_dashboard,
@@ -29,7 +30,6 @@ from src.oncall_agent.services.incident_service import (
     IncidentService,
 )
 from src.oncall_agent.services.slack_notifier import get_slack_notifier
-from src.oncall_agent.services import agent_settings_service
 from src.oncall_agent.utils import get_logger
 
 router = APIRouter(prefix="/webhook", tags=["webhooks"])
@@ -313,7 +313,7 @@ async def pagerduty_webhook(
                     # AI agent is disabled via ENV VAR - this takes precedence
                     logger.info(f"⏸️ AI agent is DISABLED via ENV VAR (AI_AGENT_ENABLED=false) - skipping analysis for incident: {incident.id}")
                     await log_stream_manager.log_info(
-                        f"⏸️ AI agent is disabled via environment variable - incident logged but not analyzed",
+                        "⏸️ AI agent is disabled via environment variable - incident logged but not analyzed",
                         incident_id=incident.id,
                         stage="ai_agent_disabled",
                         metadata={
@@ -340,7 +340,7 @@ async def pagerduty_webhook(
                     # AI agent is disabled via UI toggle
                     logger.info(f"⏸️ AI agent is DISABLED via UI toggle - skipping analysis for incident: {incident.id}")
                     await log_stream_manager.log_info(
-                        f"⏸️ AI agent is disabled via UI toggle - incident logged but not analyzed",
+                        "⏸️ AI agent is disabled via UI toggle - incident logged but not analyzed",
                         incident_id=incident.id,
                         stage="ai_agent_disabled",
                         metadata={
@@ -391,10 +391,15 @@ async def pagerduty_webhook(
 
                 # Store the analysis in database for report downloads
                 if result.get("agent_response", {}).get("analysis"):
+                    agent_response = result["agent_response"]
                     analysis_data = {
-                        "analysis": result["agent_response"]["analysis"],
-                        "ai_mode": result["agent_response"].get("ai_mode", "standard"),
-                        "k8s_alert_type": result["agent_response"].get("k8s_alert_type"),
+                        "status": "analyzed",
+                        "analysis": agent_response["analysis"],
+                        "parsed_analysis": agent_response.get("parsed_analysis", {}),
+                        "ai_mode": agent_response.get("ai_mode", "standard"),
+                        "k8s_alert_type": agent_response.get("k8s_alert_type"),
+                        "confidence_score": agent_response.get("confidence_score", 0.85),
+                        "risk_level": agent_response.get("risk_level", "medium"),
                         "context": result.get("context", {}),
                         "processed_at": datetime.now(UTC).isoformat()
                     }
@@ -539,7 +544,7 @@ async def pagerduty_webhook(
                     if not env_ai_enabled:
                         logger.info(f"⏸️ AI agent is DISABLED via ENV VAR (AI_AGENT_ENABLED=false) - skipping analysis for incident: {incident.id}")
                         await log_stream_manager.log_info(
-                            f"⏸️ AI agent is disabled via environment variable - incident logged but not analyzed",
+                            "⏸️ AI agent is disabled via environment variable - incident logged but not analyzed",
                             incident_id=incident.id,
                             stage="ai_agent_disabled",
                             metadata={
@@ -553,7 +558,7 @@ async def pagerduty_webhook(
                     if not ui_ai_enabled:
                         logger.info(f"⏸️ AI agent is DISABLED via UI toggle - skipping analysis for incident: {incident.id}")
                         await log_stream_manager.log_info(
-                            f"⏸️ AI agent is disabled via UI toggle - incident logged but not analyzed",
+                            "⏸️ AI agent is disabled via UI toggle - incident logged but not analyzed",
                             incident_id=incident.id,
                             stage="ai_agent_disabled",
                             metadata={
