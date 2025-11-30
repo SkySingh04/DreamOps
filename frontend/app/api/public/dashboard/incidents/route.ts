@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10');
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://backend:8000';
 
-    const response = await fetch(`${backendUrl}/api/v1/incidents?page_size=${limit}`, {
+    const response = await fetch(`${backendUrl}/api/v1/incidents/?page_size=${limit}`, {
       headers: { 'Content-Type': 'application/json' },
       cache: 'no-store',
     });

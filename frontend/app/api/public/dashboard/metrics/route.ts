@@ -5,8 +5,8 @@ export async function GET(request: NextRequest) {
   try {
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://backend:8000';
 
-    // Fetch incidents from backend to calculate metrics
-    const incidentsResponse = await fetch(`${backendUrl}/api/v1/incidents?page_size=100`, {
+    // Fetch incidents from backend to calculate metrics (use trailing slash for FastAPI)
+    const incidentsResponse = await fetch(`${backendUrl}/api/v1/incidents/?page_size=100`, {
       headers: { 'Content-Type': 'application/json' },
       cache: 'no-store',
     });
