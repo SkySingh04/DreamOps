@@ -204,19 +204,41 @@ async def pagerduty_webhook(
                         content={"status": "success", "message": "Incident not in triggered state"}
                     )
 
+                # Extract service info - handle multiple formats
+                service_data = incident_data.get('service', {})
+                service_name = (
+                    service_data.get('name') or
+                    service_data.get('summary') or
+                    service_data.get('description') or
+                    'Unknown Service'
+                )
+                service_id = service_data.get('id', 'unknown')
+
+                # Extract assignee info from assignments
+                assignee = None
+                assignments = incident_data.get('assignments', [])
+                if assignments and len(assignments) > 0:
+                    first_assignment = assignments[0]
+                    assignee_data = first_assignment.get('assignee', {})
+                    assignee = (
+                        assignee_data.get('name') or
+                        assignee_data.get('summary') or
+                        assignee_data.get('email')
+                    )
+
                 # Convert V3 incident to our format
                 incident = PagerDutyIncidentData(
                     id=incident_data.get('id'),
-                    incident_number=incident_data.get('incident_number', 0),
+                    incident_number=incident_data.get('incident_number') or incident_data.get('number', 0),
                     title=incident_data.get('title', 'Unknown'),
                     description=incident_data.get('description'),
                     created_at=incident_data.get('created_at', v3_payload.event.occurred_at),
                     status=incident_data.get('status', 'triggered'),
                     incident_key=incident_data.get('incident_key'),
                     service=PagerDutyService(
-                        id=incident_data.get('service', {}).get('id', 'unknown'),
-                        name=incident_data.get('service', {}).get('summary', 'Unknown Service')
-                    ) if incident_data.get('service') else None,
+                        id=service_id,
+                        name=service_name
+                    ) if service_data else None,
                     urgency=incident_data.get('urgency', 'high'),
                     html_url=incident_data.get('html_url', '')
                 )
@@ -272,6 +294,7 @@ async def pagerduty_webhook(
                     status=IncidentStatus.TRIGGERED,
                     service_name=incident.service.name if incident.service else "Unknown Service",
                     alert_source="pagerduty",
+                    assignee=assignee,  # Use extracted assignee
                     created_at=datetime.now(UTC),
                     metadata={
                         "source_id": incident.id,
