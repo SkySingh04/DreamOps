@@ -588,45 +588,51 @@ export default function AIControlPage() {
       )}
 
       {/* AI Agent Master Toggle */}
-      <Card className={toggleData?.data?.ai_agent_enabled ? 'border-green-200 bg-green-50/30' : 'border-red-200 bg-red-50/30'}>
-        <CardContent className="py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className={`p-3 rounded-full ${toggleData?.data?.ai_agent_enabled ? 'bg-green-100' : 'bg-red-100'}`}>
-                {toggleData?.data?.ai_agent_enabled ? (
-                  <Bot className="h-8 w-8 text-green-600" />
-                ) : (
-                  <StopCircle className="h-8 w-8 text-red-600" />
-                )}
+      {(() => {
+        // Default to enabled if toggle data not yet loaded
+        const isEnabled = toggleData?.data?.ai_agent_enabled ?? true;
+        return (
+          <Card className={isEnabled ? 'border-green-200 bg-green-50/30' : 'border-red-200 bg-red-50/30'}>
+            <CardContent className="py-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className={`p-3 rounded-full ${isEnabled ? 'bg-green-100' : 'bg-red-100'}`}>
+                    {isEnabled ? (
+                      <Bot className="h-8 w-8 text-green-600" />
+                    ) : (
+                      <StopCircle className="h-8 w-8 text-red-600" />
+                    )}
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold">
+                      AI Agent Service
+                    </h2>
+                    <p className="text-muted-foreground">
+                      {isEnabled
+                        ? 'Active - Incoming incidents will trigger AI analysis and Slack notifications'
+                        : 'Disabled - Incidents are logged but not analyzed'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <Badge
+                    variant={isEnabled ? 'default' : 'destructive'}
+                    className="text-sm px-3 py-1"
+                  >
+                    {isEnabled ? 'ENABLED' : 'DISABLED'}
+                  </Badge>
+                  <Switch
+                    checked={isEnabled}
+                    onCheckedChange={(checked) => toggleAIAgentMutation.mutate(checked)}
+                    disabled={toggleAIAgentMutation.isPending || toggleLoading}
+                    className="scale-125"
+                  />
+                </div>
               </div>
-              <div>
-                <h2 className="text-xl font-semibold">
-                  AI Agent Service
-                </h2>
-                <p className="text-muted-foreground">
-                  {toggleData?.data?.ai_agent_enabled
-                    ? 'Active - Incoming incidents will trigger AI analysis and Slack notifications'
-                    : 'Disabled - Incidents are logged but not analyzed'}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <Badge
-                variant={toggleData?.data?.ai_agent_enabled ? 'default' : 'destructive'}
-                className="text-sm px-3 py-1"
-              >
-                {toggleData?.data?.ai_agent_enabled ? 'ENABLED' : 'DISABLED'}
-              </Badge>
-              <Switch
-                checked={toggleData?.data?.ai_agent_enabled ?? true}
-                onCheckedChange={(checked) => toggleAIAgentMutation.mutate(checked)}
-                disabled={toggleAIAgentMutation.isPending || toggleLoading}
-                className="scale-125"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* AI Mode Selection */}
       <Card>
